@@ -26,6 +26,8 @@
 *.log
 *.sql
 *.sqlite
+*.pkl
+*.traj
 
 # OS generated files #
 ######################
