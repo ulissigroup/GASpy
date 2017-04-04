@@ -7,6 +7,7 @@ from generate_database_luigi import default_parameter_gas
 from generate_database_luigi import default_parameter_slab
 from generate_database_luigi import default_parameter_adsorption
 from generate_database_luigi import WriteAdsorptionConfig
+from generate_database_luigi import CalculateEnergy
 from generate_database_luigi import get_db
 from generate_database_luigi import UpdateDB
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
@@ -125,20 +126,20 @@ class StudyCoordinationSites(luigi.WrapperTask):
             row = rows[rowind]
             print(row.miller)
             print(row.mpid)
-            for adsorbate in ['CO']:
+            for adsorbate in ['CO','H','OH']:
                 if len([result for result in resultRows
                         if result.adsorbate == adsorbate
                         and (result.coordination == row.coordination
                              or result.initial_coordination == row.coordination)
                        ]
-                      ) == 0:
+                      ) <=2:
                     ads_parameter = default_parameter_adsorption(adsorbate)
                     ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
                     parameters = {"bulk": default_parameter_bulk(row.mpid),
                                   'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                                   'gas':default_parameter_gas('CO'),
                                   'adsorption':ads_parameter}
-                    yield WriteAdsorptionConfig(parameters=parameters)
+                    yield CalculateEnergy(parameters=parameters)
 
 class EnumerateAlloys(luigi.WrapperTask):
     max_index = luigi.IntParameter(2)
