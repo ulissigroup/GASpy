@@ -200,7 +200,7 @@ class UpdateDB(luigi.Task):
                 starting_atoms = ase.io.read('atom_temp.traj', index=0)
                 vasp_settings = fw.name['vasp_settings']
                 vasp_settings = vasp_settings_to_str(vasp_settings)
-                return atoms, starting_atoms, vasp_settings
+                return atoms, starting_atoms, atomshex, vasp_settings
 
             # Get all of the completed fireworks
             optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED'})
@@ -211,7 +211,7 @@ class UpdateDB(luigi.Task):
                 if fwid not in all_inserted_fireworks:
                     fw = launchpad.get_fw_by_id(fwid)
                     # Get the information from the class we just pulled from the launchpad
-                    atoms, starting_atoms, vasp_settings = getFireworkInfo(fw)
+                    atoms, starting_atoms, trajectory, vasp_settings = getFireworkInfo(fw)
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
                     doc['fwname'] = fw.name
@@ -354,7 +354,7 @@ class WriteRow(luigi.Task):
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input().open())
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if slab['tags']['shift'] == self.parameters['slab']['shift']
+                            if float(np.round(slab['tags']['shift'],4)) == float(np.round(self.parameters['slab']['shift'],4))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
                 if len(atomlist) > 1:
@@ -375,8 +375,12 @@ class WriteRow(luigi.Task):
                 fpd_structs = pickle.load(self.input().open())
                 def matchFP(entry, fp):
                     for key in fp:
-                        if entry[key] != fp[key]:
-                            return False
+                        if type(entry[key])==list:
+                            if sorted(entry[key])!=sorted(fp[key]):
+                                return False
+                        else:
+                            if entry[key] != fp[key]:
+                                return False
                     return True
                 # If there is an 'fp' key in parameters['adsorption']['adsorbates'][0], we
                 # search for a site with the correct fingerprint, otherwise we search for an
@@ -918,6 +922,10 @@ class WriteAdsorptionConfig(luigi.Task):
         fingerprints = pickle.load(self.input()[1].open())
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
+        for fp in [fp_init,fp_final]:
+            for key in ['neighborcoord','coordination']:
+                if key not in fp:
+                    fp[key]=''
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
