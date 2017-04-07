@@ -231,12 +231,12 @@ class PredictAndSubmit(luigi.WrapperTask):
         dEprediction=pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
         matching=[]
         for dE,row in zip(dEprediction['CO'],adsorption_rows_catalog):
-            if dE>-0.9 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40:
+            if dE>-1.2 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40:
                 matching.append([dE,row])
 
         ncoord,ncoord_index=np.unique([eval(row[1].neighborcoord) for row in matching],return_index=True)
 
-        for ind in ncoord_index[0:400]:
+        for ind in ncoord_index:
             row=matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,'neighborcoord':eval(row.neighborcoord)}
