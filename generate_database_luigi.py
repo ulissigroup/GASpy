@@ -200,7 +200,7 @@ class UpdateDB(luigi.Task):
                 starting_atoms = ase.io.read('atom_temp.traj', index=0)
                 vasp_settings = fw.name['vasp_settings']
                 vasp_settings = vasp_settings_to_str(vasp_settings)
-                return atoms, starting_atoms, vasp_settings
+                return atoms, starting_atoms, atomshex, vasp_settings
 
             # Get all of the completed fireworks
             optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED'})
@@ -211,7 +211,7 @@ class UpdateDB(luigi.Task):
                 if fwid not in all_inserted_fireworks:
                     fw = launchpad.get_fw_by_id(fwid)
                     # Get the information from the class we just pulled from the launchpad
-                    atoms, starting_atoms, vasp_settings = getFireworkInfo(fw)
+                    atoms, starting_atoms, trajectory, vasp_settings = getFireworkInfo(fw)
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
                     doc['fwname'] = fw.name
@@ -354,7 +354,7 @@ class WriteRow(luigi.Task):
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input().open())
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if slab['tags']['shift'] == self.parameters['slab']['shift']
+                            if float(np.round(slab['tags']['shift'],4)) == float(np.round(self.parameters['slab']['shift'],4))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
                 if len(atomlist) > 1:
@@ -375,8 +375,12 @@ class WriteRow(luigi.Task):
                 fpd_structs = pickle.load(self.input().open())
                 def matchFP(entry, fp):
                     for key in fp:
-                        if entry[key] != fp[key]:
-                            return False
+                        if type(entry[key])==list:
+                            if sorted(entry[key])!=sorted(fp[key]):
+                                return False
+                        else:
+                            if entry[key] != fp[key]:
+                                return False
                     return True
                 # If there is an 'fp' key in parameters['adsorption']['adsorbates'][0], we
                 # search for a site with the correct fingerprint, otherwise we search for an
@@ -801,10 +805,20 @@ def fingerprint(atoms, siteind):
         coord_symbols.sort()
         # Turn the [list] of [unicode] values into a single [unicode]
         neighborcoord.append(i.species_string+':'+'-'.join(coord_symbols))
+        
+    # [list] of PyMatGen [periodic site class]es for each of the atoms that are
+    # coordinated with the adsorbate
+    coordinated_atoms_nextnearest = vcf.get_coordinated_sites(siteind, 0.2)
+    # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
+    coordinated_symbols_nextnearest = map(lambda x: x.species_string, coordinated_atoms_nextnearest)
+    # Take out atoms that we assume are not part of the slab
+    coordinated_symbols_nextnearest = [a for a in coordinated_symbols_nextnearest if a not in ['U']]
+    # Turn the [list] of [unicode] values into a single [unicode]
+    coordination_nextnearest = '-'.join(sorted(coordinated_symbols_nextnearest))
 
     # Return a dictionary with each of the fingerprints.  Any key/value pair can be added here
     # and will propagate up the chain
-    return {'coordination':coordination, 'neighborcoord':neighborcoord, 'natoms':len(atoms)}
+    return {'coordination':coordination, 'neighborcoord':neighborcoord, 'natoms':len(atoms),'nextnearestcoordination':coordination_nextnearest}
 
 
 class FingerprintStructure(luigi.Task):
@@ -836,7 +850,8 @@ class FingerprintStructure(luigi.Task):
         expected_slab_atoms = blank_entry[0]['atoms']['natoms']
 
         if expected_slab_atoms == len(best_sys['atoms']):
-            fp = {}
+            fp_final = {}
+            fp_init={}
         else:
             # Calculate fingerprints for the initial and final state
             fp_final = fingerprint(best_sys['atoms'], expected_slab_atoms)
@@ -918,6 +933,10 @@ class WriteAdsorptionConfig(luigi.Task):
         fingerprints = pickle.load(self.input()[1].open())
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
+        for fp in [fp_init,fp_final]:
+            for key in ['neighborcoord','coordination']:
+                if key not in fp:
+                    fp[key]=''
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
@@ -932,8 +951,10 @@ class WriteAdsorptionConfig(luigi.Task):
                     'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
                     'adsorption_site':self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
                     'coordination':fp_final['coordination'],
+                    'nextnearestcoordination':fp_final['nextnearestcoordination'],
                     'neighborcoord':str(fp_final['neighborcoord']),
                     'initial_coordination':fp_init['coordination'],
+                    'initial_nextnearestcoordination':fp_init['nextnearestcoordination'],
                     'initial_neighborcoord':str(fp_init['neighborcoord']),
                     'shift':self.parameters['slab']['shift'],
                     'fwid':best_sys_pkl['slab+ads']['fwid'],

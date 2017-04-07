@@ -7,6 +7,7 @@ from generate_database_luigi import default_parameter_gas
 from generate_database_luigi import default_parameter_slab
 from generate_database_luigi import default_parameter_adsorption
 from generate_database_luigi import WriteAdsorptionConfig
+from generate_database_luigi import CalculateEnergy
 from generate_database_luigi import get_db
 from generate_database_luigi import UpdateDB
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
@@ -15,6 +16,13 @@ from pymatgen.matproj.rest import MPRester
 import luigi
 from ase.db import connect
 import numpy as np
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.linear_model import LinearRegression
+from scipy.sparse import coo_matrix
+from multiprocessing import Pool
+import cPickle as pickle
+
+
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
     def requires(self):
@@ -129,16 +137,16 @@ class StudyCoordinationSites(luigi.WrapperTask):
                 if len([result for result in resultRows
                         if result.adsorbate == adsorbate
                         and (result.coordination == row.coordination
-                             or result.initial_coordination == row.coordination)
+                             or result.initial_coordination == row.coordination) 
                        ]
-                      ) == 0:
+                      ) <=1:
                     ads_parameter = default_parameter_adsorption(adsorbate)
                     ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
                     parameters = {"bulk": default_parameter_bulk(row.mpid),
                                   'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                                   'gas':default_parameter_gas('CO'),
                                   'adsorption':ads_parameter}
-                    yield WriteAdsorptionConfig(parameters=parameters)
+                    yield CalculateEnergy(parameters=parameters)
 
 class EnumerateAlloys(luigi.WrapperTask):
     max_index = luigi.IntParameter(2)
@@ -214,3 +222,28 @@ class EnumerateAlloys(luigi.WrapperTask):
                                                                                 adsorption=default_parameter_adsorption('U',
                                                                                                                       "[  3.36   1.16  24.52]",
                                                                                                                       "(1, 1)",24)))
+
+class PredictAndSubmit(luigi.WrapperTask):
+    def requires(self):
+        conEnum=connect('../GASpy/enumerated_adsorption_sites.db')
+        adsorption_rows_catalog=[row for row in conEnum.select()]
+
+        dEprediction=pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
+        matching=[]
+        for dE,row in zip(dEprediction['CO'],adsorption_rows_catalog):
+            if dE>-1.2 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40:
+                matching.append([dE,row])
+
+        ncoord,ncoord_index=np.unique([eval(row[1].neighborcoord) for row in matching],return_index=True)
+
+        for ind in ncoord_index:
+            row=matching[ind][1]
+            ads_parameter = default_parameter_adsorption('CO')
+            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,'neighborcoord':eval(row.neighborcoord)}
+            parameters = {'bulk': default_parameter_bulk(row.mpid),
+                          'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
+                          'gas':default_parameter_gas('CO'),
+                          'adsorption':ads_parameter}
+            yield CalculateEnergy(parameters=parameters)
+
+
