@@ -805,10 +805,20 @@ def fingerprint(atoms, siteind):
         coord_symbols.sort()
         # Turn the [list] of [unicode] values into a single [unicode]
         neighborcoord.append(i.species_string+':'+'-'.join(coord_symbols))
+        
+    # [list] of PyMatGen [periodic site class]es for each of the atoms that are
+    # coordinated with the adsorbate
+    coordinated_atoms_nextnearest = vcf.get_coordinated_sites(siteind, 0.2)
+    # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
+    coordinated_symbols_nextnearest = map(lambda x: x.species_string, coordinated_atoms_nextnearest)
+    # Take out atoms that we assume are not part of the slab
+    coordinated_symbols_nextnearest = [a for a in coordinated_symbols_nextnearest if a not in ['U']]
+    # Turn the [list] of [unicode] values into a single [unicode]
+    coordination_nextnearest = '-'.join(sorted(coordinated_symbols_nextnearest))
 
     # Return a dictionary with each of the fingerprints.  Any key/value pair can be added here
     # and will propagate up the chain
-    return {'coordination':coordination, 'neighborcoord':neighborcoord, 'natoms':len(atoms)}
+    return {'coordination':coordination, 'neighborcoord':neighborcoord, 'natoms':len(atoms),'nextnearestcoordination':coordination_nextnearest}
 
 
 class FingerprintStructure(luigi.Task):
@@ -840,7 +850,8 @@ class FingerprintStructure(luigi.Task):
         expected_slab_atoms = blank_entry[0]['atoms']['natoms']
 
         if expected_slab_atoms == len(best_sys['atoms']):
-            fp = {}
+            fp_final = {}
+            fp_init={}
         else:
             # Calculate fingerprints for the initial and final state
             fp_final = fingerprint(best_sys['atoms'], expected_slab_atoms)
@@ -940,8 +951,10 @@ class WriteAdsorptionConfig(luigi.Task):
                     'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
                     'adsorption_site':self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
                     'coordination':fp_final['coordination'],
+                    'nextnearestcoordination':fp_final['nextnearestcoordination'],
                     'neighborcoord':str(fp_final['neighborcoord']),
                     'initial_coordination':fp_init['coordination'],
+                    'initial_nextnearestcoordination':fp_init['nextnearestcoordination'],
                     'initial_neighborcoord':str(fp_init['neighborcoord']),
                     'shift':self.parameters['slab']['shift'],
                     'fwid':best_sys_pkl['slab+ads']['fwid'],
