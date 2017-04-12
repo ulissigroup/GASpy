@@ -966,7 +966,7 @@ class WriteAdsorptionConfig(luigi.Task):
             criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
-        with connect('adsorption_energy_database.db') as conAds:
+        with connect('../adsorption_energy_database.db') as conAds:
             conAds.write(best_sys, **criteria)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -990,7 +990,7 @@ class WriteConfigsLocalDB(luigi.Task):
         return FingerprintGeneratedStructures(self.parameters)
 
     def run(self):
-        with connect('enumerated_adsorption_sites.db') as con:
+        with connect('../enumerated_adsorption_sites.db') as con:
 
             # Load the configurations
             configs = pickle.load(self.input().open())
