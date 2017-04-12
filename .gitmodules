@@ -1,0 +1,6 @@
+[submodule "AuAg"]
+	path = AuAg
+	url = https://github.com/ktran9891/AuAg.git
+[submodule "GASpy_regressions"]
+	path = GASpy_regressions
+	url = https://github.com/ktran9891/GASpy_regressions.git
