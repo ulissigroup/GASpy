@@ -1011,7 +1011,8 @@ class WriteConfigsLocalDB(luigi.Task):
                           top=self.parameters['slab']['top'],
                           adsorption_site=config['adsorption_site'],
                           coordination=config['coordination'],
-                          neighborcoord=str(config['neighborcoord']))   # Plus tags
+                          neighborcoord=str(config['neighborcoord']),                          
+                          nextnearestcoordination=str(config['nextnearestcoordination']))   # Plus tags
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:

@@ -228,22 +228,32 @@ class PredictAndSubmit(luigi.WrapperTask):
         conEnum=connect('../GASpy/enumerated_adsorption_sites.db')
         adsorption_rows_catalog=[row for row in conEnum.select()]
 
+        # Get all of the adsorption energies we've already calculated
+        with connect('adsorption_energy_database.db') as con:
+            resultRows = [row for row in con.select()]
+
         dEprediction=pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
         matching=[]
         for dE,row in zip(dEprediction['CO'],adsorption_rows_catalog):
-            if dE>-1.2 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40:
+            if dE>-1.2 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40 and len([row2 for row2 in resultRows if row2.coordination==row.coordination and row2.nextnearestcoordination==row.nextnearestcoordination])>0:
                 matching.append([dE,row])
 
-        ncoord,ncoord_index=np.unique([eval(row[1].neighborcoord) for row in matching],return_index=True)
+        ncoord,ncoord_index=np.unique([str([row[1].coordination,row[1].nextnearestcoordination]) for row in matching],return_index=True)
 
         for ind in ncoord_index:
             row=matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
-            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,'neighborcoord':eval(row.neighborcoord)}
+            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,'nextnearestcoordination':row.nextnearestcoordination}
             parameters = {'bulk': default_parameter_bulk(row.mpid),
                           'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                           'gas':default_parameter_gas('CO'),
                           'adsorption':ads_parameter}
             yield CalculateEnergy(parameters=parameters)
+            #parameterRPBE=copy.deepcopy(parameters)
+            #parameterRPBE['bulk']['vasp_settings']['xc']='rpbe'
+            #parameterRPBE['slab']['vasp_settings']['xc']='rpbe'
+            #parameterRPBE['gas']['vasp_settings']['xc']='rpbe'
+            #parameterRPBE['asdsorption']['vasp_settings']['xc']='rpbe'
+            #yield CalculateEnergy(
 
 
