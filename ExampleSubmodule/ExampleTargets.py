@@ -191,6 +191,12 @@ class EnumerateAlloys(luigi.WrapperTask):
     max_index = luigi.IntParameter(2)
     writeDB = luigi.BoolParameter(False)
     def requires(self):
+        """
+        Luigi automatically runs the `requires` method whenever we tell it to execute a
+        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
+        `run`, and `output` methods), we put all of the "action" into the `requires`
+        method.
+        """
         # Define some elements that we don't want alloys with (note no oxides for the moment)
         all_elements = ['H', 'He', 'Li', 'Be', 'B', 'C',
                         'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S',
@@ -271,27 +277,38 @@ class PredictAndSubmit(luigi.WrapperTask):
     submodule for details regarding how we created the *.pkl file referenced here.
     """
     def requires(self):
-        conEnum=connect('../GASpy/enumerated_adsorption_sites.db')
-        adsorption_rows_catalog=[row for row in conEnum.select()]
-
-        # Get all of the adsorption energies we've already calculated
-        with connect('adsorption_energy_database.db') as con:
-            resultRows = [row for row in con.select()]
-
-        dEprediction=pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
-        matching=[]
-        for dE,row in zip(dEprediction['CO'],adsorption_rows_catalog):
-            if dE>-1.2 and dE<-0.5 and 'Al' not in row.formula and 'Cu' not in row.formula and row.natoms<40 and len([row2 for row2 in resultRows if row2.coordination==row.coordination and row2.nextnearestcoordination==row.nextnearestcoordination])>0:
-                matching.append([dE,row])
-
-        ncoord,ncoord_index=np.unique([str([row[1].coordination,row[1].nextnearestcoordination]) for row in matching],return_index=True)
-
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
         class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         """
+        # Get all of the adsorption sites we've already identified
+        with connect('../enumerated_adsorption_sites.db') as conEnum:
+            adsorption_rows_catalog = [row for row in conEnum.select()]
+
+        # Get all of the adsorption energies we've already calculated
+        with connect('../adsorption_energy_database.db') as con:
+            resultRows = [row for row in con.select()]
+
+        # Load the regression's predictions from a pickle. You may need to change the location depending
+        # on your folder structure.
+        dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
+        matching = []
+        for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
+            if (dE > -1.2
+                    and dE < -0.5
+                    and 'Al' not in row.formula
+                    and 'Cu' not in row.formula
+                    and row.natoms < 40
+                    and len([row2
+                             for row2 in resultRows
+                             if row2.coordination == row.coordination
+                             and row2.nextnearestcoordination == row.nextnearestcoordination]) > 0):
+                matching.append([dE, row])
+
+        ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
+                                          for row in matching], return_index=True)
 
         # Load the adsorption site database
         conEnum = connect('../enumerated_adsorption_sites.db')
@@ -302,10 +319,10 @@ class PredictAndSubmit(luigi.WrapperTask):
         # submodule
         dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
 
-        # Find all of the regressed energies and database rows of all slab+adsorbate relaxations that had
-        # relaxed energies between -1.2 and -0.5 eV, had CO as an adsorbate, did not have Al or Cu in the
-        # bulk, and had less than 40 total atoms in the slab+adsorbate system. The regressed energies are
-        # the database rows are zipped into the `matching` list.
+        # Find all of the regressed energies and database rows of all slab+adsorbate relaxations
+        # that had relaxed energies between -1.2 and -0.5 eV, had CO as an adsorbate, did not have
+        # Al or Cu in the bulk, and had less than 40 total atoms in the slab+adsorbate system. The
+        # regressed energies are the database rows are zipped into the `matching` list.
         matching = []
         for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
             if (dE > -1.2
@@ -323,8 +340,10 @@ class PredictAndSubmit(luigi.WrapperTask):
         for ind in ncoord_index:
             row = matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
-            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,'nextnearestcoordination':row.nextnearestcoordination}
-            #ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination, 'neighborcoord':eval(row.neighborcoord)}
+            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
+                                                    'nextnearestcoordination':row.nextnearestcoordination}
+#             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
+#                                                     'neighborcoord':eval(row.neighborcoord)}
             parameters = {'bulk': default_parameter_bulk(row.mpid),
                           'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                           'gas':default_parameter_gas('CO'),
