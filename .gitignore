@@ -28,6 +28,7 @@
 *.sqlite
 *.pkl
 *.traj
+*.token
 
 # OS generated files #
 ######################
