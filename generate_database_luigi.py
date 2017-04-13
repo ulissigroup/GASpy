@@ -286,7 +286,8 @@ class WriteRow(luigi.Task):
                               'fwname.shift':self.parameters['slab']['shift'],
                               'fwname.mpid':self.parameters['bulk']['mpid']}
             for key in self.parameters['slab']['vasp_settings']:
-                search_strings['fwname.vasp_settings.%s'%key] = self.parameters['slab']['vasp_settings'][key]
+                if key not in ['isym']:
+                    search_strings['fwname.vasp_settings.%s'%key] = self.parameters['slab']['vasp_settings'][key]
         elif self.calctype == 'bulk':
             search_strings = {'type':'bulk',
                               'fwname.mpid':self.parameters['bulk']['mpid']}
@@ -300,7 +301,7 @@ class WriteRow(luigi.Task):
                               'fwname.mpid':self.parameters['bulk']['mpid'],
                               'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
             for key in self.parameters['adsorption']['vasp_settings']:
-                if key not in ['nsw']:
+                if key not in ['nsw', 'isym']:
                     search_strings['fwname.vasp_settings.%s'%key] = self.parameters['adsorption']['vasp_settings'][key]
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
@@ -1030,6 +1031,7 @@ def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
                                                  ibrion=2,
                                                  nsw=100,
                                                  isif=0,
+                                                 isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
                                                  ediffg=-0.03),
@@ -1107,6 +1109,7 @@ def default_parameter_adsorption(adsorbate,
                                                  ibrion=2,
                                                  nsw=200,
                                                  isif=0,
+                                                 isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
                                                  ediffg=-0.03))
