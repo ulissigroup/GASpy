@@ -301,7 +301,7 @@ class WriteRow(luigi.Task):
                               'fwname.mpid':self.parameters['bulk']['mpid'],
                               'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
             for key in self.parameters['adsorption']['vasp_settings']:
-                if key not in ['nsw','isym']:
+                if key not in ['nsw', 'isym']:
                     search_strings['fwname.vasp_settings.%s'%key] = self.parameters['adsorption']['vasp_settings'][key]
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
