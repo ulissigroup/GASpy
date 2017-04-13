@@ -1,0 +1,3 @@
+[submodule "GASpy_regressions"]
+	path = GASpy_regressions
+	url = https://github.com/zulissi/GASpy_regressions.git
