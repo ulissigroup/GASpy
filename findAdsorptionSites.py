@@ -14,12 +14,14 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 
-# This function must be supplied with both "slabAtoms" and "bulkAtoms" (see above)
-def find_adsorption_sites(slabAtoms, bulkAtoms):
+
+def label_structure_with_surface(slabAtoms,bulkAtoms):
+
     # Convert the slab and bulk from [atoms class]es to a
     # [structure class]es (i.e., from ASE format to PyMatGen format)
     slab_struct = AseAtomsAdaptor.get_structure(slabAtoms)
     bulk_struct = AseAtomsAdaptor.get_structure(bulkAtoms)
+    
     # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
     # be used to find adsorption sites
     vcf_surface = VoronoiCoordFinder(slab_struct)
@@ -81,7 +83,16 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     # We add "new_site_properties" to "slab_struct" [PyMatGen structure class]
     new_site_properties = {'surface_properties':plate_surf, 'coord':cn_surf}
     slab_struct = slab_struct.copy(site_properties=new_site_properties)
+    
+    return slab_struct
+    
 
+    
+# This function must be supplied with both "slabAtoms" and "bulkAtoms" (see above)
+def find_adsorption_sites(slabAtoms, bulkAtoms):
+
+    
+    slab_struct=label_structure_with_surface(slabAtoms,bulkAtoms)
     # Finally, we call "AdsorbateSiteFinder", which is a function in a branch of PyMatGen,
     # to create "asf" [class]
     asf = AdsorbateSiteFinder(slab_struct)
