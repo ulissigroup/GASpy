@@ -175,7 +175,10 @@ def get_db():
 class UpdateDB(luigi.Task):
     """
     This is a task that looks at the fireworks database and loads the values into the
-    results database (the one in getDB())
+    results database (the one in getDB()).
+    We use the database in getDB() because we found that querying the Fireworks database
+    from a remote server (i.e., Gilgamesh) takes a long time. So instead, we dump the
+    Fireworks database into the one in getDB(), which we can query quickly.
     """
     def run(self):
         launchpad = LaunchPad(host='gilgamesh.cheme.cmu.edu',
