@@ -243,7 +243,7 @@ class UpdateDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('./updatedDB.token')
+        return luigi.LocalTarget('../updatedDB.token')
 
 
 class WriteRow(luigi.Task):
@@ -427,7 +427,7 @@ class WriteRow(luigi.Task):
                 print(wflow)
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -442,7 +442,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
@@ -532,7 +532,7 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbatesMarker(luigi.Task):
@@ -552,7 +552,7 @@ class GenerateAdsorbatesMarker(luigi.Task):
                              parameters={'bulk':self.parameters['bulk']})]
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
     def run(self):
         adsorbate = {'name':'U', 'atoms':Atoms('U')}
@@ -676,7 +676,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -759,7 +759,7 @@ class CalculateEnergy(luigi.Task):
 
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
@@ -863,7 +863,7 @@ class FingerprintStructure(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class FingerprintGeneratedStructures(luigi.Task):
@@ -900,7 +900,7 @@ class FingerprintGeneratedStructures(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(atomslist, open(self.temp_output_path, 'w'))
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class WriteAdsorptionConfig(luigi.Task):
@@ -976,7 +976,7 @@ class WriteAdsorptionConfig(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
 
 class WriteConfigsLocalDB(luigi.Task):
@@ -984,7 +984,7 @@ class WriteConfigsLocalDB(luigi.Task):
     parameters = luigi.DictParameter()
 
     def output(self):
-        return luigi.LocalTarget('./structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
     def requires(self):
         """ Get the generated adsorbate configurations """
