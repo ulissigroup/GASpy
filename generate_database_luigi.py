@@ -243,7 +243,7 @@ class UpdateDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('./updatedDB.token')
+        return luigi.LocalTarget('../updatedDB.token')
 
 
 class WriteRow(luigi.Task):
