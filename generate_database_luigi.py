@@ -32,13 +32,14 @@ from vasp_settings_to_str import vasp_settings_to_str
 from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 import luigi
 
+luigi_save_loc='/global/cscratch1/sd/zulissi/luigi_files/'
 
 def get_launchpad():
-    return LaunchPad(host='gilgamesh.cheme.cmu.edu',
+    return LaunchPad(host='mongodb03.nersc.gov',
                      name='fw_zu_vaspsurfaces',
                      username='admin_zu_vaspsurfaces',
                      password='$TPAHPmj',
-                     port=30000)
+                     port=27017)
 
 
 def adsorbate_dictionary(adsorbate):
@@ -164,11 +165,11 @@ def running_fireworks(name_dict, launchpad):
 
 def get_db():
     """ Get a handle to the results database """
-    return MongoDatabase(host='ds117909.mlab.com',
-                         port=17909,
-                         user='ulissi_admin',
-                         password='ulissi_admin',
-                         database='ulissigroup_test',
+    return MongoDatabase(host='mongodb03.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
 
@@ -178,11 +179,7 @@ class UpdateDB(luigi.Task):
     results database (the one in getDB())
     """
     def run(self):
-        launchpad = LaunchPad(host='gilgamesh.cheme.cmu.edu',
-                              name='fw_zu_vaspsurfaces',
-                              username='admin_zu_vaspsurfaces',
-                              password='$TPAHPmj',
-                              port=30000)
+        launchpad = get_launchpad()
 
         # Create a class, "con", that has methods to interact with the database.
         with get_db() as MD:
@@ -427,7 +424,7 @@ class WriteRow(luigi.Task):
                 print(wflow)
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -442,7 +439,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
@@ -532,7 +529,7 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbatesMarker(luigi.Task):
@@ -552,7 +549,7 @@ class GenerateAdsorbatesMarker(luigi.Task):
                              parameters={'bulk':self.parameters['bulk']})]
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
     def run(self):
         adsorbate = {'name':'U', 'atoms':Atoms('U')}
@@ -676,7 +673,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -759,7 +756,7 @@ class CalculateEnergy(luigi.Task):
 
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
@@ -863,7 +860,7 @@ class FingerprintStructure(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class FingerprintGeneratedStructures(luigi.Task):
@@ -900,7 +897,7 @@ class FingerprintGeneratedStructures(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(atomslist, open(self.temp_output_path, 'w'))
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class WriteAdsorptionConfig(luigi.Task):
@@ -976,7 +973,7 @@ class WriteAdsorptionConfig(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_loc+'%s.pkl'%(self.task_id))
 
 
 class WriteConfigsLocalDB(luigi.Task):
@@ -984,7 +981,7 @@ class WriteConfigsLocalDB(luigi.Task):
     parameters = luigi.DictParameter()
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(luigi_save_log+'%s.pkl'%(self.task_id))
 
     def requires(self):
         """ Get the generated adsorbate configurations """
