@@ -9,6 +9,10 @@ ase.db.connect(*.db) in this file that you use ase.db.connect(../*.db) to fetch 
 GASpy/ directory, not the submodule directory.
 '''
 
+
+# Add the parent directory (i.e., GASpy) to the PYTHONPATH so that we can import the GASpy module
+import sys
+sys.path.append("..")
 from collections import OrderedDict
 import random
 from generate_database_luigi import WriteConfigsLocalDB
@@ -32,6 +36,23 @@ from sklearn.linear_model import LinearRegression
 from scipy.sparse import coo_matrix
 from multiprocessing import Pool
 import cPickle as pickle
+
+
+class InitializeDB(luigi.WrapperTask):
+    """
+    This class calls on the UpdateDB class in generate_database_luigi.py so that we can
+    dump the fireworks database into the quick-access-mlab database. We would normally
+    just use fireworks, but calling fireworks from a remote cluster is slow. So we speed
+    up the calls by dumping the data to mlab, where querying is fast.
+    """
+    def requires(self):
+        """
+        Luigi automatically runs the `requires` method whenever we tell it to execute a
+        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
+        `run`, and `output` methods), we put all of the "action" into the `requires`
+        method.
+        """
+        UpdateDB()
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
