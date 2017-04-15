@@ -245,7 +245,7 @@ class DumpToAuxDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/DumpToAuxDB.token')
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/DumpToAuxDB.token')
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -472,7 +472,7 @@ class SubmitToFW(luigi.Task):
                 print wflow
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -487,7 +487,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
@@ -577,7 +577,7 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbatesMarker(luigi.Task):
@@ -669,7 +669,7 @@ class GenerateAdsorbatesMarker(luigi.Task):
             pickle.dump(slabsave, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbates(luigi.Task):
@@ -721,7 +721,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -803,7 +803,7 @@ class CalculateEnergy(luigi.Task):
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
@@ -910,7 +910,7 @@ class FingerprintStructure(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class FingerprintGeneratedStructures(luigi.Task):
@@ -951,7 +951,7 @@ class FingerprintGeneratedStructures(luigi.Task):
             pickle.dump(atomslist, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class DumpToLocalDB(luigi.Task):
@@ -1013,7 +1013,7 @@ class DumpToLocalDB(luigi.Task):
             criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
-        with connect('/global/cscratch1/sd/zulissi/GASpy/DBs/adsorption_energy_database.db') as conAds:
+        with connect('/global/cscratch1/sd/zulissi/GASpy_DBs/adsorption_energy_database.db') as conAds:
             conAds.write(best_sys, **criteria)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -1022,7 +1022,7 @@ class DumpToLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy_DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class DumpSitesLocalDB(luigi.Task):
@@ -1034,7 +1034,7 @@ class DumpSitesLocalDB(luigi.Task):
         return FingerprintGeneratedStructures(self.parameters)
 
     def run(self):
-        with connect('/global/cscratch1/sd/zulissi/GASpy/DBs/enumerated_adsorption_sites.db') as con:
+        with connect('/global/cscratch1/sd/zulissi/GASpy_DBs/enumerated_adsorption_sites.db') as con:
 
             # Load the configurations
             configs = pickle.load(self.input().open())
@@ -1063,7 +1063,7 @@ class DumpSitesLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('./global/cscratch1/sd/zulissi/GASpy/DBs/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('./global/cscratch1/sd/zulissi/GASpy_DBs/%s.pkl'%(self.task_id))
 
 
 def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
