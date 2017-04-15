@@ -15,32 +15,31 @@ import sys
 sys.path.append("..")
 from collections import OrderedDict
 import random
-from generate_database_luigi import WriteConfigsLocalDB
-from generate_database_luigi import FingerprintGeneratedStructures
-from generate_database_luigi import default_parameter_bulk
-from generate_database_luigi import default_parameter_gas
-from generate_database_luigi import default_parameter_slab
-from generate_database_luigi import default_parameter_adsorption
-from generate_database_luigi import WriteAdsorptionConfig
-from generate_database_luigi import CalculateEnergy
-from generate_database_luigi import get_db
-from generate_database_luigi import UpdateDB
+import cPickle as pickle
+# from multiprocessing import Pool
+from gaspy_toolbox import DumpSitesLocalDB
+from gaspy_toolbox import FingerprintGeneratedStructures
+from gaspy_toolbox import default_parameter_bulk
+from gaspy_toolbox import default_parameter_gas
+from gaspy_toolbox import default_parameter_slab
+from gaspy_toolbox import default_parameter_adsorption
+from gaspy_toolbox import DumpToLocalDB
+from gaspy_toolbox import CalculateEnergy
+from gaspy_toolbox import UpdateAllDB
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.matproj.rest import MPRester
 import luigi
 from ase.db import connect
 import numpy as np
-from sklearn.preprocessing import LabelBinarizer
-from sklearn.linear_model import LinearRegression
-from scipy.sparse import coo_matrix
-from multiprocessing import Pool
-import cPickle as pickle
+# from sklearn.preprocessing import LabelBinarizer
+# from sklearn.linear_model import LinearRegression
+# from scipy.sparse import coo_matrix
 
 
-class InitializeDB(luigi.WrapperTask):
+class UpdateDBs(luigi.WrapperTask):
     """
-    This class calls on the UpdateDB class in generate_database_luigi.py so that we can
+    This class calls on the DumpToAuxDB class in gaspy_toolbox.py so that we can
     dump the fireworks database into the quick-access-mlab database. We would normally
     just use fireworks, but calling fireworks from a remote cluster is slow. So we speed
     up the calls by dumping the data to mlab, where querying is fast.
@@ -52,7 +51,7 @@ class InitializeDB(luigi.WrapperTask):
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         """
-        UpdateDB()
+        UpdateAllDB()
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
@@ -75,7 +74,7 @@ class ExampleSingleSiteSubmission(luigi.WrapperTask):
                       'slab':default_parameter_slab([1,0,0], True, 0),
                       'gas':default_parameter_gas('CO'),
                       'adsorption':ads_parameter}
-        yield WriteAdsorptionConfig(parameters=parameters)
+        yield DumpToLocalDB(parameters=parameters)
 
         # Find and submit H at a 3-fold Ni site on the top side of mp-23(111)
         ads_parameter = default_parameter_adsorption('H')
@@ -84,7 +83,7 @@ class ExampleSingleSiteSubmission(luigi.WrapperTask):
                       'slab':default_parameter_slab([1,1,1], True, 0),
                       'gas':default_parameter_gas('CO'),
                       'adsorption':ads_parameter}
-        yield WriteAdsorptionConfig(parameters=parameters)
+        yield DumpToLocalDB(parameters=parameters)
 
         # Find and submit CO at every Ni-Ni bridge site on the top side of mp-23(100)
         ads_parameter = default_parameter_adsorption('CO')
@@ -94,50 +93,7 @@ class ExampleSingleSiteSubmission(luigi.WrapperTask):
                       'slab':default_parameter_slab([1,0,0], True, 0),
                       'gas':default_parameter_gas('CO'),
                       'adsorption':ads_parameter}
-        yield WriteAdsorptionConfig(parameters=parameters)
-
-
-class UpdateDFTAdsorptionEnergies(luigi.WrapperTask):
-    """
-    This class is meant to be called by Luigi to update the database with
-    newly completed calculations
-    """
-    def requires(self):
-        """
-        Luigi automatically runs the `requires` method whenever we tell it to execute a
-        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
-        `run`, and `output` methods), we put all of the "action" into the `requires`
-        method.
-        """
-        yield UpdateDB()
-
-        # Get every row in the mongo database of completed fireworks results
-        relaxed_rows = get_db().find({'type':'slab+adsorbate'})
-
-        # Find unique adsorption sites (in case multiple rows are basically the same adsorbate/position/etc
-        unique_configs = np.unique([str([row['fwname']['mpid'],
-                                         row['fwname']['miller'],
-                                         row['fwname']['top'],
-                                         row['fwname']['adsorption_site'],
-                                         row['fwname']['adsorbate'],
-                                         row['fwname']['num_slab_atoms'],
-                                         row['fwname']['slabrepeat'],
-                                         row['fwname']['shift']])
-                                    for row in relaxed_rows
-                                    if row['fwname']['adsorbate'] != ''])
-
-        # For each adsorbate/configuration, make a task to write the results to the output database
-        for row in unique_configs:
-            mpid, miller, top, adsorption_site, adsorbate, num_slab_atoms, slabrepeat, shift = eval(row)
-            parameters = {'bulk':default_parameter_bulk(mpid),
-                          'gas':default_parameter_gas(gasname='CO'),
-                          'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
-                          'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
-                                                                  num_slab_atoms=num_slab_atoms,
-                                                                  slabrepeat=slabrepeat,
-                                                                  adsorption_site=adsorption_site)
-                         }
-            yield WriteAdsorptionConfig(parameters)
+        yield DumpToLocalDB(parameters=parameters)
 
 
 class StudyCoordinationSites(luigi.WrapperTask):
@@ -161,14 +117,11 @@ class StudyCoordinationSites(luigi.WrapperTask):
         with connect('../adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
-        # Find all of the unique sites at the first level of coordination for results
-        unique_result_coordination = np.unique([row.coordination for row in resultRows])
-
         # Find all of the unique sites at the first level of coordination for enumerated configurations
         unique_coord, inverse = np.unique([str([row.coordination]) for row in rows], return_inverse=True)
         random.seed(42)
 
-        print('Number of unique sites to first order: %d'%len(unique_coord))
+        print 'Number of unique sites to first order: %d'%len(unique_coord)
 
 
         # select a number of random site types to investigate
@@ -254,7 +207,6 @@ class EnumerateAlloys(luigi.WrapperTask):
                                'task_id',
                                'structure'],
                               mp_decode=True)
-            # results = m.query({"elements":{"$in": ['Cu','Pd','Au']},"e_above_hull":{"$lt":0.1},"formation_energy_per_atom":{"$lt":0.0}},["pretty_formula","formula",'spacegroup','material id','taskid','task_id'],mp_decode=False)
 
         # Define how to enumerate all of the facets for a given material
         def processStruc(result):
@@ -271,13 +223,13 @@ class EnumerateAlloys(luigi.WrapperTask):
         for facets in all_miller:
             for facet in facets:
                 if self.writeDB:
-                    yield WriteConfigsLocalDB(parameters=OrderedDict(unrelaxed=True,
-                                                                     bulk=default_parameter_bulk(facet[0]),
-                                                                     slab=default_parameter_slab(facet[1], True, 0),
-                                                                     gas=default_parameter_gas('CO'),
-                                                                     adsorption=default_parameter_adsorption('U',
+                    yield DumpSitesLocalDB(parameters=OrderedDict(unrelaxed=True,
+                                                                  bulk=default_parameter_bulk(facet[0]),
+                                                                  slab=default_parameter_slab(facet[1], True, 0),
+                                                                  gas=default_parameter_gas('CO'),
+                                                                  adsorption=default_parameter_adsorption('U',
                                                                                                            "[  3.36   1.16  24.52]",
-                                                                                                           "(1, 1)",24)
+                                                                                                           "(1, 1)", 24)
                                                                     )
                                              )
                 else:
@@ -287,7 +239,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                                                                                 gas=default_parameter_gas('CO'),
                                                                                 adsorption=default_parameter_adsorption('U',
                                                                                                                       "[  3.36   1.16  24.52]",
-                                                                                                                      "(1, 1)",24)))
+                                                                                                                      "(1, 1)", 24)))
 
 
 class PredictAndSubmit(luigi.WrapperTask):
@@ -312,8 +264,8 @@ class PredictAndSubmit(luigi.WrapperTask):
         with connect('../adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
-        # Load the regression's predictions from a pickle. You may need to change the location depending
-        # on your folder structure.
+        # Load the regression's predictions from a pickle. You may need to change the
+        # location depending on your folder structure.
         dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
         matching = []
         for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
@@ -353,8 +305,8 @@ class PredictAndSubmit(luigi.WrapperTask):
                     and row.natoms < 40):
                 matching.append([dE, row])
 
-        # Find the unique coordination of the systems that we filtered out. Also store the index of each
-        # unique coordination with respect to the `matching` list.
+        # Find the unique coordination of the systems that we filtered out. Also store the index
+        # of each unique coordination with respect to the `matching` list.
         ncoord, ncoord_index = np.unique([eval(row[1].neighborcoord) for row in matching], return_index=True)
 
         # Initiate the DFT relaxations/calculations of these systems

@@ -9,11 +9,11 @@ from collections import OrderedDict
 import copy
 import math
 from math import ceil
-import glob
+# import glob
 import cPickle as pickle
 import numpy as np
 from numpy.linalg import norm
-import pymatgen
+# import pymatgen
 from pymatgen.matproj.rest import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -34,29 +34,35 @@ import luigi
 
 
 def get_launchpad():
-    return LaunchPad(host='gilgamesh.cheme.cmu.edu',
+    return LaunchPad(host='mongodb03.nersc.gov',
                      name='fw_zu_vaspsurfaces',
                      username='admin_zu_vaspsurfaces',
                      password='$TPAHPmj',
-                     port=30000)
+                     port=27017)
 
 
 def adsorbate_dictionary(adsorbate):
     """
     This is a helper function to take an adsorbate as a string (e.g. 'CO') and attempt to
     return an atoms object for it, primarily as a way to count the number of constitutent
-    atoms in the adsorbate
+    atoms in the adsorbate. It also contains a skeleton for the user to manually add atoms
+    objects to "atom_dict".
     """
-    # First, try to create an [atoms class] from the input
+    # First, add the manually-added adsorbates to the atom_dict lookup variable. Note that
+    # 'H' is just an example. It won't actually be used here.
+    atom_dict = {'H': Atoms('H')}
+
+    # Try to create an [atoms class] from the input
     try:
         atoms = Atoms(adsorbate)
+
     # If that doesn't work, then look for the adsorbate in the "atomDict" object
-    except:
+    except LookupError:
         try:
-            atoms = atomDict[adsorbate]
+            atoms = atom_dict[adsorbate]
         # If that doesn't work, then alert the user and move on
-        except:
-            print('Error: Adsorbate name may not be in the "atomDict" dictionary')
+        except LookupError:
+            print 'Error: Adsorbate name may not be in the "atomDict" dictionary'
     # Return the number of constraints added
     return atoms
 
@@ -105,15 +111,15 @@ def make_firework(atomin, namein, vaspin, threshold=40, maxMiller=3):
         above 3 won't get submitted by accident
     """
     if len(atomin) > threshold:
-        print('too many atoms! '+str(namein))
+        print 'too many atoms! '+str(namein)
         return
     if 'miller' in namein and np.max(eval(str(namein['miller']))) > maxMiller:
-        print('too high miller! '+str(namein))
+        print 'too high miller! '+str(namein)
         return
     # Generate a string representation that we can pass to the job as input
     atom_hex = atoms_to_hex(atomin)
     # Two steps - write the input structure to an input file, then relax that traj file
-    write_surface = PyTask(func='fireworks_helper_scripts.atomsHexToFile',
+    write_surface = PyTask(func='fireworks_helper_scripts.atoms_hex_to_file',
                            args=['slab_in.traj',
                                  atom_hex]
                           )
@@ -162,33 +168,26 @@ def running_fireworks(name_dict, launchpad):
     return fw_list
 
 
-def get_db():
-    """ Get a handle to the results database """
-    return MongoDatabase(host='ds117909.mlab.com',
-                         port=17909,
-                         user='ulissi_admin',
-                         password='ulissi_admin',
-                         database='ulissigroup_test',
+def get_aux_db():
+    """ This is the information for the Auxiliary vasp.mongo database """
+    return MongoDatabase(host='mongodb03.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
 
-class UpdateDB(luigi.Task):
+class DumpToAuxDB(luigi.Task):
     """
-    This is a task that looks at the fireworks database and loads the values into the
-    results database (the one in getDB()).
-    We use the database in getDB() because we found that querying the Fireworks database
-    from a remote server (i.e., Gilgamesh) takes a long time. So instead, we dump the
-    Fireworks database into the one in getDB(), which we can query quickly.
+    This class will load the results from the Primary FireWorks database into the
+    Auxiliary vasp.mongo database.
     """
     def run(self):
-        launchpad = LaunchPad(host='gilgamesh.cheme.cmu.edu',
-                              name='fw_zu_vaspsurfaces',
-                              username='admin_zu_vaspsurfaces',
-                              password='$TPAHPmj',
-                              port=30000)
+        launchpad = get_launchpad()
 
         # Create a class, "con", that has methods to interact with the database.
-        with get_db() as MD:
+        with get_aux_db() as MD:
 
             # A list of integers containing the Fireworks job ID numbers that have been
             # added to the database already
@@ -246,20 +245,64 @@ class UpdateDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('../updatedDB.token')
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/DumpToAuxDB.token')
 
 
-class WriteRow(luigi.Task):
+class UpdateAllDB(luigi.WrapperTask):
     """
-    his class defines a task to get a result from the database of fireworks results
-    (in getDB()). If the result is not present, we should yield a dependency that will
-    create and relax the necessary result
+    Dump from the Primary database to the Auxiliary database, and then dump from the
+    Auxiliary database to the Local database
+    """
+    def requires(self):
+        """
+        Luigi automatically runs the `requires` method whenever we tell it to execute a
+        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
+        `run`, and `output` methods), we put all of the "action" into the `requires`
+        method.
+        """
+        yield DumpToAuxDB()
+
+        # Get every row in the mongo database of completed fireworks results
+        relaxed_rows = get_aux_db().find({'type':'slab+adsorbate'})
+
+        # Find unique adsorption sites (in case multiple rows are basically the same
+        #adsorbate/position/etc)
+        unique_configs = np.unique([str([row['fwname']['mpid'],
+                                         row['fwname']['miller'],
+                                         row['fwname']['top'],
+                                         row['fwname']['adsorption_site'],
+                                         row['fwname']['adsorbate'],
+                                         row['fwname']['num_slab_atoms'],
+                                         row['fwname']['slabrepeat'],
+                                         row['fwname']['shift']])
+                                    for row in relaxed_rows
+                                    if row['fwname']['adsorbate'] != ''])
+
+        # For each adsorbate/configuration, make a task to write the results to the output database
+        for row in unique_configs:
+            mpid, miller, top, adsorption_site, adsorbate, num_slab_atoms, slabrepeat, shift = eval(row)
+            parameters = {'bulk':default_parameter_bulk(mpid),
+                          'gas':default_parameter_gas(gasname='CO'),
+                          'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
+                          'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
+                                                                  num_slab_atoms=num_slab_atoms,
+                                                                  slabrepeat=slabrepeat,
+                                                                  adsorption_site=adsorption_site)
+                         }
+            yield DumpToLocalDB(parameters)
+
+
+class SubmitToFW(luigi.Task):
+    """
+    This class accepts a luigi.Task (e.g., relax a structure), then checks to see if
+    this task is already logged in the Auxiliary vasp.mongo database. If it is not, then it
+    submits the task to our Primary FireWorks database.
     """
     # Calctype is one of 'gas','slab','bulk','slab+adsorbate'
-    calctype=luigi.Parameter()
+    calctype = luigi.Parameter()
 
     # Parameters is a nested dictionary of parameters
-    parameters=luigi.DictParameter()
+    parameters = luigi.DictParameter()
 
     def requires(self):
         """
@@ -275,7 +318,7 @@ class WriteRow(luigi.Task):
                     return False
             return True
 
-        # Define a dictionary that will be used to search the results database and find
+        # Define a dictionary that will be used to search the Auxiliary database and find
         # the correct entry
         if self.calctype == 'gas':
             search_strings = {'type':'gas', 'fwname.gasname':self.parameters['gas']['gasname']}
@@ -312,8 +355,8 @@ class WriteRow(luigi.Task):
         if 'fwname.shift' in search_strings:
             search_strings['fwname.shift'] = np.round(search_strings['fwname.shift'], 4)
 
-        # Grab all of the matching entries in the database
-        with get_db() as MD:
+        # Grab all of the matching entries in the Auxiliary database
+        with get_aux_db() as MD:
             self.matching_row = list(MD.find(search_strings))
 
         # If there are no matching entries, we need to yield a requirement that will
@@ -327,7 +370,6 @@ class WriteRow(luigi.Task):
                 return GenerateBulk({'bulk':self.parameters['bulk']})
             if self.calctype == 'gas':
                 return GenerateGas({'gas':self.parameters['gas']})
-
 
 
     def run(self):
@@ -379,8 +421,8 @@ class WriteRow(luigi.Task):
                 fpd_structs = pickle.load(self.input().open())
                 def matchFP(entry, fp):
                     for key in fp:
-                        if type(entry[key])==list:
-                            if sorted(entry[key])!=sorted(fp[key]):
+                        if type(entry[key]) == list:
+                            if sorted(entry[key]) != sorted(fp[key]):
                                 return False
                         else:
                             if entry[key] != fp[key]:
@@ -422,15 +464,15 @@ class WriteRow(luigi.Task):
                                                       name,
                                                       self.parameters['adsorption']['vasp_settings']))
             # If we've found a structure that needs submitting, do so
-            print('tosubmit: '+str(tosubmit))
+            print 'tosubmit: '+str(tosubmit)
             tosubmit = [a for a in tosubmit if a is not None]
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                print(wflow)
+                print wflow
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -445,7 +487,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
@@ -455,7 +497,7 @@ class GenerateSurfaces(luigi.Task):
         if 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == True:
             return GenerateBulk(parameters={'bulk':self.parameters['bulk']})
         else:
-            return WriteRow(calctype='bulk', parameters={'bulk':self.parameters['bulk']})
+            return SubmitToFW(calctype='bulk', parameters={'bulk':self.parameters['bulk']})
 
     def run(self):
         atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
@@ -535,7 +577,7 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbatesMarker(luigi.Task):
@@ -548,14 +590,11 @@ class GenerateAdsorbatesMarker(luigi.Task):
                                                             slab=self.parameters['slab'])),
                     GenerateBulk(parameters={'bulk':self.parameters['bulk']})]
         else:
-            return [WriteRow(calctype='slab',
-                             parameters=OrderedDict(bulk=self.parameters['bulk'],
+            return [SubmitToFW(calctype='slab',
+                               parameters=OrderedDict(bulk=self.parameters['bulk'],
                                                     slab=self.parameters['slab'])),
-                    WriteRow(calctype='bulk',
-                             parameters={'bulk':self.parameters['bulk']})]
-
-    def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+                    SubmitToFW(calctype='bulk',
+                               parameters={'bulk':self.parameters['bulk']})]
 
     def run(self):
         adsorbate = {'name':'U', 'atoms':Atoms('U')}
@@ -629,6 +668,9 @@ class GenerateAdsorbatesMarker(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(slabsave, open(self.temp_output_path, 'w'))
 
+    def output(self):
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
+
 
 class GenerateAdsorbates(luigi.Task):
     """
@@ -679,7 +721,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -695,14 +737,14 @@ class CalculateEnergy(luigi.Task):
         structures/energies
         """
         toreturn = []
-        toreturn.append(WriteRow(parameters=self.parameters, calctype='slab+adsorbate'))
+        toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
-        toreturn.append(WriteRow(parameters=param, calctype='slab+adsorbate'))
+        toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
         for gasname in ['CO', 'H2', 'H2O']:
             param = copy.deepcopy({'gas':self.parameters['gas']})
             param['gas']['gasname'] = gasname
-            toreturn.append(WriteRow(parameters=param, calctype='gas'))
+            toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
         # toreturn is a list of [slab+adsorbate,slab,CO,H2,H2O] relaxed structures
         return toreturn
 
@@ -760,9 +802,8 @@ class CalculateEnergy(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
-
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
@@ -826,7 +867,10 @@ def fingerprint(atoms, siteind):
 
 
 class FingerprintStructure(luigi.Task):
-    """ This class fingerprints a relaxed structure """
+    """
+    This class takes relaxed structures from our Pickles, fingerprints them, then adds the
+    fingerprints back to our Pickles
+    """
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -839,8 +883,8 @@ class FingerprintStructure(luigi.Task):
                                                          atoms=pickle.dumps(Atoms('')).
                                                          encode('hex'))]
         return [CalculateEnergy(self.parameters),
-                WriteRow(parameters=param,
-                         calctype='slab+adsorbate')]
+                SubmitToFW(parameters=param,
+                           calctype='slab+adsorbate')]
 
     def run(self):
 
@@ -866,18 +910,21 @@ class FingerprintStructure(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
 class FingerprintGeneratedStructures(luigi.Task):
-    """ This class is used to fingerprint non-relaxed structures """
+    """
+    This class takes unrelaxed structures from our Pickles, fingerprints them, then adds the
+    fingerprints back to our Pickles
+    """
     parameters = luigi.DictParameter()
     def requires(self):
         # Get the unrelaxed adsorbates and surfaces
         return [GenerateAdsorbates(self.parameters),
                 GenerateSurfaces(parameters=OrderedDict(unrelaxed=True,
-                                                         bulk=self.parameters['bulk'],
-                                                         slab=self.parameters['slab']))]
+                                                        bulk=self.parameters['bulk'],
+                                                        slab=self.parameters['slab']))]
 
     def run(self):
         # Load the lowest-energy configuration
@@ -902,16 +949,13 @@ class FingerprintGeneratedStructures(luigi.Task):
         # Write
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(atomslist, open(self.temp_output_path, 'w'))
+
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
-class WriteAdsorptionConfig(luigi.Task):
-    """
-    This class is used to a processed adsorption calculation to a local ase-db database
-    If you want the results to end up somewhere else, write a similar class and use it as the
-    final target instead
-    """
+class DumpToLocalDB(luigi.Task):
+    """ This class dumps the adsorption energies from our pickles to a local ASE database. """
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -921,11 +965,10 @@ class WriteAdsorptionConfig(luigi.Task):
         """
         return [CalculateEnergy(self.parameters),
                 FingerprintStructure(self.parameters),
-                WriteRow(calctype='bulk',
-                         parameters={'bulk':self.parameters['bulk']})]
+                SubmitToFW(calctype='bulk',
+                           parameters={'bulk':self.parameters['bulk']})]
 
     def run(self):
-
         # Load the structure
         best_sys_pkl = pickle.load(self.input()[0].open())
         # Extract the atoms object
@@ -970,7 +1013,7 @@ class WriteAdsorptionConfig(luigi.Task):
             criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
-        with connect('../adsorption_energy_database.db') as conAds:
+        with connect('/global/cscratch1/sd/zulissi/GASpy/DBs/adsorption_energy_database.db') as conAds:
             conAds.write(best_sys, **criteria)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -979,22 +1022,19 @@ class WriteAdsorptionConfig(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget('/global/cscratch1/sd/zulissi/GASpy/DBs/pickles/%s.pkl'%(self.task_id))
 
 
-class WriteConfigsLocalDB(luigi.Task):
-    """ This class is used to write a generated structure to a local ase database """
+class DumpSitesLocalDB(luigi.Task):
+    """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
     parameters = luigi.DictParameter()
-
-    def output(self):
-        return luigi.LocalTarget('../structures/%s.pkl'%(self.task_id))
 
     def requires(self):
         """ Get the generated adsorbate configurations """
         return FingerprintGeneratedStructures(self.parameters)
 
     def run(self):
-        with connect('../enumerated_adsorption_sites.db') as con:
+        with connect('/global/cscratch1/sd/zulissi/GASpy/DBs/enumerated_adsorption_sites.db') as con:
 
             # Load the configurations
             configs = pickle.load(self.input().open())
@@ -1015,12 +1055,15 @@ class WriteConfigsLocalDB(luigi.Task):
                           top=self.parameters['slab']['top'],
                           adsorption_site=config['adsorption_site'],
                           coordination=config['coordination'],
-                          neighborcoord=str(config['neighborcoord']),                          
+                          neighborcoord=str(config['neighborcoord']),
                           nextnearestcoordination=str(config['nextnearestcoordination']))   # Plus tags
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
                 fhandle.write(' ')
+
+    def output(self):
+        return luigi.LocalTarget('./global/cscratch1/sd/zulissi/GASpy/DBs/%s.pkl'%(self.task_id))
 
 
 def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
