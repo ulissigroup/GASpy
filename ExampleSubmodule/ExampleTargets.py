@@ -54,7 +54,7 @@ class UpdateDBs(luigi.WrapperTask):
         yield UpdateAllDB()
 
 
-GASpy_DB_loc='/global/cscratch1/sd/zulissi/'
+GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
@@ -286,42 +286,20 @@ class PredictAndSubmit(luigi.WrapperTask):
         ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
                                           for row in matching], return_index=True)
 
-        # Load the adsorption site database
-        conEnum = connect(GASpy_DB_loc+'/enumerated_adsorption_sites.db')
-        # Load the rows in the database
-        adsorption_rows_catalog = [row for row in conEnum.select()]
-
-        # Load energy predictions from a .pkl file that was generated in the GASpy_regressions
-        # submodule
-        dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
-
-        # Find all of the regressed energies and database rows of all slab+adsorbate relaxations
-        # that had relaxed energies between -1.2 and -0.5 eV, had CO as an adsorbate, did not have
-        # Al or Cu in the bulk, and had less than 40 total atoms in the slab+adsorbate system. The
-        # regressed energies are the database rows are zipped into the `matching` list.
-        matching = []
-        for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
-            if (dE > -1.2
-                    and dE < -0.5
-                    and 'Al' not in row.formula
-                    and 'Cu' not in row.formula
-                    and row.natoms < 40):
-                matching.append([dE, row])
-
-        # Find the unique coordination of the systems that we filtered out. Also store the index
-        # of each unique coordination with respect to the `matching` list.
-        ncoord, ncoord_index = np.unique([eval(row[1].neighborcoord) for row in matching], return_index=True)
-
+        print(len(ncoord_index))
         # Initiate the DFT relaxations/calculations of these systems
         for ind in ncoord_index:
             row = matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
-#             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
-#                                                     'neighborcoord':eval(row.neighborcoord)}
-            parameters = {'bulk': default_parameter_bulk(row.mpid),
-                          'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
-                          'gas':default_parameter_gas('CO'),
-                          'adsorption':ads_parameter}
-            yield CalculateEnergy(parameters=parameters)
+            if len([row2 for row2 in resultRows if row2.adsorbate=='CO' and 
+                                                   (row.coordination==row2.coordination and \
+                                                      row.nextnearestcoordination==row2.nextnearestcoordination) or \
+ 					           (row.coordination==row2.initial_coordination \
+                                                       and row.nextnearestcoordination==row2.initial_nextnearestcoordination)])>0:
+                parameters = {'bulk': default_parameter_bulk(row.mpid),
+                              'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
+                              'gas':default_parameter_gas('CO'),
+                              'adsorption':ads_parameter}
+                yield CalculateEnergy(parameters=parameters)

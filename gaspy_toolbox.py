@@ -268,21 +268,33 @@ class UpdateAllDB(luigi.WrapperTask):
 
         # Find unique adsorption sites (in case multiple rows are basically the same
         #adsorbate/position/etc)
-        unique_configs = np.unique([str([row['fwname']['mpid'],
-                                         row['fwname']['miller'],
-                                         row['fwname']['top'],
-                                         row['fwname']['adsorption_site'],
-                                         row['fwname']['adsorbate'],
-                                         row['fwname']['num_slab_atoms'],
-                                         row['fwname']['slabrepeat'],
-                                         row['fwname']['shift']])
-                                    for row in relaxed_rows
-                                    if row['fwname']['adsorbate'] != ''])
+        #unique_configs = np.unique([str([row['fwname']['mpid'],
+        #                                 row['fwname']['miller'],
+        #                                 row['fwname']['top'],
+        #                                 row['fwname']['adsorption_site'],
+        #                                 row['fwname']['adsorbate'],
+        #                                 row['fwname']['num_slab_atoms'],
+        #                                 row['fwname']['slabrepeat'],
+        #                                 row['fwname']['shift']])
+        #                            for row in relaxed_rows
+        #                            if row['fwname']['adsorbate'] != ''])
+
+        #Get all of the current fwid entries in the db
+        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
+            fwidlist=[row.fwid for row in conAds.select()]
 
         # For each adsorbate/configuration, make a task to write the results to the output database
-        for row in unique_configs:
-            mpid, miller, top, adsorption_site, adsorbate, num_slab_atoms, slabrepeat, shift = eval(row)
-            parameters = {'bulk':default_parameter_bulk(mpid),
+        for row in relaxed_rows:
+            if row['fwid'] not in fwidlist and row['fwname']['adsorbate']!='':
+                mpid=row['fwname']['mpid']
+                miller=row['fwname']['miller']
+                adsorption_site=row['fwname']['adsorption_site']
+                adsorbate=row['fwname']['adsorbate']
+                top=row['fwname']['top']
+                num_slab_atoms=row['fwname']['num_slab_atoms']
+                slabrepeat=row['fwname']['slabrepeat']
+                shift=row['fwname']['shift']
+                parameters = {'bulk':default_parameter_bulk(mpid),
                           'gas':default_parameter_gas(gasname='CO'),
                           'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
                           'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
@@ -290,7 +302,7 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                   slabrepeat=slabrepeat,
                                                                   adsorption_site=adsorption_site)
                          }
-            yield DumpToLocalDB(parameters)
+                yield DumpToLocalDB(parameters)
 
 
 class SubmitToFW(luigi.Task):
