@@ -34,6 +34,9 @@ from multiprocessing import Pool
 import cPickle as pickle
 
 
+db_loc='/global/cscratch1/sd/zulissi/'
+
+
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
     def requires(self):
         """
@@ -94,7 +97,7 @@ class UpdateDFTAdsorptionEnergies(luigi.WrapperTask):
         relaxed_rows = get_db().find({'type':'slab+adsorbate'})
 
         # Find unique adsorption sites (in case multiple rows are basically the same adsorbate/position/etc
-        unique_configs = np.unique([str([row['fwname']['mpid'],
+        unique_configs = [str([row['fwname']['mpid'],
                                          row['fwname']['miller'],
                                          row['fwname']['top'],
                                          row['fwname']['adsorption_site'],
@@ -103,7 +106,7 @@ class UpdateDFTAdsorptionEnergies(luigi.WrapperTask):
                                          row['fwname']['slabrepeat'],
                                          row['fwname']['shift']])
                                     for row in relaxed_rows
-                                    if row['fwname']['adsorbate'] != ''])
+                                    if row['fwname']['adsorbate'] != '']
 
         # For each adsorbate/configuration, make a task to write the results to the output database
         for row in unique_configs:
@@ -133,11 +136,11 @@ class StudyCoordinationSites(luigi.WrapperTask):
         """
 
         # Get all of the enumerated configurations
-        with connect('../enumerated_adsorption_sites.db') as con:
+        with connect(db+loc+'enumerated_adsorption_sites.db') as con:
             rows = [row for row in con.select()]
 
         # Get all of the adsorption energies we've already calculated
-        with connect('../adsorption_energy_database.db') as con:
+        with connect(db_loc+'adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
         # Find all of the unique sites at the first level of coordination for results
@@ -284,11 +287,11 @@ class PredictAndSubmit(luigi.WrapperTask):
         method.
         """
         # Get all of the adsorption sites we've already identified
-        with connect('../enumerated_adsorption_sites.db') as conEnum:
+        with connect(db_loc+'enumerated_adsorption_sites.db') as conEnum:
             adsorption_rows_catalog = [row for row in conEnum.select()]
 
         # Get all of the adsorption energies we've already calculated
-        with connect('../adsorption_energy_database.db') as con:
+        with connect(db_loc+'adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
         # Load the regression's predictions from a pickle. You may need to change the location depending
@@ -311,7 +314,7 @@ class PredictAndSubmit(luigi.WrapperTask):
                                           for row in matching], return_index=True)
 
         # Load the adsorption site database
-        conEnum = connect('../enumerated_adsorption_sites.db')
+        conEnum = connect(db_loc+'enumerated_adsorption_sites.db')
         # Load the rows in the database
         adsorption_rows_catalog = [row for row in conEnum.select()]
 
