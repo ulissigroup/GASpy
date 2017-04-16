@@ -1,0 +1,69 @@
+#+TITLE:  GASpy:  Generalized Adsorption Simulation Package for Python
+#+date:  04 April 2017
+
+* Purpose
+To use Density Functional Theory (DFT) to calculate adsorption energies of adsorbates onto slabs,
+but to do it in a general way such that we may perform these calculations for an arbitrary number of
+configurations (e.g., slab materials, adsorbate types, adsorption sites, percent coverages, etc.).
+
+* Overview
+GASpy is written in Python, and we use various tools that enable us to begin DFT relaxations on
+"arbitrarily large" sample pools.
+
+** Tools
+ASE (https://wiki.fysik.dtu.dk/ase/about.html)
+
+PyMatGen (http://pymatgen.org/, https://github.com/zulissi/pymatgen)
+
+Luigi (https://github.com/spotify/luigi)
+
+FireWorks (https://pythonhosted.org/FireWorks/index.html)
+
+VASP (https://www.vasp.at/index.php/about-vasp/59-about-vasp)
+
+VASP.py (https://github.com/jkitchin/vasp)
+
+Materials Project (https://materialsproject.org/)
+
+MongoDB (https://www.mongodb.com/)
+
+** Infrastructure
+We created various Python classes to automate adsorption energy calculations; these classes live inside
+gaspy_toolbox.py. For example:  We have classes to fetch bulk structures from the Materials Projec and
+then turn them into ASE atoms objects; we have classes that use PyMatGen to cut slabs out of these
+bulk structures; we have classes that use PyMatGen to enumerate adsorption sites on these slabs; we
+have classes to add adsorbates onto these sites; and we have classes to calculate adsorption energies
+from slab, adsorbate, and slab+adsorbate relaxations.
+
+We use Luigi to manage the dependencies between these classes (e.g., our slab cutting class requires
+that we have already fetched the bulk structure), and we use FireWorks to manage/submit our DFT simulations
+across multiple clusters.
+
+Thus, we can simply tell GASpy to "calculate the adsorption energy of CO on Pt", and it automatically
+performs all of the necessary steps (e.g., fetch Pt from Materials Project; cut slabs; relax the slabs;
+add CO onto the slab and then relax; then calculate the adsorption energy).
+
+* Use
+We recommend using submodules (https://git-scm.com/docs/git-mv).
+
+To submit calculations, create Python classes that call on the appropriate classes in gasp_toolbox.py,
+and then use Luigi to execute the classes that you made. Luigi will automatically submit your calculations
+to the FireWorks Launchpad. Follow the example in "ExampleTargets.py" and "RunExampleTarget.sh", which
+live in the ExampleSubmodule/ folder.
+
+* Under the hood
+Since we are performing a (very) large number of DFT simulations, we need to store the data somewhere.
+Our Primary, "blessed" database is a MongoDB that is managed by our FireWorks launchpad.
+
+But our Primary, FireWorks-mananged database is not friendly with our Luigi dependency-mananger, nor is
+it friendly with our pre-launch redundancy checks (which we use to prevent re-calculations on systems we've
+already studied). So we create an Auxiliary vasp.mongo database where we dump all of our data from our Primary
+database, but in a "good" format. GASpy then does its administrative work on the Auxiliary vasp.mongo
+database and then submits jobs to the Primary FireWorks database. The user specifies when to update the
+Auxiliary database from the Primary database.
+
+To make matters even more fun, we love having ASE-style databases for slab+adsorbate systems so that we can
+easily visualize our systems. To accomplish this, we dump our Auxiliary database into a Local ASE *.db file,
+which we can then port to a web-based visualizer. The user also decides when to perform this dump.
+
+All of these actions are either automated or defined as (easy-to-use-we-hope) classes in gaspy_toolbox.py.
