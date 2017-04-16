@@ -51,7 +51,7 @@ class UpdateDBs(luigi.WrapperTask):
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         """
-        UpdateAllDB()
+        yield UpdateAllDB()
 
 
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/'

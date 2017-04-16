@@ -473,7 +473,7 @@ class SubmitToFW(luigi.Task):
                 print wflow
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_location+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -488,7 +488,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_location+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
