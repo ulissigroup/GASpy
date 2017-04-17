@@ -10,6 +10,9 @@ GASpy/ directory, not the submodule directory.
 '''
 
 
+DB_LOC = '/global/cscratch1/sd/zulissi/GASpy_DB/'
+
+
 # Add the parent directory (i.e., GASpy) to the PYTHONPATH so that we can import the GASpy module
 import sys
 sys.path.append("..")
@@ -52,9 +55,6 @@ class UpdateDBs(luigi.WrapperTask):
         method.
         """
         yield UpdateAllDB()
-
-
-GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
@@ -113,11 +113,11 @@ class StudyCoordinationSites(luigi.WrapperTask):
         """
 
         # Get all of the enumerated configurations
-        with connect(GASpy_DB_loc+'/enumerated_adsorption_sites.db') as con:
+        with connect(DB_LOC+'/enumerated_adsorption_sites.db') as con:
             rows = [row for row in con.select()]
 
         # Get all of the adsorption energies we've already calculated
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as con:
+        with connect(DB_LOC+'/adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
         # Find all of the unique sites at the first level of coordination for enumerated configurations
@@ -260,11 +260,11 @@ class PredictAndSubmit(luigi.WrapperTask):
         method.
         """
         # Get all of the adsorption sites we've already identified
-        with connect(GASpy_DB_loc+'/enumerated_adsorption_sites.db') as conEnum:
+        with connect(DB_LOC+'/enumerated_adsorption_sites.db') as conEnum:
             adsorption_rows_catalog = [row for row in conEnum.select()]
 
         # Get all of the adsorption energies we've already calculated
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as con:
+        with connect(DB_LOC+'/adsorption_energy_database.db') as con:
             resultRows = [row for row in con.select()]
 
         # Load the regression's predictions from a pickle. You may need to change the
@@ -285,20 +285,22 @@ class PredictAndSubmit(luigi.WrapperTask):
         ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
                                           for row in matching], return_index=True)
 
-        print(len(ncoord_index))
+        print len(ncoord_index)
         # Initiate the DFT relaxations/calculations of these systems
         for ind in ncoord_index:
             row = matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
-            if len([row2 for row2 in resultRows if row2.adsorbate=='CO' and 
-                                                   (row.coordination==row2.coordination and \
-                                                      row.nextnearestcoordination==row2.nextnearestcoordination and \
-                                                      row.neighborcoord==row2.neighborcoord) or \
- 					           (row.coordination==row2.initial_coordination and \
-                                                       row.nextnearestcoordination==row2.initial_nextnearestcoordination and \
-                                                       row.neighborcoord==row2.initial_neighborcoord)])>0:
+            if len([row2 for row2 in resultRows
+                    if row2.adsorbate == 'CO'
+                    and (row.coordination == row2.coordination
+                         and row.nextnearestcoordination == row2.nextnearestcoordination
+                         and row.neighborcoord == row2.neighborcoord)
+                    or (row.coordination == row2.initial_coordination
+                        and row.nextnearestcoordination == row2.initial_nextnearestcoordination
+                        and row.neighborcoord == row2.initial_neighborcoord)]
+                  ) > 0:
                 parameters = {'bulk': default_parameter_bulk(row.mpid),
                               'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                               'gas':default_parameter_gas('CO'),
