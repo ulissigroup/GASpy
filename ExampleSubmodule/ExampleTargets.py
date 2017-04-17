@@ -272,10 +272,9 @@ class PredictAndSubmit(luigi.WrapperTask):
         dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
         matching = []
         for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
-            if (dE > -1.2
-                    and dE < -0.5
+            if (dE > -1.7
+                    and dE < -0.3
                     and 'Al' not in row.formula
-                    and 'Cu' not in row.formula
                     and row.natoms < 40
                     and len([row2
                              for row2 in resultRows
@@ -295,9 +294,11 @@ class PredictAndSubmit(luigi.WrapperTask):
                                                     'nextnearestcoordination':row.nextnearestcoordination}
             if len([row2 for row2 in resultRows if row2.adsorbate=='CO' and 
                                                    (row.coordination==row2.coordination and \
-                                                      row.nextnearestcoordination==row2.nextnearestcoordination) or \
- 					           (row.coordination==row2.initial_coordination \
-                                                       and row.nextnearestcoordination==row2.initial_nextnearestcoordination)])>0:
+                                                      row.nextnearestcoordination==row2.nextnearestcoordination and \
+                                                      row.neighborcoord==row2.neighborcoord) or \
+ 					           (row.coordination==row2.initial_coordination and \
+                                                       row.nextnearestcoordination==row2.initial_nextnearestcoordination and \
+                                                       row.neighborcoord==row2.initial_neighborcoord)])>0:
                 parameters = {'bulk': default_parameter_bulk(row.mpid),
                               'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                               'gas':default_parameter_gas('CO'),

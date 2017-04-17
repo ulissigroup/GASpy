@@ -100,7 +100,7 @@ def set_constraints(atoms, numSlabAtoms, zcutoff=3.):
     return atomscopy
 
 
-def make_firework(atomin, namein, vaspin, threshold=40, maxMiller=3):
+def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=3):
     """
     This function makes a simple vasp relaxation firework
     atomin: atoms object to relax
@@ -833,7 +833,7 @@ def fingerprint(atoms, siteind):
     atoms[-1].symbol = 'U'
 
     # Turn the atoms into a pymatgen structure file
-    struct = AseAtomsAdaptor.get_structure(atoms[0:siteind+1])
+    struct = AseAtomsAdaptor.get_structure(atoms)
     # PyMatGen [vcf class] of our system
     vcf = VoronoiCoordFinder(struct)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
@@ -867,6 +867,7 @@ def fingerprint(atoms, siteind):
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
     coordinated_atoms_nextnearest = vcf.get_coordinated_sites(siteind, 0.2)
+
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string, coordinated_atoms_nextnearest)
     # Take out atoms that we assume are not part of the slab
@@ -934,10 +935,10 @@ class FingerprintGeneratedStructures(luigi.Task):
     parameters = luigi.DictParameter()
     def requires(self):
         # Get the unrelaxed adsorbates and surfaces
+        param = copy.deepcopy(self.parameters)
+        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         return [GenerateAdsorbates(self.parameters),
-                GenerateSurfaces(parameters=OrderedDict(unrelaxed=True,
-                                                        bulk=self.parameters['bulk'],
-                                                        slab=self.parameters['slab']))]
+                GenerateAdsorbates(parameters=param)]
 
     def run(self):
         # Load the lowest-energy configuration
@@ -945,7 +946,8 @@ class FingerprintGeneratedStructures(luigi.Task):
         surfaces = pickle.load(self.input()[1].open())
         # Get the number of slab atoms
         if len(atomslist) > 0:
-            expected_slab_atoms = len(surfaces[0]['atoms']['atoms'])*np.prod(eval(atomslist[0]['slabrepeat']))
+            expected_slab_atoms = len(surfaces[0]['atoms'])
+            # len(surfaces[0]['atoms']['atoms'])*np.prod(eval(atomslist[0]['slabrepeat']))
 
             for entry in atomslist:
                 if entry['adsorbate'] == '':
@@ -994,7 +996,7 @@ class DumpToLocalDB(luigi.Task):
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
         for fp in [fp_init,fp_final]:
-            for key in ['neighborcoord','coordination']:
+            for key in ['neighborcoord','nextnearestcoordination','coordination']:
                 if key not in fp:
                     fp[key]=''
 
