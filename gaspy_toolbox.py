@@ -279,29 +279,29 @@ class UpdateAllDB(luigi.WrapperTask):
         #                            for row in relaxed_rows
         #                            if row['fwname']['adsorbate'] != ''])
 
-        #Get all of the current fwid entries in the db
+        # Get all of the current fwid entries in the db
         with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
-            fwidlist=[row.fwid for row in conAds.select()]
+            fwidlist = [row.fwid for row in conAds.select()]
 
         # For each adsorbate/configuration, make a task to write the results to the output database
         for row in relaxed_rows:
-            if row['fwid'] not in fwidlist and row['fwname']['adsorbate']!='':
-                mpid=row['fwname']['mpid']
-                miller=row['fwname']['miller']
-                adsorption_site=row['fwname']['adsorption_site']
-                adsorbate=row['fwname']['adsorbate']
-                top=row['fwname']['top']
-                num_slab_atoms=row['fwname']['num_slab_atoms']
-                slabrepeat=row['fwname']['slabrepeat']
-                shift=row['fwname']['shift']
+            if row['fwid'] not in fwidlist and row['fwname']['adsorbate'] != '':
+                mpid = row['fwname']['mpid']
+                miller = row['fwname']['miller']
+                adsorption_site = row['fwname']['adsorption_site']
+                adsorbate = row['fwname']['adsorbate']
+                top = row['fwname']['top']
+                num_slab_atoms = row['fwname']['num_slab_atoms']
+                slabrepeat = row['fwname']['slabrepeat']
+                shift = row['fwname']['shift']
                 parameters = {'bulk':default_parameter_bulk(mpid),
-                          'gas':default_parameter_gas(gasname='CO'),
-                          'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
-                          'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
-                                                                  num_slab_atoms=num_slab_atoms,
-                                                                  slabrepeat=slabrepeat,
-                                                                  adsorption_site=adsorption_site)
-                         }
+                              'gas':default_parameter_gas(gasname='CO'),
+                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
+                              'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
+                                                                        num_slab_atoms=num_slab_atoms,
+                                                                        slabrepeat=slabrepeat,
+                                                                        adsorption_site=adsorption_site)
+                             }
                 yield DumpToLocalDB(parameters)
 
 
