@@ -272,37 +272,37 @@ class PredictAndSubmit(luigi.WrapperTask):
         dEprediction = pickle.load(open('../GASpy_regressions/primary_coordination_prediction.pkl'))
         matching = []
         for dE, row in zip(dEprediction['CO'], adsorption_rows_catalog):
-            if (dE > -1.7
-                    and dE < -0.3
+            if (dE > -0.7
+                    and dE < -0.4
+                    and 'Cu' not in row.formula
                     and 'Al' not in row.formula
                     and row.natoms < 40
-                    and len([row2
-                             for row2 in resultRows
-                             if row2.coordination == row.coordination
-                             and row2.nextnearestcoordination == row.nextnearestcoordination]) > 0):
+                    and len([row2 for row2 in resultRows
+                             if  row2.adsorbate=='CO' and ((row2.coordination == row.coordination
+                                  and row2.nextnearestcoordination == row.nextnearestcoordination) or 
+                                 (row2.initial_coordination == row.coordination
+                                  and row2.initial_nextnearestcoordination == row.nextnearestcoordination))
+                                 ]) == 0):
                 matching.append([dE, row])
 
         ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
                                           for row in matching], return_index=True)
+        ncoord_index = sorted(ncoord_index,key=lambda x: np.abs(-0.55-matching[x][0]))
 
-        print len(ncoord_index)
+
+        #ncoord, ncoord_index = np.unique([str([row[1].coordination])
+        #                                  for row in matching], return_index=True)
+                
+        print(len(ncoord_index))
+        ncoord_index=ncoord_index[0:100]
         # Initiate the DFT relaxations/calculations of these systems
         for ind in ncoord_index:
             row = matching[ind][1]
             ads_parameter = default_parameter_adsorption('CO')
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
-            if len([row2 for row2 in resultRows
-                    if row2.adsorbate == 'CO'
-                    and (row.coordination == row2.coordination
-                         and row.nextnearestcoordination == row2.nextnearestcoordination
-                         and row.neighborcoord == row2.neighborcoord)
-                    or (row.coordination == row2.initial_coordination
-                        and row.nextnearestcoordination == row2.initial_nextnearestcoordination
-                        and row.neighborcoord == row2.initial_neighborcoord)]
-                  ) > 0:
-                parameters = {'bulk': default_parameter_bulk(row.mpid),
+            parameters = {'bulk': default_parameter_bulk(row.mpid),
                               'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
                               'gas':default_parameter_gas('CO'),
                               'adsorption':ads_parameter}
-                yield CalculateEnergy(parameters=parameters)
+            yield CalculateEnergy(parameters=parameters)

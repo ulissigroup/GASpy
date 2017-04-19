@@ -413,13 +413,17 @@ class SubmitToFW(luigi.Task):
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input().open())
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if float(np.round(slab['tags']['shift'],4)) == float(np.round(self.parameters['slab']['shift'],4))
+                            if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
                 if len(atomlist) > 1:
                     print('matching atoms! something is weird')
                     print(self.input().fn)
-                else:
+                elif len(atomlist)==0:
+                    print(atomlist)
+                    print(slab_list)
+                    print( float(np.round(self.parameters['slab']['shift'],4)))
+                elif len(atomlist)==1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
                         'mpid':self.parameters['bulk']['mpid'],
@@ -450,7 +454,7 @@ class SubmitToFW(luigi.Task):
                 else:
                     if self.parameters['adsorption']['adsorbates'][0]['name'] != '':
                         matching_rows = [row for row in fpd_structs
-                                         if fpd_structs['adsorption_site'] == self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
+                                         if row['adsorption_site'] == self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_rows = [row for row in fpd_structs]
                 if self.parameters['adsorption']['adsorbates'][0]['name'] == '':
