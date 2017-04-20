@@ -276,26 +276,26 @@ class PredictAndSubmit(luigi.WrapperTask):
                     and dE < -0.4
                     and 'Cu' not in row.formula
                     and 'Al' not in row.formula
-                    and np.max(eval(row.miller))<=2
+                    and np.max(eval(row.miller)) <= 2
                     and row.natoms < 40
                     and len([row2 for row2 in resultRows
-                             if  row2.adsorbate=='CO' and ((row2.coordination == row.coordination
-                                  and row2.nextnearestcoordination == row.nextnearestcoordination) or 
-                                 (row2.initial_coordination == row.coordination
-                                  and row2.initial_nextnearestcoordination == row.nextnearestcoordination))
-                                 ]) == 0):
+                             if row2.adsorbate == 'CO'
+                             and ((row2.coordination == row.coordination
+                                   and row2.nextnearestcoordination == row.nextnearestcoordination)
+                                  or (row2.initial_coordination == row.coordination
+                                      and row2.initial_nextnearestcoordination == row.nextnearestcoordination))
+                            ]) == 0):
                 matching.append([dE, row])
 
         ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
                                           for row in matching], return_index=True)
-        ncoord_index = sorted(ncoord_index,key=lambda x: np.abs(-0.55-matching[x][0]))
-
+        ncoord_index = sorted(ncoord_index, key=lambda x: np.abs(-0.55-matching[x][0]))
 
         #ncoord, ncoord_index = np.unique([str([row[1].coordination])
         #                                  for row in matching], return_index=True)
-                
-        print(len(ncoord_index))
-        ncoord_index=ncoord_index[0:100]
+
+        print len(ncoord_index)
+        ncoord_index = ncoord_index[0:100]
         # Initiate the DFT relaxations/calculations of these systems
         for ind in ncoord_index:
             row = matching[ind][1]
@@ -303,7 +303,7 @@ class PredictAndSubmit(luigi.WrapperTask):
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
             parameters = {'bulk': default_parameter_bulk(row.mpid),
-                              'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
-                              'gas':default_parameter_gas('CO'),
-                              'adsorption':ads_parameter}
+                          'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
+                          'gas':default_parameter_gas('CO'),
+                          'adsorption':ads_parameter}
             yield CalculateEnergy(parameters=parameters)

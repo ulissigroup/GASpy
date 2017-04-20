@@ -32,7 +32,7 @@ from vasp_settings_to_str import vasp_settings_to_str
 from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 import luigi
 
-GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
+LOC_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 def get_launchpad():
     return LaunchPad(host='mongodb01.nersc.gov',
@@ -246,7 +246,7 @@ class DumpToAuxDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/DumpToAuxDB.token')
+        return luigi.LocalTarget(LOC_DB_PATH+'/DumpToAuxDB.token')
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -280,7 +280,7 @@ class UpdateAllDB(luigi.WrapperTask):
         #                            if row['fwname']['adsorbate'] != ''])
 
         # Get all of the current fwid entries in the db
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
+        with connect(LOC_DB_PATH+'/adsorption_energy_database.db') as conAds:
             fwidlist = [row.fwid for row in conAds.select()]
 
         # For each adsorbate/configuration, make a task to write the results to the output database
@@ -413,17 +413,17 @@ class SubmitToFW(luigi.Task):
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input().open())
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
+                            if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
                 if len(atomlist) > 1:
-                    print('matching atoms! something is weird')
-                    print(self.input().fn)
-                elif len(atomlist)==0:
-                    print(atomlist)
-                    print(slab_list)
-                    print( float(np.round(self.parameters['slab']['shift'],4)))
-                elif len(atomlist)==1:
+                    print 'matching atoms! something is weird'
+                    print self.input().fn
+                elif len(atomlist) == 0:
+                    print atomlist
+                    print slab_list
+                    print float(np.round(self.parameters['slab']['shift'], 4))
+                elif len(atomlist) == 1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
                         'mpid':self.parameters['bulk']['mpid'],
@@ -489,7 +489,7 @@ class SubmitToFW(luigi.Task):
                 print wflow
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -504,7 +504,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSurfaces(luigi.Task):
@@ -594,7 +594,7 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbatesMarker(luigi.Task):
@@ -686,7 +686,7 @@ class GenerateAdsorbatesMarker(luigi.Task):
             pickle.dump(slabsave, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdsorbates(luigi.Task):
@@ -738,7 +738,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -820,7 +820,7 @@ class CalculateEnergy(luigi.Task):
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
@@ -928,7 +928,7 @@ class FingerprintStructure(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class FingerprintGeneratedStructures(luigi.Task):
@@ -970,7 +970,7 @@ class FingerprintGeneratedStructures(luigi.Task):
             pickle.dump(atomslist, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class DumpToLocalDB(luigi.Task):
@@ -1032,7 +1032,7 @@ class DumpToLocalDB(luigi.Task):
             criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
+        with connect(LOC_DB_PATH+'/adsorption_energy_database.db') as conAds:
             conAds.write(best_sys, **criteria)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -1041,7 +1041,7 @@ class DumpToLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 class DumpSitesLocalDB(luigi.Task):
     """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
@@ -1052,7 +1052,7 @@ class DumpSitesLocalDB(luigi.Task):
         return FingerprintGeneratedStructures(self.parameters)
 
     def run(self):
-        with connect(GASpy_DB_loc+'/enumerated_adsorption_sites.db') as con:
+        with connect(LOC_DB_PATH+'/enumerated_adsorption_sites.db') as con:
             # Load the configurations
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
@@ -1080,7 +1080,7 @@ class DumpSitesLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
