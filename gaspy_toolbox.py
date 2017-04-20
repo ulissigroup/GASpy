@@ -35,7 +35,7 @@ import luigi
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 def get_launchpad():
-    return LaunchPad(host='mongodb03.nersc.gov',
+    return LaunchPad(host='mongodb01.nersc.gov',
                      name='fw_zu_vaspsurfaces',
                      username='admin_zu_vaspsurfaces',
                      password='$TPAHPmj',
@@ -100,7 +100,7 @@ def set_constraints(atoms, numSlabAtoms, zcutoff=3.):
     return atomscopy
 
 
-def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=3):
+def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=2):
     """
     This function makes a simple vasp relaxation firework
     atomin: atoms object to relax
@@ -171,7 +171,7 @@ def running_fireworks(name_dict, launchpad):
 
 def get_aux_db():
     """ This is the information for the Auxiliary vasp.mongo database """
-    return MongoDatabase(host='mongodb03.nersc.gov',
+    return MongoDatabase(host='mongodb01.nersc.gov',
                          port=27017,
                          user='admin_zu_vaspsurfaces',
                          password='$TPAHPmj',

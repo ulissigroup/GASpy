@@ -276,6 +276,7 @@ class PredictAndSubmit(luigi.WrapperTask):
                     and dE < -0.4
                     and 'Cu' not in row.formula
                     and 'Al' not in row.formula
+                    and np.max(eval(row.miller))<=2
                     and row.natoms < 40
                     and len([row2 for row2 in resultRows
                              if  row2.adsorbate=='CO' and ((row2.coordination == row.coordination
