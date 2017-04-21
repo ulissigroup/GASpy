@@ -19,6 +19,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
+from pymatgen.analysis.structure_analyzer import average_coordination_number
 from ase.db import connect
 from ase import Atoms
 import ase.io
@@ -376,7 +377,8 @@ class SubmitToFW(luigi.Task):
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
             if self.calctype == 'slab':
-                return GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'], slab=self.parameters['slab']))
+                return [GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'], slab=self.parameters['slab'])),
+                        GenerateSurfaces(OrderedDict(unrelaxed=True,bulk=self.parameters['bulk'], slab=self.parameters['slab']))]
             if self.calctype == 'slab+adsorbate':
                 return FingerprintGeneratedStructures(self.parameters)
             if self.calctype == 'bulk':
@@ -411,18 +413,61 @@ class SubmitToFW(luigi.Task):
                     atoms = ase.io.read(self.input().fn)
                     tosubmit.append(make_firework(atoms, name, self.parameters['gas']['vasp_settings']))
             if self.calctype == 'slab':
-                slab_list = pickle.load(self.input().open())
+                slab_list = pickle.load(self.input()[0].open())
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
                             if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
                 if len(atomlist) > 1:
                     print('matching atoms! something is weird')
-                    print(self.input().fn)
+                    print(self.input()[0].fn)
                 elif len(atomlist)==0:
-                    print(atomlist)
-                    print(slab_list)
-                    print( float(np.round(self.parameters['slab']['shift'],4)))
+                    #We couldn't find the desired shift value in the surfaces
+                    #generated for the relaxed bulk, so we need to try to find
+                    #it by comparison with the reference (unrelaxed) surfaces
+                    slab_list_unrelaxed = pickle.load(self.input()[1].open())
+                    atomlist_unrelaxed=[mongo_doc_atoms(slab) for slab in slab_list_unrelaxed
+                            if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
+                            and slab['tags']['top'] == self.parameters['slab']['top']
+                           ]
+                    if len(atomlist_unrelaxed)==0:
+                        print(slab_list_unrelaxed)
+                        print('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
+
+                    #we need all of the relaxed slabs in atoms form:
+                    all_relaxed_surfaces = [mongo_doc_atoms(slab) for slab in slab_list
+                            if slab['tags']['top'] == self.parameters['slab']['top']
+                           ]
+
+                    #We use the average coordination as a descriptor of the structure,
+                    #there should be a pretty large change with different shifts
+                    def getCoord(x):
+                        return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
+
+                    #Get the coordination for the unrelaxed surface w/ correct shift
+                    reference_coord=getCoord(atomlist_unrelaxed[0])
+                    
+                    #get the coordination for each relaxed surface
+                    relaxed_coord=map(getCoord,all_relaxed_surfaces)
+
+                    #We want to minimize the distance in these dictionaries
+                    def getDist(x,y):
+                        vals=[]
+                        for key in x:
+                            vals.append(x[key]-y[key])
+                        return np.linalg.norm(vals)
+                    
+                    #Get the distances to the reference coordinations
+                    dist=map(lambda x: getDist(x,reference_coord),relaxed_coord)
+                    
+                    #Grab the atoms object that minimized this distance
+                    atoms=all_relaxed_surfaces[np.argmin(dist)]
+                    print('Unable to find a slab with the correct shift, but found one with max position difference of %1.4f!'%np.min(dist))
+                    print(str(reference_coord)+str(relaxed_coord[np.argmin(dist)]))
+                    print([self.input()[0].fn,self.input()[1].fn])
+                    #print(atomlist)
+                    #print(slab_list)
+                    #print( float(np.round(self.parameters['slab']['shift'],4)))
                 elif len(atomlist)==1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
@@ -1041,7 +1086,7 @@ class DumpToLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+       return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
 
 class DumpSitesLocalDB(luigi.Task):
     """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
