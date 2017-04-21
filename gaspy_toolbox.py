@@ -32,6 +32,7 @@ from findAdsorptionSites import find_adsorption_sites
 from vasp_settings_to_str import vasp_settings_to_str
 from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 import luigi
+import getpass
 
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
@@ -133,6 +134,7 @@ def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=2):
 
     # Package the tasks into a firework, the fireworks into a workflow,
     # and submit the workflow to the launchpad
+    namein['user']=getpass.getuser()
     firework = Firework([write_surface, opt_bulk], name=namein)
     return firework
 
