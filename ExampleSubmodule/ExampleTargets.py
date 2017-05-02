@@ -104,6 +104,7 @@ class StudyCoordinationSites(luigi.WrapperTask):
     This class is meant to be called by Luigi to begin relaxations of a particular set of
     adsorption sites.
     """
+    xc=luigi.Parameter('beef-vdw')
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -118,7 +119,7 @@ class StudyCoordinationSites(luigi.WrapperTask):
 
         # Get all of the adsorption energies we've already calculated
         with connect(DB_LOC+'/adsorption_energy_database.db') as con:
-            resultRows = [row for row in con.select()]
+            resultRows = [row for row in con.select() if row.xc==self.xc]
 
         # Find all of the unique sites at the first level of coordination for enumerated configurations
         unique_coord, inverse = np.unique([str([row.coordination]) for row in rows], return_inverse=True)
@@ -145,18 +146,18 @@ class StudyCoordinationSites(luigi.WrapperTask):
             row = rows[rowind]
             print(row.miller)
             print(row.mpid)
-            for adsorbate in ['CO']:
+            for adsorbate in ['CO','H','OH','O','C']:
                 if len([result for result in resultRows
                         if result.adsorbate == adsorbate
                         and (result.coordination == row.coordination
                              or result.initial_coordination == row.coordination) 
                        ]
                       ) <=1:
-                    ads_parameter = default_parameter_adsorption(adsorbate)
+                    ads_parameter = default_parameter_adsorption(adsorbate,xc=self.xc)
                     ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
-                    parameters = {"bulk": default_parameter_bulk(row.mpid),
-                                  'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
-                                  'gas':default_parameter_gas('CO'),
+                    parameters = {"bulk": default_parameter_bulk(row.mpid,xc=self.xc),
+                                  'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift,xc=self.xc),
+                                  'gas':default_parameter_gas('CO',xc=self.xc),
                                   'adsorption':ads_parameter}
                     yield CalculateEnergy(parameters=parameters)
 
@@ -167,6 +168,7 @@ class EnumerateAlloys(luigi.WrapperTask):
     """
     max_index = luigi.IntParameter(2)
     writeDB = luigi.BoolParameter(False)
+    xc=luigi.Parameter('beef-vdw')
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -193,7 +195,8 @@ class EnumerateAlloys(luigi.WrapperTask):
                      'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
 
         whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
-                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os', 'Fe']
+                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os', 
+                     'Fe','V','Si','Sn','Sb']
         # whitelist=['Pd','Cu','Au','Ag']
         restricted_elements = [el for el in all_elements if el not in whitelist]
 
@@ -252,6 +255,8 @@ class PredictAndSubmit(luigi.WrapperTask):
     See the `primary_coordination_prediction_next.py` file in the GASpy_regressions
     submodule for details regarding how we created the *.pkl file referenced here.
     """
+    xc = luigi.Parameter('beef-vdw')
+    Nsubmit=luigi.IntParameter(100)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -265,7 +270,7 @@ class PredictAndSubmit(luigi.WrapperTask):
 
         # Get all of the adsorption energies we've already calculated
         with connect(DB_LOC+'/adsorption_energy_database.db') as con:
-            resultRows = [row for row in con.select()]
+            resultRows = [row for row in con.select() if row.xc==self.xc]
 
         # Load the regression's predictions from a pickle. You may need to change the
         # location depending on your folder structure.
@@ -277,7 +282,7 @@ class PredictAndSubmit(luigi.WrapperTask):
                     and 'Cu' not in row.formula
                     and 'Al' not in row.formula
                     and np.max(eval(row.miller))<=2
-                    and row.natoms < 40
+                    and row.natoms < 35
                     and len([row2 for row2 in resultRows
                              if  row2.adsorbate=='CO' and ((row2.coordination == row.coordination
                                   and row2.nextnearestcoordination == row.nextnearestcoordination) or 
@@ -286,24 +291,26 @@ class PredictAndSubmit(luigi.WrapperTask):
                                  ]) == 0):
                 matching.append([dE, row])
 
-        ncoord, ncoord_index = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
-                                          for row in matching], return_index=True)
-        ncoord_index = sorted(ncoord_index,key=lambda x: np.abs(-0.55-matching[x][0]))
+        ncoord, ncoord_index,ncoord_inverse = np.unique([str([row[1].coordination, row[1].nextnearestcoordination])
+                                          for row in matching], return_index=True,return_inverse=True)
+        ncoord_index_sorted = sorted(range(len(ncoord_index)),key=lambda x: np.abs(-0.55-matching[ncoord_index[x]][0]))
 
 
         #ncoord, ncoord_index = np.unique([str([row[1].coordination])
         #                                  for row in matching], return_index=True)
                 
-        print(len(ncoord_index))
-        ncoord_index=ncoord_index[0:100]
+        print(len(ncoord_index_sorted))
+        ncoord_index_sorted_torun=ncoord_index_sorted[0:self.Nsubmit]
         # Initiate the DFT relaxations/calculations of these systems
-        for ind in ncoord_index:
-            row = matching[ind][1]
-            ads_parameter = default_parameter_adsorption('CO')
+        for ind in ncoord_index_sorted_torun:
+            indices, natoms = zip(*[[i, matching[i][1].natoms] for i in range(len(ncoord_inverse)) if ncoord_inverse[i] == ind])
+            rowind = indices[np.argmin(natoms)]
+            row = matching[rowind][1]
+            ads_parameter = default_parameter_adsorption('CO',xc=self.xc)
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
-            parameters = {'bulk': default_parameter_bulk(row.mpid),
-                              'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift),
-                              'gas':default_parameter_gas('CO'),
+            parameters = {'bulk': default_parameter_bulk(row.mpid,xc=self.xc),
+                              'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift,xc=self.xc),
+                              'gas':default_parameter_gas('CO',xc=self.xc),
                               'adsorption':ads_parameter}
             yield CalculateEnergy(parameters=parameters)

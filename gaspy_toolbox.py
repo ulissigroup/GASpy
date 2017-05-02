@@ -33,6 +33,7 @@ from vasp_settings_to_str import vasp_settings_to_str
 from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 import luigi
 import getpass
+from ase.collections import g2
 
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
@@ -297,13 +298,14 @@ class UpdateAllDB(luigi.WrapperTask):
                 num_slab_atoms = row['fwname']['num_slab_atoms']
                 slabrepeat = row['fwname']['slabrepeat']
                 shift = row['fwname']['shift']
-                parameters = {'bulk':default_parameter_bulk(mpid),
-                              'gas':default_parameter_gas(gasname='CO'),
-                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top),
+                xc = row['fwname']['vasp_settings']['xc']
+                parameters = {'bulk':default_parameter_bulk(mpid,xc=xc),
+                              'gas':default_parameter_gas(gasname='CO',xc=xc),
+                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top,xc=xc),
                               'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
                                                                         num_slab_atoms=num_slab_atoms,
                                                                         slabrepeat=slabrepeat,
-                                                                        adsorption_site=adsorption_site)
+                                                                        adsorption_site=adsorption_site,xc=xc)
                              }
                 yield DumpToLocalDB(parameters)
 
@@ -382,6 +384,14 @@ class SubmitToFW(luigi.Task):
                 return [GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'], slab=self.parameters['slab'])),
                         GenerateSurfaces(OrderedDict(unrelaxed=True,bulk=self.parameters['bulk'], slab=self.parameters['slab']))]
             if self.calctype == 'slab+adsorbate':
+                #return the base structure, and all possible matching ones for the surface
+                search_strings = {'type':'slab+adsorbate',
+                              'fwname.miller':list(self.parameters['slab']['miller']),
+                              'fwname.top':self.parameters['slab']['top'],
+                              'fwname.mpid':self.parameters['bulk']['mpid'],
+                              'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
+                with get_aux_db() as MD:
+                    self.matching_rows_all_calcs = list(MD.find(search_strings))
                 return FingerprintGeneratedStructures(self.parameters)
             if self.calctype == 'bulk':
                 return GenerateBulk({'bulk':self.parameters['bulk']})
@@ -409,10 +419,10 @@ class SubmitToFW(luigi.Task):
                     tosubmit.append(make_firework(atoms, name, self.parameters['bulk']['vasp_settings']))
             if self.calctype == 'gas':
                 name = {'vasp_settings':self.parameters['gas']['vasp_settings'],
-                        'gasname':self.parameters['bulk']['gasname'],
+                        'gasname':self.parameters['gas']['gasname'],
                         'calculation_type':'gas phase optimization'}
                 if len(running_fireworks(name, launchpad)) == 0:
-                    atoms = ase.io.read(self.input().fn)
+                    atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name, self.parameters['gas']['vasp_settings']))
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input()[0].open())
@@ -432,9 +442,9 @@ class SubmitToFW(luigi.Task):
                             if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
                             and slab['tags']['top'] == self.parameters['slab']['top']
                            ]
-                    if len(atomlist_unrelaxed)==0:
-                        print(slab_list_unrelaxed)
-                        print('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
+                    #if len(atomlist_unrelaxed)==0:
+                    #    print(slab_list_unrelaxed)
+                    #    print('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
 
                     #we need all of the relaxed slabs in atoms form:
                     all_relaxed_surfaces = [mongo_doc_atoms(slab) for slab in slab_list
@@ -465,8 +475,8 @@ class SubmitToFW(luigi.Task):
                     #Grab the atoms object that minimized this distance
                     atoms=all_relaxed_surfaces[np.argmin(dist)]
                     print('Unable to find a slab with the correct shift, but found one with max position difference of %1.4f!'%np.min(dist))
-                    print(str(reference_coord)+str(relaxed_coord[np.argmin(dist)]))
-                    print([self.input()[0].fn,self.input()[1].fn])
+                    #print(str(reference_coord)+str(relaxed_coord[np.argmin(dist)]))
+                    #print([self.input()[0].fn,self.input()[1].fn])
                     #print(atomlist)
                     #print(slab_list)
                     #print( float(np.round(self.parameters['slab']['shift'],4)))
@@ -510,6 +520,27 @@ class SubmitToFW(luigi.Task):
                     matching_rows = matching_rows[0:self.parameters['adsorption']['numtosubmit']]
 
                 for row in matching_rows:
+                    #First, let's see if we can find a reasonable guess for the row:
+                    #guess_rows=[row2 for row2 in self.matching_rows_all_calcs if matchFP(fingerprint(row2['atoms'],),row)]
+                    guess_rows=[]
+                    #We've found another calculation with exactly the same fingerprint
+                    if len(guess_rows)>0:
+                        guess=guess_rows[0]
+
+                        #Get the initial adsorption site of the identified row
+                        ads_site=np.array(map(eval,guess['fwname']['adsorption_site'].strip().split()[1:4]))
+                        atoms=row['atoms']
+                        atomsguess=guess['atoms']
+                        
+                        #For each adsorbate atom, move it the same relative amount as in the guessed configuration
+                        lenAdsorbates=len(Atoms(self.parameters['adsorption']['adsorbates'][0]['name']))
+                        for ind in range(-lenAdsorbates,len(atoms)):
+                            atoms[ind].position+=atomsguess[ind].position-ads_site
+                    else:
+                        atoms=row['atoms']
+
+
+
                     name = {'mpid':self.parameters['bulk']['mpid'],
                             'miller':self.parameters['slab']['miller'],
                             'top':self.parameters['slab']['top'],
@@ -519,11 +550,11 @@ class SubmitToFW(luigi.Task):
                             'num_slab_atoms':self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat':self.parameters['adsorption']['slabrepeat'],
                             'calculation_type':'slab+adsorbate optimization'}
-
+                    if len(guess_rows)>0:
+                        name['guessed_from']={'xc':guess['fwname']['vasp_settings']['xc'],'encut':guess['fwname']['vasp_settings']['encut']}
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
                     if len(running_fireworks(name, launchpad)) == 0:
-                        atoms = row['atoms']
                         tosubmit.append(make_firework(atoms,
                                                       name,
                                                       self.parameters['adsorption']['vasp_settings']))
@@ -552,6 +583,22 @@ class GenerateBulk(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+
+class GenerateGas(luigi.Task):
+    parameters = luigi.DictParameter()
+
+    def run(self):
+        atoms = g2[self.parameters['gas']['gasname']]
+        atoms.positions+=10.
+        atoms.cell=[20,20,20]
+        atoms.pbc=[True,True,True]
+        with self.output().temporary_path() as self.temp_output_path:
+            pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
+
+    def output(self):
+        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+
+
 
 
 class GenerateSurfaces(luigi.Task):
@@ -1116,7 +1163,7 @@ class DumpSitesLocalDB(luigi.Task):
                           miller=str(self.parameters['slab']['miller']),
                           mpid=self.parameters['bulk']['mpid'],
                           adsorbate=self.parameters['adsorption']['adsorbates'][0]['name'],
-                          top=self.parameters['slab']['top'],
+                          top=config['top'],
                           adsorption_site=config['adsorption_site'],
                           coordination=config['coordination'],
                           neighborcoord=str(config['neighborcoord']),
