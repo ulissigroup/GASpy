@@ -1,9 +1,9 @@
 [submodule "AuAg"]
 	path = AuAg
-	url = https://github.com/ktran9891/AuAg.git
+	url = git@github.com:ktran9891/AuAg.git
 [submodule "GASpy_Sandbox"]
 	path = GASpy_Sandbox
-	url = https://github.com/ktran9891/GASpy_Sandbox.git
+	url = git@github.com:ktran9891/GASpy_Sandb
 [submodule "GASpy_regressions"]
 	path = GASpy_regressions
-	url = https://github.com/ktran9891/GASpy_regressions.git
+	url = git@github.com:ktran9891/GASpy_regressions.git
