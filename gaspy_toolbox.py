@@ -34,6 +34,7 @@ from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 import luigi
 import getpass
 from ase.collections import g2
+from vasp import Vasp
 
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
@@ -206,6 +207,23 @@ class DumpToAuxDB(luigi.Task):
                 atoms = ase.io.read('atom_temp.traj')
                 starting_atoms = ase.io.read('atom_temp.traj', index=0)
                 vasp_settings = fw.name['vasp_settings']
+                #Guess the pseudotential version if it's not present
+                if 'pp_version' not in vasp_settings:
+                    if 'arjuna' in fw.launches[-1].fworker.name:
+                        vasp_settings['pp_version']='5.4'
+                    else:
+                        vasp_settings['pp_version']='5.3.5'
+                    vasp_settings['pp_guessed']=True
+                if 'gga' not in vasp_settings:
+                    settings=Vasp.xc_defaults[vasp_settings['xc']]
+                    for key in settings:
+                        vasp_settings[key]=settings[key]
+                #if 'psp' not in vasp_settings:
+                #    #guess based on default in vasp()
+                #    if vasp_settings['xc']=='beef-vdw':
+                #        vasp_settings['psp']='PBE'
+                #    elif vasp_settings['xc']=='rpbe':
+                #        vasp_settings['psp']='LDA'
                 vasp_settings = vasp_settings_to_str(vasp_settings)
                 return atoms, starting_atoms, atomshex, vasp_settings
 
@@ -221,6 +239,7 @@ class DumpToAuxDB(luigi.Task):
                     atoms, starting_atoms, trajectory, vasp_settings = getFireworkInfo(fw)
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
+                    #fw.name['vasp_settings']=vasp_settings
                     doc['fwname'] = fw.name
                     if 'miller' in fw.name:
                         if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
@@ -258,6 +277,8 @@ class UpdateAllDB(luigi.WrapperTask):
     Dump from the Primary database to the Auxiliary database, and then dump from the
     Auxiliary database to the Local database
     """
+    writeDB=luigi.BoolParameter()
+    Nprocess=luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -287,9 +308,10 @@ class UpdateAllDB(luigi.WrapperTask):
         with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
             fwidlist = [row.fwid for row in conAds.select()]
 
+        count=1
         # For each adsorbate/configuration, make a task to write the results to the output database
         for row in relaxed_rows:
-            if row['fwid'] not in fwidlist and row['fwname']['adsorbate'] != '':
+            if row['fwid'] not in fwidlist and row['fwname']['adsorbate'] != '' and ((self.Nprocess==0) or (self.Nprocess>0 and count<self.Nprocess)):
                 mpid = row['fwname']['mpid']
                 miller = row['fwname']['miller']
                 adsorption_site = row['fwname']['adsorption_site']
@@ -298,17 +320,25 @@ class UpdateAllDB(luigi.WrapperTask):
                 num_slab_atoms = row['fwname']['num_slab_atoms']
                 slabrepeat = row['fwname']['slabrepeat']
                 shift = row['fwname']['shift']
-                xc = row['fwname']['vasp_settings']['xc']
-                parameters = {'bulk':default_parameter_bulk(mpid,xc=xc),
-                              'gas':default_parameter_gas(gasname='CO',xc=xc),
-                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top,xc=xc),
+                keys=['gga','encut','zab_vdw','lbeefens','luse_vdw','pp','pp_version']
+                settings=OrderedDict()
+                for key in keys:
+                    if key in row['fwname']['vasp_settings']:
+                        settings[key]=row['fwname']['vasp_settings'][key]                        
+                parameters = {'bulk':default_parameter_bulk(mpid,settings=settings),
+                              'gas':default_parameter_gas(gasname='CO',settings=settings),
+                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top,settings=settings),
                               'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
                                                                         num_slab_atoms=num_slab_atoms,
                                                                         slabrepeat=slabrepeat,
-                                                                        adsorption_site=adsorption_site,xc=xc)
+                                                                        adsorption_site=adsorption_site,settings=settings)
                              }
-                yield DumpToLocalDB(parameters)
+                if self.writeDB:
+                    yield DumpToLocalDB(parameters)
+                else:
+                    yield FingerprintStructure(parameters)
 
+                count+=1
 
 class SubmitToFW(luigi.Task):
     """
@@ -357,6 +387,7 @@ class SubmitToFW(luigi.Task):
                               'fwname.mpid':self.parameters['bulk']['mpid']}
             for key in self.parameters['bulk']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s'%key] = self.parameters['bulk']['vasp_settings'][key]
+            
         elif self.calctype == 'slab+adsorbate':
             search_strings = {'type':'slab+adsorbate',
                               'fwname.miller':list(self.parameters['slab']['miller']),
@@ -514,6 +545,14 @@ class SubmitToFW(luigi.Task):
                                          if row['adsorption_site'] == self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_rows = [row for row in fpd_structs]
+                if len(matching_rows)==0:
+                    print('No rows matching the desired FP/Site!')
+                    print('Desired sites:')
+                    print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
+                    print('Available Sites:')
+                    print(fpd_structs)
+                    print(self.parameters)
+
                 if self.parameters['adsorption']['adsorbates'][0]['name'] == '':
                     matching_rows = matching_rows[0:1]
                 elif 'numtosubmit' in self.parameters['adsorption']:
@@ -558,6 +597,10 @@ class SubmitToFW(luigi.Task):
                         tosubmit.append(make_firework(atoms,
                                                       name,
                                                       self.parameters['adsorption']['vasp_settings']))
+                    tosubmit=[a for a in tosubmit if a is not None]
+                    if 'numtosubmit' in self.parameters['adsorption']:
+                        matching_rows = tosubmit[0:self.parameters['adsorption']['numtosubmit']]
+
             # If we've found a structure that needs submitting, do so
             print 'tosubmit: '+str(tosubmit)
             tosubmit = [a for a in tosubmit if a is not None]
@@ -1097,6 +1140,26 @@ class DumpToLocalDB(luigi.Task):
             for key in ['neighborcoord','nextnearestcoordination','coordination']:
                 if key not in fp:
                     fp[key]=''
+        
+        def unit_vector(vector):
+            """ Returns the unit vector of the vector.  """
+            return vector / np.linalg.norm(vector)
+
+        def angle_between(v1, v2):
+            """ Returns the angle in radians between vectors 'v1' and 'v2'::
+            """
+            v1_u = unit_vector(v1)
+            v2_u = unit_vector(v2)
+            return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+        
+        if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO','OH']:
+            angle=angle_between(best_sys[-1].position-best_sys[-2].position,best_sys.cell[2])
+            if self.parameters['slab']['top']==False:
+                angle=np.abs(angle-math.pi)
+        else:
+            angle=0.
+
+        angle=angle/2./np.pi*360
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
@@ -1116,10 +1179,11 @@ class DumpToLocalDB(luigi.Task):
                     'initial_coordination':fp_init['coordination'],
                     'initial_nextnearestcoordination':fp_init['nextnearestcoordination'],
                     'initial_neighborcoord':str(fp_init['neighborcoord']),
-                    'shift':self.parameters['slab']['shift'],
+                    'shift':best_sys_pkl['slab+ads']['fwname']['shift'],
                     'fwid':best_sys_pkl['slab+ads']['fwid'],
                     'slabfwid':best_sys_pkl['slab']['fwid'],
-                    'bulkfwid':bulk[bulkmin]['fwid']}
+                    'bulkfwid':bulk[bulkmin]['fwid'],
+                    'adsorbate_angle':angle}
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
@@ -1177,21 +1241,35 @@ class DumpSitesLocalDB(luigi.Task):
         return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
 
 
-def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
+def new_default_settings(xc):
+    if xc=='rpbe':
+        settings=OrderedDict(gga='RP',xc='PBE',pp='PBE')
+    else:
+        settings=OrderedDict(Vasp.xc_default[xc])
+    return settings
+
+def default_calc_settings(xc):
+    settings=OrderedDict({'encut':350,'pp_version':'5.4'})
+    default_settings=new_default_settings('beef-vdw')
+    for key in default_settings:
+        settings[key]=default_settings[key]
+    return settings
+
+def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
     """ Generate some default parameters for a slab and expected relaxation settings """
+    if type(settings)==str:
+        settings=default_calc_settings(settings)
     return OrderedDict(miller=miller,
                        top=top,
                        shift=shift,
                        relaxed=True,
-                       vasp_settings=OrderedDict(xc=xc,
-                                                 encut=encut,
-                                                 ibrion=2,
+                       vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=100,
                                                  isif=0,
                                                  isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
-                                                 ediffg=-0.03),
+                                                 ediffg=-0.03,**settings),
                        slab_generate_settings=OrderedDict(min_slab_size=7.,
                                                           min_vacuum_size=20.,
                                                           lll_reduce=False,
@@ -1204,44 +1282,49 @@ def default_parameter_slab(miller, top, shift, xc='beef-vdw', encut=350.):
                                                      symmetrize=False))
 
 
-def default_parameter_gas(gasname, xc='beef-vdw', encut=350.):
+def default_parameter_gas(gasname, settings='beef-vdw'):
     """ Generate some default parameters for a gas and expected relaxation settings """
+    if type(settings)==str:
+        settings=default_calc_settings(settings)
     return OrderedDict(gasname=gasname,
                        relaxed=True,
-                       vasp_settings=OrderedDict(xc=xc,
-                                                 encut=encut,
-                                                 ibrion=2,
+                       vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=100,
                                                  isif=0,
                                                  kpts=[1, 1, 1],
-                                                 ediffg=-0.03))
+                                                 ediffg=-0.03,
+                                                 **settings))
 
 
-def default_parameter_bulk(mpid, xc='beef-vdw', encutBulk=800.):
+
+def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=800.):
     """ Generate some default parameters for a bulk and expected relaxation settings """
+    if type(settings)==str:
+        settings=default_calc_settings(settings)
+    #We're getting a handle to a dictionary, so need to copy before modifying
+    settings=copy.deepcopy(settings)
+    settings['encut']=encutBulk
     return OrderedDict(mpid=mpid,
                        relaxed=True,
-                       vasp_settings=OrderedDict(xc=xc,
-                                                 encut=encutBulk,
-                                                 ibrion=1,
+                       vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
                                                  ediff=1e-8,
                                                  kpts=[10, 10, 10],
-                                                 prec='Accurate'))
+                                                 prec='Accurate',**settings))
 
 
 def default_parameter_adsorption(adsorbate,
                                  adsorption_site=None,
                                  slabrepeat='(1, 1)',
                                  num_slab_atoms=0,
-                                 xc='beef-vdw',
-                                 encut=350.):
+                                 settings='beef-vdw'):
     """
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings
     """
-
+    if type(settings)==str:
+        settings=default_calc_settings(settings)
     adsorbateStructures = {'CO':{'atoms':Atoms('CO', positions=[[0.,0.,0.],[0.,0.,1.2]]),  'name':'CO'},
                            'H':{'atoms':Atoms('H',   positions=[[0.,0.,-0.5]]),            'name':'H'},
                            'O':{'atoms':Atoms('O',   positions=[[0.,0.,0.]]),              'name':'O'},
@@ -1261,12 +1344,10 @@ def default_parameter_adsorption(adsorbate,
                        adsorbates=[OrderedDict(name=adsorbate,
                                                atoms=pickle.dumps(adsorbateStructures[adsorbate]['atoms']).encode('hex'),
                                                adsorption_site=adsorption_site)],
-                       vasp_settings=OrderedDict(xc=xc,
-                                                 encut=encut,
-                                                 ibrion=2,
+                       vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=200,
                                                  isif=0,
                                                  isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
-                                                 ediffg=-0.03))
+                                                 ediffg=-0.03,**settings))
