@@ -252,13 +252,6 @@ class DumpBulkGasToAuxDB(luigi.Task):
 
                     MD.write(doc)
 
-        #Touch the token
-        #with self.output().temporary_path() as self.temp_output_path:
-        #    with open(self.temp_output_path, 'w') as fhandle:
-        #        fhandle.write(' ')
-
-    #def output(self):
-    #    return luigi.LocalTarget(GASpy_DB_loc+'/DumpBulkGasToAuxDB.token')
 
 class DumpSurfacesToAuxDB(luigi.Task):
     """
@@ -347,14 +340,9 @@ class DumpSurfacesToAuxDB(luigi.Task):
                             else:
                                 starting_blank=starting_atoms
                             reference_coord=getCoord(starting_blank)
-                        #print('starting atoms!')
-                        #print(starting_atoms)
-                        #print('blank atoms!')
-                        #print(starting_blank)
                         #get the coordination for each unrelaxed surface
                         unrelaxed_coord=map(getCoord,atomlist_unrelaxed)
-                        print(unrelaxed_coord)
-                        print(reference_coord)
+
                         #We want to minimize the distance in these dictionaries
                         def getDist(x,y):
                             vals=[]
@@ -403,19 +391,6 @@ class UpdateAllDB(luigi.WrapperTask):
         yield DumpSurfacesToAuxDB()
         # Get every row in the mongo database of completed fireworks results
         relaxed_rows = get_aux_db().find({'type':'slab+adsorbate'})
-
-        # Find unique adsorption sites (in case multiple rows are basically the same
-        #adsorbate/position/etc)
-        #unique_configs = np.unique([str([row['fwname']['mpid'],
-        #                                 row['fwname']['miller'],
-        #                                 row['fwname']['top'],
-        #                                 row['fwname']['adsorption_site'],
-        #                                 row['fwname']['adsorbate'],
-        #                                 row['fwname']['num_slab_atoms'],
-        #                                 row['fwname']['slabrepeat'],
-        #                                 row['fwname']['shift']])
-        #                            for row in relaxed_rows
-        #                            if row['fwname']['adsorbate'] != ''])
 
         # Get all of the current fwid entries in the db
         with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
