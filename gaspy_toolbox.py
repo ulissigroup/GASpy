@@ -35,6 +35,7 @@ import luigi
 import getpass
 from ase.collections import g2
 from vasp import Vasp
+import random
 
 GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
 
@@ -183,12 +184,34 @@ def get_aux_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
+# Given a Fireworks ID, this function will return the "atoms" [class] and
+# "vasp_settings" [str] used to perform the relaxation
+def get_firework_info(fw):
+    atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
+    atoms_hex_to_file('atom_temp.traj', atomshex)
+    atoms = ase.io.read('atom_temp.traj')
+    starting_atoms = ase.io.read('atom_temp.traj', index=0)
+    vasp_settings = fw.name['vasp_settings']
+    #Guess the pseudotential version if it's not present
+    if 'pp_version' not in vasp_settings:
+        if 'arjuna' in fw.launches[-1].fworker.name:
+            vasp_settings['pp_version']='5.4'
+        else:
+            vasp_settings['pp_version']='5.3.5'
+        vasp_settings['pp_guessed']=True
+    if 'gga' not in vasp_settings:
+        settings=Vasp.xc_defaults[vasp_settings['xc']]
+        for key in settings:
+            vasp_settings[key]=settings[key]
+    vasp_settings = vasp_settings_to_str(vasp_settings)
+    return atoms, starting_atoms, atomshex, vasp_settings
 
-class DumpToAuxDB(luigi.Task):
+class DumpBulkGasToAuxDB(luigi.Task):
     """
     This class will load the results from the Primary FireWorks database into the
     Auxiliary vasp.mongo database.
     """
+    
     def run(self):
         launchpad = get_launchpad()
 
@@ -201,34 +224,10 @@ class DumpToAuxDB(luigi.Task):
 
             # Given a Fireworks ID, this function will return the "atoms" [class] and
             # "vasp_settings" [str] used to perform the relaxation
-            def getFireworkInfo(fw):
-                atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
-                atoms_hex_to_file('atom_temp.traj', atomshex)
-                atoms = ase.io.read('atom_temp.traj')
-                starting_atoms = ase.io.read('atom_temp.traj', index=0)
-                vasp_settings = fw.name['vasp_settings']
-                #Guess the pseudotential version if it's not present
-                if 'pp_version' not in vasp_settings:
-                    if 'arjuna' in fw.launches[-1].fworker.name:
-                        vasp_settings['pp_version']='5.4'
-                    else:
-                        vasp_settings['pp_version']='5.3.5'
-                    vasp_settings['pp_guessed']=True
-                if 'gga' not in vasp_settings:
-                    settings=Vasp.xc_defaults[vasp_settings['xc']]
-                    for key in settings:
-                        vasp_settings[key]=settings[key]
-                #if 'psp' not in vasp_settings:
-                #    #guess based on default in vasp()
-                #    if vasp_settings['xc']=='beef-vdw':
-                #        vasp_settings['psp']='PBE'
-                #    elif vasp_settings['xc']=='rpbe':
-                #        vasp_settings['psp']='LDA'
-                vasp_settings = vasp_settings_to_str(vasp_settings)
-                return atoms, starting_atoms, atomshex, vasp_settings
 
             # Get all of the completed fireworks
-            optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED'})
+            optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'unit cell optimization'}) + \
+                               launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'gas phase optimization'})
 
             # For each fireworks object, turn the results into a mongo doc and submit
             # into the database
@@ -236,7 +235,7 @@ class DumpToAuxDB(luigi.Task):
                 if fwid not in all_inserted_fireworks:
                     fw = launchpad.get_fw_by_id(fwid)
                     # Get the information from the class we just pulled from the launchpad
-                    atoms, starting_atoms, trajectory, vasp_settings = getFireworkInfo(fw)
+                    atoms, starting_atoms, trajectory, vasp_settings = get_firework_info(fw)
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
                     #fw.name['vasp_settings']=vasp_settings
@@ -250,18 +249,131 @@ class DumpToAuxDB(luigi.Task):
                         doc['type'] = 'bulk'
                     elif fw.name['calculation_type'] == 'gas phase optimization':
                         doc['type'] = 'gas'
-                    elif fw.name['calculation_type'] == 'slab optimization':
-                        doc['type'] = 'slab'
-                        if 'shift' not in doc['fwname']:
-                            doc['fwname']['shift'] = 0
-                        doc['fwname']['shift'] = float(np.round(doc['fwname']['shift'], 4))
-                    elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
-                        doc['type'] = 'slab+adsorbate'
-                        if 'shift' not in doc['fwname']:
-                            doc['fwname']['shift'] = 0
-                        doc['fwname']['shift'] = float(np.round(doc['fwname']['shift'], 4))
 
                     MD.write(doc)
+
+        #Touch the token
+        #with self.output().temporary_path() as self.temp_output_path:
+        #    with open(self.temp_output_path, 'w') as fhandle:
+        #        fhandle.write(' ')
+
+    #def output(self):
+    #    return luigi.LocalTarget(GASpy_DB_loc+'/DumpBulkGasToAuxDB.token')
+
+class DumpSurfacesToAuxDB(luigi.Task):
+    """
+    This class will load the results from the Primary FireWorks database into the
+    Auxiliary vasp.mongo database.
+    """
+
+    def requires(self):
+        launchpad = get_launchpad()
+
+        # A list of integers containing the Fireworks job ID numbers that have been
+        # added to the database already
+        with get_aux_db() as MD:
+            all_inserted_fireworks = [a['fwid'] for a in MD.find({'fwid':{'$exists':True}})]
+
+        optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'slab optimization'}) + \
+                           launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'slab+adsorbate optimization'})
+        #random.seed(42)
+        #random.shuffle(optimization_fws)
+        #optimization_fws=optimization_fws[-60:]
+        optimization_fws.reverse()
+        toreturn=[]
+        self.toadd=[]
+        for fwid in optimization_fws:
+           if fwid not in all_inserted_fireworks:
+               fw = launchpad.get_fw_by_id(fwid)
+               # Get the information from the class we just pulled from the launchpad
+               atoms, starting_atoms, trajectory, vasp_settings = get_firework_info(fw)
+               keys=['gga','encut','zab_vdw','lbeefens','luse_vdw','pp','pp_version']
+               settings=OrderedDict()
+               for key in keys:
+                   if key in vasp_settings:
+                       settings[key]=vasp_settings[key]
+               if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                   miller = eval(fw.name['miller'])
+               else:
+                   miller = fw.name['miller']
+               #print(fw.name['mpid'])
+               toreturn.append(GenerateSurfaces({'bulk':default_parameter_bulk(mpid=fw.name['mpid'],settings=settings),
+                                                 'slab': default_parameter_slab(miller=miller, top=True,shift=0., settings=settings)}))
+               self.toadd.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
+
+        return toreturn
+
+    def run(self):
+        selfinput=self.input()
+        with get_aux_db() as MD:
+            count=0
+            #print('self.input len: %d'%len(self.input()))
+            #print('toadd len: %d' %len(self.toadd))
+            for atoms, starting_atoms, trajectory, vasp_settings,fw,fwid in self.toadd:
+                print(count)
+                doc = mongo_doc(atoms)
+                doc['initial_configuration'] = mongo_doc(starting_atoms)
+                doc['fwname'] = fw.name
+                if 'miller' in fw.name:
+                    if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
+                doc['fwid'] = fwid
+                doc['directory'] = fw.launches[-1].launch_dir
+
+                if fw.name['calculation_type'] == 'slab optimization':
+                    doc['type'] = 'slab'
+                elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
+                    doc['type'] = 'slab+adsorbate'
+                
+                if 'shift' not in doc['fwname']:
+                    slab_list_unrelaxed = pickle.load(selfinput[count].open())                    
+                    atomlist_unrelaxed=[mongo_doc_atoms(slab) for slab in slab_list_unrelaxed if slab['tags']['top'] == fw.name['top']]
+ 
+                    if len(atomlist_unrelaxed)>1:
+                        print(atomlist_unrelaxed)
+                        print(fw)
+                        #We use the average coordination as a descriptor of the structure,
+                        #there should be a pretty large change with different shifts
+                        def getCoord(x):
+                            return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
+
+                        #Get the coordination for the unrelaxed surface w/ correct shift
+                        if doc['type']=='slab':
+                            reference_coord=getCoord(starting_atoms)
+                        elif doc['type']=='slab+adsorbate':
+                            num_adsorbate_atoms={'':0,'OH':2,'CO':2,'C':1,'H':1,'O':1}[fw.name['adsorbate']]
+                            if num_adsorbate_atoms>0:
+                                starting_blank=starting_atoms[0:-num_adsorbate_atoms]
+                            else:
+                                starting_blank=starting_atoms
+                            reference_coord=getCoord(starting_blank)
+                        #print('starting atoms!')
+                        #print(starting_atoms)
+                        #print('blank atoms!')
+                        #print(starting_blank)
+                        #get the coordination for each unrelaxed surface
+                        unrelaxed_coord=map(getCoord,atomlist_unrelaxed)
+                        print(unrelaxed_coord)
+                        print(reference_coord)
+                        #We want to minimize the distance in these dictionaries
+                        def getDist(x,y):
+                            vals=[]
+                            for key in x:
+                                vals.append(x[key]-y[key])
+                            return np.linalg.norm(vals)
+
+                        #Get the distances to the reference coordinations
+                        dist=map(lambda x: getDist(x,reference_coord),unrelaxed_coord)
+
+                        #Grab the atoms object that minimized this distance
+                        shift=slab_list_unrelaxed[np.argmin(dist)]['tags']['shift']
+                        doc['fwname']['shift'] = float(np.round(shift, 4))
+                        doc['fwname']['shift_guessed']=True
+                    else:
+                        doc['fwname']['shift'] = 0
+                        doc['fwname']['shift_guessed']=True
+                MD.write(doc)
+                count+=1
 
         #Touch the token
         with self.output().temporary_path() as self.temp_output_path:
@@ -270,6 +382,7 @@ class DumpToAuxDB(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(GASpy_DB_loc+'/DumpToAuxDB.token')
+
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -286,8 +399,8 @@ class UpdateAllDB(luigi.WrapperTask):
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         """
-        yield DumpToAuxDB()
-
+        DumpBulkGasToAuxDB().run()
+        yield DumpSurfacesToAuxDB()
         # Get every row in the mongo database of completed fireworks results
         relaxed_rows = get_aux_db().find({'type':'slab+adsorbate'})
 
@@ -506,11 +619,7 @@ class SubmitToFW(luigi.Task):
                     #Grab the atoms object that minimized this distance
                     atoms=all_relaxed_surfaces[np.argmin(dist)]
                     print('Unable to find a slab with the correct shift, but found one with max position difference of %1.4f!'%np.min(dist))
-                    #print(str(reference_coord)+str(relaxed_coord[np.argmin(dist)]))
-                    #print([self.input()[0].fn,self.input()[1].fn])
-                    #print(atomlist)
-                    #print(slab_list)
-                    #print( float(np.round(self.parameters['slab']['shift'],4)))
+
                 elif len(atomlist)==1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
@@ -578,11 +687,10 @@ class SubmitToFW(luigi.Task):
                     else:
                         atoms=row['atoms']
 
-
-
                     name = {'mpid':self.parameters['bulk']['mpid'],
                             'miller':self.parameters['slab']['miller'],
                             'top':self.parameters['slab']['top'],
+                            'shift':row['shift'],
                             'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
                             'adsorption_site':row['adsorption_site'],
                             'vasp_settings':self.parameters['adsorption']['vasp_settings'],
@@ -640,9 +748,6 @@ class GenerateGas(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
-
-
-
 
 class GenerateSurfaces(luigi.Task):
     parameters = luigi.DictParameter()
@@ -1312,6 +1417,7 @@ def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=800.):
                                                  ediff=1e-8,
                                                  kpts=[10, 10, 10],
                                                  prec='Accurate',**settings))
+
 
 
 def default_parameter_adsorption(adsorbate,
