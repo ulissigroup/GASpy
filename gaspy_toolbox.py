@@ -1325,7 +1325,7 @@ def new_default_settings(xc):
     if xc=='rpbe':
         settings=OrderedDict(gga='RP',xc='PBE',pp='PBE')
     else:
-        settings=OrderedDict(Vasp.xc_default[xc])
+        settings=OrderedDict(Vasp.xc_defaults[xc])
     return settings
 
 def default_calc_settings(xc):
