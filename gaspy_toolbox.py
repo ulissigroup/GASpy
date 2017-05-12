@@ -182,9 +182,12 @@ def get_aux_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
-# Given a Fireworks ID, this function will return the "atoms" [class] and
-# "vasp_settings" [str] used to perform the relaxation
+
 def get_firework_info(fw):
+    """
+    Given a Fireworks ID, this function will return the "atoms" [class] and
+    "vasp_settings" [str] used to perform the relaxation
+    """
     atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
     atoms_hex_to_file('atom_temp.traj', atomshex)
     atoms = ase.io.read('atom_temp.traj')
@@ -203,6 +206,7 @@ def get_firework_info(fw):
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
     return atoms, starting_atoms, atomshex, vasp_settings
+
 
 class DumpBulkGasToAuxDB(luigi.Task):
     """
@@ -380,7 +384,6 @@ class DumpSurfacesToAuxDB(luigi.Task):
         return luigi.LocalTarget(LOC_DB_PATH+'/DumpToAuxDB.token')
 
 
-
 class UpdateAllDB(luigi.WrapperTask):
     """
     Dump from the Primary database to the Auxiliary database, and then dump from the
@@ -441,6 +444,7 @@ class UpdateAllDB(luigi.WrapperTask):
                     yield FingerprintStructure(parameters)
 
                 count += 1
+
 
 class SubmitToFW(luigi.Task):
     """
@@ -1349,12 +1353,14 @@ def new_default_settings(xc):
         settings = OrderedDict(Vasp.xc_defaults[xc])
     return settings
 
+
 def default_calc_settings(xc):
     settings = OrderedDict({'encut':350, 'pp_version':'5.4'})
     default_settings = new_default_settings('beef-vdw')
     for key in default_settings:
         settings[key] = default_settings[key]
     return settings
+
 
 def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
     """ Generate some default parameters for a slab and expected relaxation settings """
@@ -1398,7 +1404,6 @@ def default_parameter_gas(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-
 def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=800.):
     """ Generate some default parameters for a bulk and expected relaxation settings """
     if isinstance(settings, str):
@@ -1415,7 +1420,6 @@ def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=800.):
                                                  kpts=[10, 10, 10],
                                                  prec='Accurate',
                                                  **settings))
-
 
 
 def default_parameter_adsorption(adsorbate,
