@@ -993,16 +993,25 @@ class CalculateEnergy(luigi.Task):
         We need the relaxed slab, the relaxed slab+adsorbate, and relaxed CO/H2/H2O gas
         structures/energies
         """
+        # Initialize the list of things that need to be done before we can calculate the
+        # adsorption enegies
         toreturn = []
+        # First, we need to relax the slab+adsorbate system
         toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
+        # Then, we need to relax the slab. We do this by taking the adsorbate off and
+        # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
+        # calculation because of our code infrasttructure.
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
+        # Lastly, we need to relax the base gases.
         for gasname in ['CO', 'H2', 'H2O']:
             param = copy.deepcopy({'gas':self.parameters['gas']})
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
-        # toreturn is a list of [slab+adsorbate,slab,CO,H2,H2O] relaxed structures
+        # Now we put it all together.
+        print 'Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'],
+                                                                 self.parametecrs['slab']['miller'])
         return toreturn
 
     def run(self):
@@ -1057,6 +1066,9 @@ class CalculateEnergy(luigi.Task):
         # Write the dictionary as a pickle
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
+
+        print 'Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'],
+                                                              self.parametecrs['slab']['miller'])
 
     def output(self):
         return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
