@@ -172,6 +172,8 @@ def running_fireworks(name_dict, launchpad):
         if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
             fw_list.append(fwid)
     # Return the matching fireworks
+    if len(fw_list)==0:
+        print('No matching FW: '+str(name))
     return fw_list
 
 
@@ -275,6 +277,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
         optimization_fws.reverse()
         toreturn=[]
         self.toadd=[]
+        self.toadd_missingshift=[]
         for fwid in optimization_fws:
            if fwid not in all_inserted_fireworks:
                fw = launchpad.get_fw_by_id(fwid)
@@ -290,9 +293,13 @@ class DumpSurfacesToAuxDB(luigi.Task):
                else:
                    miller = fw.name['miller']
                #print(fw.name['mpid'])
-               toreturn.append(GenerateSurfaces({'bulk':default_parameter_bulk(mpid=fw.name['mpid'],settings=settings),
+               if 'shift' not in fw.name:
+                   toreturn.append(GenerateSurfaces({'bulk':default_parameter_bulk(mpid=fw.name['mpid'],settings=settings),
                                                  'slab': default_parameter_slab(miller=miller, top=True,shift=0., settings=settings)}))
-               self.toadd.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
+                   self.toadd_missingshift.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
+               else:
+                   self.toadd.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
+
 
         return toreturn
 
@@ -300,10 +307,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
         selfinput=self.input()
         with get_aux_db() as MD:
             count=0
-            #print('self.input len: %d'%len(self.input()))
-            #print('toadd len: %d' %len(self.toadd))
-            for atoms, starting_atoms, trajectory, vasp_settings,fw,fwid in self.toadd:
-                print(count)
+            for atoms, starting_atoms, trajectory, vasp_settings,fw,fwid in self.toadd_missingshift+self.toadd:
                 doc = mongo_doc(atoms)
                 doc['initial_configuration'] = mongo_doc(starting_atoms)
                 doc['fwname'] = fw.name
@@ -490,12 +494,14 @@ class SubmitToFW(luigi.Task):
                 search_strings['fwname.adsorption_site'] = self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
 
         if 'fwname.shift' in search_strings:
-            search_strings['fwname.shift'] = np.round(search_strings['fwname.shift'], 4)
+            shift=search_strings['fwname.shift']
+            search_strings['fwname.shift'] = {'$gte':shift-1e-4, '$lte':shift+1e-4}
+            #search_strings['fwname.shift'] = np.round(search_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
         with get_aux_db() as MD:
             self.matching_row = list(MD.find(search_strings))
-
+        #print('search string: '+str(search_strings))
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
@@ -604,6 +610,7 @@ class SubmitToFW(luigi.Task):
                         'vasp_settings':self.parameters['slab']['vasp_settings'],
                         'calculation_type':'slab optimization',
                         'num_slab_atoms':len(atoms)}
+                print(name)
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
             if self.calctype == 'slab+adsorbate':
@@ -1267,7 +1274,10 @@ class DumpToLocalDB(luigi.Task):
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
-            criteria[key] = VSP_STNGS[key]
+            if key=='pp_version':
+                criteria[key] = VSP_STNGS[key]+'.'
+            else:
+                criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
         with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
@@ -1323,14 +1333,14 @@ class DumpSitesLocalDB(luigi.Task):
 
 def new_default_settings(xc):
     if xc=='rpbe':
-        settings=OrderedDict(gga='RP',xc='PBE',pp='PBE')
+        settings=OrderedDict(gga='RP',pp='PBE')
     else:
         settings=OrderedDict(Vasp.xc_defaults[xc])
     return settings
 
 def default_calc_settings(xc):
     settings=OrderedDict({'encut':350,'pp_version':'5.4'})
-    default_settings=new_default_settings('beef-vdw')
+    default_settings=new_default_settings(xc)
     for key in default_settings:
         settings[key]=default_settings[key]
     return settings
@@ -1377,7 +1387,7 @@ def default_parameter_gas(gasname, settings='beef-vdw'):
 
 
 
-def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=800.):
+def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=500.):
     """ Generate some default parameters for a bulk and expected relaxation settings """
     if type(settings)==str:
         settings=default_calc_settings(settings)
@@ -1389,6 +1399,7 @@ def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=800.):
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
+                                                 isym=0,
                                                  ediff=1e-8,
                                                  kpts=[10, 10, 10],
                                                  prec='Accurate',**settings))
