@@ -1011,7 +1011,7 @@ class CalculateEnergy(luigi.Task):
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
         # Now we put it all together.
         print 'Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'],
-                                                                 self.parametecrs['slab']['miller'])
+                                                                 self.parameters['slab']['miller'])
         return toreturn
 
     def run(self):
@@ -1068,7 +1068,7 @@ class CalculateEnergy(luigi.Task):
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
         print 'Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'],
-                                                              self.parametecrs['slab']['miller'])
+                                                              self.parameters['slab']['miller'])
 
     def output(self):
         return luigi.LocalTarget(LOC_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
