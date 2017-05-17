@@ -11,4 +11,4 @@ rm $SCRATCH/GASpy_DB/adsorption_energy_database.db
 mongo -u admin_zu_vaspsurfaces -p '$TPAHPmj' --host mongodb01.nersc.gov vasp_zu_vaspsurfaces --eval 'db.atoms.drop()' 
 
 #Update the results to rebuild adsorption_energy_database.db
-./UpdateResults.sh
+#./UpdateResults.sh

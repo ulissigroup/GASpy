@@ -642,6 +642,7 @@ class SubmitToFW(luigi.Task):
                     print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
                     print('Available Sites:')
                     print(fpd_structs)
+                    print(self.input().fn)
                     print(self.parameters)
 
                 if self.parameters['adsorption']['adsorbates'][0]['name'] == '':
@@ -1066,7 +1067,7 @@ def fingerprint(atoms, siteind):
     vcf = VoronoiCoordFinder(struct)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.8)
+    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.7)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
     # Take out atoms that we assume are not part of the slab
