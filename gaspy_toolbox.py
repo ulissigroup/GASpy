@@ -61,15 +61,15 @@ def ads_dict(adsorbate):
     try:
         atoms = Atoms(adsorbate)
     except ValueError:
-        print "Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
-            % adsorbate
+        print("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
+              % adsorbate)
 
     # If that doesn't work, then look for the adsorbate in the "atom_dict" object
     try:
         atoms = atom_dict[adsorbate]
     except KeyError:
-        print "%s is not is GASpy's dictionary. You need to construct it manually and add" + \
-            " it to the ads_dict function in gaspy_toolbox.py"
+        print("%s is not is GASpy's dictionary. You need to construct it manually and add it to \
+              the ads_dict function in gaspy_toolbox.py")
 
     # Return the atoms
     return atoms
@@ -119,12 +119,11 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     """
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
-        print 'Not making firework because there are too many atoms in %s' % str(fw_name)
+        print('Not making firework because there are too many atoms in %s' % str(fw_name))
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
-        print 'Not making firework because the miller index exceeds the maximum of %s in %s' \
-            % (max_miller, str(fw_name))
+        print('Not making firework because the miller index exceeds the maximum of %s in %s' % (max_miller, str(fw_name)))
         return
 
     # Generate a string representation that we can pass to the job as input
@@ -261,8 +260,8 @@ class DumpBulkGasToAuxDB(luigi.Task):
 
                     # Write the doc onto the Auxiliary database
                     aux_db.write(doc)
-                    print 'Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
-                            % (doc['type'], fw.name, fwid)
+                    print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                          % (doc['type'], fw.name, fwid))
 
 
 class DumpSurfacesToAuxDB(luigi.Task):
@@ -315,7 +314,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                     miller = eval(fw.name['miller'])
                 else:
                     miller = fw.name['miller']
-                #print fw.name['mpid']
+                #print(fw.name['mpid'])
 
                 # Create the surfaces
                 surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
@@ -337,8 +336,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
         # Create a class, "aux_db", that has methods to interact with the database.
         with get_aux_db() as aux_db:
 
-            #print 'self.input len: %d' % len(self.input())
-            #print 'to_dump len: %d' % len(self.to_dump)
+            #print('self.input len: %d' % len(self.input()))
+            #print('to_dump len: %d' % len(self.to_dump))
 
             # Perform a dump for each surface that we put into to_dump
             for i, (atoms, starting_atoms, trajectory, vasp_settings, fw, fwid) in enumerate(self.to_dump):
@@ -365,8 +364,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                                           if slab['tags']['top'] == fw.name['top']]
 
                     if len(atomlist_unrelaxed) > 1:
-                        print atomlist_unrelaxed
-                        print fw
+                        print(atomlist_unrelaxed)
+                        print(fw)
                         # We use the average coordination as a descriptor of the structure,
                         # there should be a pretty large change with different shifts
                         def getCoord(x):
@@ -379,8 +378,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                             try:
                                 num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
                             except KeyError:
-                                print "%s is not recognizable by GASpy's adsorbates dictionary." \
-                                        + " Please add it to `num_adsorbate_atoms` in "\
+                                print("%s is not recognizable by GASpy's adsorbates dictionary. \
+                                      Please add it to `num_adsorbate_atoms` in "\)
                                         + "`DumpSurfacesToAuxDB`" % fw.name['adsorbate']
                             if num_adsorbate_atoms > 0:
                                 starting_blank = starting_atoms[0:-num_adsorbate_atoms]
@@ -409,8 +408,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                         doc['fwname']['shift_guessed'] = True
 
                 aux_db.write(doc)
-                print 'Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
-                        % (doc['type'], fw.name, fwid)
+                print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                      % (doc['type'], fw.name, fwid))
 
         # Touch the token to indicate that we've written to the database
         with self.output().temporary_path() as self.temp_output_path:
@@ -623,7 +622,8 @@ class SubmitToFW(luigi.Task):
                             if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
                             and slab['tags']['top'] == self.parameters['slab']['top']]
                 if len(atomlist) > 1:
-                    print 'We have more than one slab system with identical shifts:\n%s' % self.input()[0].fn
+                    print('We have more than one slab system with identical shifts:\n%s' \
+                          % self.input()[0].fn)
                 elif len(atomlist) == 0:
                     # We couldn't find the desired shift value in the surfaces
                     # generated for the relaxed bulk, so we need to try to find
@@ -657,7 +657,8 @@ class SubmitToFW(luigi.Task):
                     dist = map(lambda x: getDist(x, reference_coord), relaxed_coord)
                     # Grab the atoms object that minimized this distance
                     atoms = all_relaxed_surfaces[np.argmin(dist)]
-                    print 'Unable to find a slab with the correct shift, but found one with max position difference of %1.4f!'%np.min(dist)
+                    print('Unable to find a slab with the correct shift, but found one with max \
+                          position difference of %1.4f!'%np.min(dist))
 
                 # If there is a shift value in the results, then continue as normal.
                 elif len(atomlist) == 1:
@@ -702,12 +703,12 @@ class SubmitToFW(luigi.Task):
                     else:
                         matching_rows = [row for row in fpd_structs]
                 if len(matching_rows) == 0:
-                    print 'No rows matching the desired FP/Site!'
-                    print 'Desired sites:'
-                    print str(self.parameters['adsorption']['adsorbates'][0]['fp'])
-                    print 'Available Sites:'
-                    print fpd_structs
-                    print self.parameters
+                    print('No rows matching the desired FP/Site!')
+                    print('Desired sites:')
+                    print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
+                    print('Available Sites:')
+                    print(fpd_structs)
+                    print(self.parameters)
 
                 # If there is no adsorbate, then trim the matching_rows to the first row we found.
                 # Otherwise, trim the matching_rows to `numtosubmit`, a user-specified value that
@@ -776,8 +777,8 @@ class SubmitToFW(luigi.Task):
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                print 'Just submitted the following Fireworks:\n%s' % tosubmit
-                print 'The workflow for these Fireworks:\n%s' % wflow
+                print('Just submitted the following Fireworks:\n%s' % tosubmit)
+                print('The workflow for these Fireworks:\n%s' % wflow)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
@@ -1087,8 +1088,7 @@ class CalculateEnergy(luigi.Task):
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
         # Now we put it all together.
-        print 'Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'],
-                                                                 self.parametecrs['slab']['miller'])
+        print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parametecrs['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1144,8 +1144,7 @@ class CalculateEnergy(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
-        print 'Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'],
-                                                              self.parametecrs['slab']['miller'])
+        print('Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'], self.parametecrs['slab']['miller']))
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
