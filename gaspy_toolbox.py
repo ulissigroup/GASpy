@@ -767,7 +767,9 @@ class SubmitToFW(luigi.Task):
                     # number of submissions to our maximum.
                     tosubmit = [a for a in tosubmit if a is not None]
                     if 'numtosubmit' in self.parameters['adsorption']:
-                        matching_rows = tosubmit[0:self.parameters['adsorption']['numtosubmit']]
+                        if len(tosubmit) > self.parameters['adsorption']['numtosubmit']:
+                            tosubmit = tosubmit[0:self.parameters['adsorption']['numtosubmit']]
+                            break
 
             # If we've found a structure that needs submitting, do so
             tosubmit = [a for a in tosubmit if a is not None]   # Trim blanks
