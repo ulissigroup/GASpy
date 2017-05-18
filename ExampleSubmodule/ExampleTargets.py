@@ -21,7 +21,7 @@ import random
 import cPickle as pickle
 # from multiprocessing import Pool
 from gaspy_toolbox import DumpSitesLocalDB
-from gaspy_toolbox import FingerprintGeneratedStructures
+from gaspy_toolbox import FingerprintUnrelaxedAdslabs
 from gaspy_toolbox import default_parameter_bulk
 from gaspy_toolbox import default_parameter_gas
 from gaspy_toolbox import default_parameter_slab
@@ -269,7 +269,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                                                                     )
                                              )
                 else:
-                    yield FingerprintGeneratedStructures(parameters=OrderedDict(unrelaxed=True,
+                    yield FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed=True,
                                                                                 bulk=default_parameter_bulk(facet[0]),
                                                                                 slab=default_parameter_slab(facet[1], True, 0),
                                                                                 gas=default_parameter_gas('CO'),

@@ -560,7 +560,7 @@ class SubmitToFW(luigi.Task):
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
-            search_strings['fwname.shift'] = {'$gta': shift - 1e-4, '$lte': shift + 1e-4}
+            search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
             #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
@@ -1010,7 +1010,7 @@ class GenerateSiteMarkers(luigi.Task):
                     # Move the adsorbate onto the adsorption site...
                     _adsorbate.translate(site)
                     # Put the adsorbate onto the slab and add the adslab system to the tags
-                    adslab = slab + _adsorbate
+                    adslab = slab_atoms_repeat.copy() + _adsorbate
                     tags['atoms'] = adslab
 
                     # Finally, add the information to list of things to save
