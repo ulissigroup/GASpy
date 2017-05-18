@@ -319,6 +319,11 @@ class DumpSurfacesToAuxDB(luigi.Task):
                     miller = fw.name['miller']
                 #print(fw.name['mpid'])
 
+                '''
+                This next paragraph of code (i.e., the lines until the next blank line)
+                addresses our old results that were saved without shift values. Here, we
+                re-create a surface so that we can guess what its shift is later on.
+                '''
                 # Create the surfaces
                 if 'shift' not in fw.name:
                     surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
@@ -330,6 +335,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                     self.missing_shift_to_dump.append([atoms, starting_atoms, trajectory,
                                                        vasp_settings, fw, fwid])
                 else:
+
                     # Pass the list of surfaces to dump to `self` so that it can be called by the
                     #`run' method
                     self.to_dump.append([atoms, starting_atoms, trajectory,
@@ -368,7 +374,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                 '''
                 This next paragraph of code (i.e., the lines until the next blank line)
                 addresses our old results that were saved without shift values. Here, we
-                guess what the shift is and declare it before saving it to the database.
+                guess what the shift is (based on information from the surface we created before
+                in the "requires" function) and declare it before saving it to the database.
                 '''
                 if 'shift' not in doc['fwname']:
                     slab_list_unrelaxed = pickle.load(selfinput[n_missing_shift].open())
@@ -625,11 +632,12 @@ class SubmitToFW(luigi.Task):
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input()[0].open())
-                # An earlier version of GASpy did not correctly log the slab shift, and so many
-                # of our calculations/results do no have shifts. If there is either zero or more
-                # one shift value, then this next paragraph (i.e., all of the following code
-                # before the next blank line) deals with it in a "hacky" way. We may eventually
-                # remove this paragraph.
+                '''
+                An earlier version of GASpy did not correctly log the slab shift, and so many
+                of our calculations/results do no have shifts. If there is either zero or more
+                one shift value, then this next paragraph (i.e., all of the following code
+                before the next blank line) deals with it in a "hacky" way.
+                '''
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
                             if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
                             and slab['tags']['top'] == self.parameters['slab']['top']]
@@ -1091,7 +1099,7 @@ class CalculateEnergy(luigi.Task):
         toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
         # Then, we need to relax the slab. We do this by taking the adsorbate off and
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
-        # calculation because of our code infrasttructure.
+        # calculation because of our code infrastructure.
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
@@ -1358,23 +1366,23 @@ class DumpToLocalDB(luigi.Task):
                 if key not in fp:
                     fp[key] = ''
 
+        # Create and use tools to calculate the angle between the bond length of the diatomic
+        # adsorbate and the z-direction of the bulk. We are not currently calculating triatomics
+        # or larger.
         def unit_vector(vector):
             """ Returns the unit vector of the vector.  """
             return vector / np.linalg.norm(vector)
-
         def angle_between(v1, v2):
             """ Returns the angle in radians between vectors 'v1' and 'v2'::  """
             v1_u = unit_vector(v1)
             v2_u = unit_vector(v2)
             return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-
         if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO', 'OH']:
             angle = angle_between(best_sys[-1].position-best_sys[-2].position, best_sys.cell[2])
             if self.parameters['slab']['top'] is False:
-                angle = np.abs(angle-math.pi)
+                angle = np.abs(angle - math.pi)
         else:
             angle = 0.
-
         angle = angle/2./np.pi*360
 
         # Make a dictionary of tags to add to the database
