@@ -9,11 +9,11 @@ from collections import OrderedDict
 import copy
 import math
 from math import ceil
-# import glob
+# import random
 import cPickle as pickle
+import getpass
 import numpy as np
 from numpy.linalg import norm
-# import pymatgen
 from pymatgen.matproj.rest import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -24,23 +24,22 @@ from ase.db import connect
 from ase import Atoms
 from ase.geometry import find_mic
 import ase.io
-from ase.utils.geometry import rotate
+from ase.build import rotate
 from ase.constraints import *
 from ase.calculators.singlepoint import SinglePointCalculator
+from ase.collections import g2
 from fireworks import LaunchPad, Firework, Workflow, PyTask
 from fireworks_helper_scripts import atoms_hex_to_file, atoms_to_hex
 from findAdsorptionSites import find_adsorption_sites
 from vasp_settings_to_str import vasp_settings_to_str
 from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
-import luigi
-import getpass
-from ase.collections import g2
 from vasp import Vasp
-import random
+import luigi
 
-GASpy_DB_loc='/global/cscratch1/sd/zulissi/GASpy_DB/'
+LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 def get_launchpad():
+    ''' This function contains the information about our FireWorks LaunchPad '''
     return LaunchPad(host='mongodb01.nersc.gov',
                      name='fw_zu_vaspsurfaces',
                      username='admin_zu_vaspsurfaces',
@@ -48,7 +47,7 @@ def get_launchpad():
                      port=27017)
 
 
-def adsorbate_dictionary(adsorbate):
+def ads_dict(adsorbate):
     """
     This is a helper function to take an adsorbate as a string (e.g. 'CO') and attempt to
     return an atoms object for it, primarily as a way to count the number of constitutent
@@ -59,72 +58,77 @@ def adsorbate_dictionary(adsorbate):
     # 'H' is just an example. It won't actually be used here.
     atom_dict = {'H': Atoms('H')}
 
-    # Try to create an [atoms class] from the input
+    # Try to create an [atoms class] from the input.
     try:
         atoms = Atoms(adsorbate)
+    except ValueError:
+        print("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
+              % adsorbate)
 
-    # If that doesn't work, then look for the adsorbate in the "atomDict" object
-    except LookupError:
-        try:
-            atoms = atom_dict[adsorbate]
-        # If that doesn't work, then alert the user and move on
-        except LookupError:
-            print 'Error: Adsorbate name may not be in the "atomDict" dictionary'
-    # Return the number of constraints added
+    # If that doesn't work, then look for the adsorbate in the "atom_dict" object
+    try:
+        atoms = atom_dict[adsorbate]
+    except KeyError:
+        print("%s is not is GASpy's dictionary. You need to construct it manually and add it to \
+              the ads_dict function in gaspy_toolbox.py")
+
+    # Return the atoms
     return atoms
 
 
-def set_constraints(atoms, numSlabAtoms, zcutoff=3.):
+def constrain_slab(atoms, n_atoms, z_cutoff=3.):
     """
-    Define a function, "setConstraints" to impose slab constraints prior to relaxation.
+    Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
     Inputs
-    atoms     ASE-atoms class of the slab to be constrained
-    zcutoff   The threshold to see if other atoms are in the same plane as the highest atom
+    atoms       ASE-atoms class of the slab to be constrained
+    n_atoms     number of slab atoms
+    z_cutoff    The threshold to see if other atoms are in the same plane as the highest atom
     """
-
     # Initialize
-    constraints = []            # This list will contain the various constraints we will impose
-    atomscopy = atoms.copy()    # Create a local copy of the atoms class to work on
+    constraints = []        # This list will contain the various constraints we will impose
+    _atoms = atoms.copy()   # Create a local copy of the atoms class to work on
 
-    scaled_positions = atomscopy.get_scaled_positions()
-    # Constrain atoms except for the top layer
-    # Find height of the highest atom, and then define it as the "maxSlabZPos" float.
-    maxSlabZPos = np.max([pos[2] for pos in scaled_positions[0:numSlabAtoms]])
-    minSlabZPos = np.min([pos[2] for pos in scaled_positions[0:numSlabAtoms]])
-
+    # Constrain atoms except for the top layer. To do this, we first pull some information out
+    # of the _atoms object.
+    scaled_positions = _atoms.get_scaled_positions() #
+    z_max = np.max([pos[2] for pos in scaled_positions[0:n_atoms]]) # Scaled height of highest atom
+    z_min = np.min([pos[2] for pos in scaled_positions[0:n_atoms]]) # Scaled height of lowest atom
     # Add the constraint, which is a binary list (i.e., 1's & 0's) used to identify which atoms
     # to fix or not. The indices of the list correspond to the indices of the atoms in the "atoms".
     if atoms.cell[2, 2] > 0:
-        constraints.append(FixAtoms(mask=[pos[2] < maxSlabZPos-(zcutoff/norm(atomscopy.cell[2]))
+        constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/norm(_atoms.cell[2]))
                                           for pos in scaled_positions]))
     else:
-        constraints.append(FixAtoms(mask=[pos[2] > minSlabZPos+(zcutoff/norm(atomscopy.cell[2]))
+        constraints.append(FixAtoms(mask=[pos[2] > z_min+(z_cutoff/norm(_atoms.cell[2]))
                                           for pos in scaled_positions]))
 
     # Enact the constraints on the local atoms class
-    atomscopy.set_constraint(constraints)
-    return atomscopy
+    _atoms.set_constraint(constraints)
+    return _atoms
 
 
-def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=2):
+def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     """
     This function makes a simple vasp relaxation firework
-    atomin: atoms object to relax
-    namein: dictionary of tags/etc to use at the fireworks name
-    vaspin: dictionary of vasp settings to pass to Vasp()
-    threshold: max number of atoms to submit, mainly as a way to prevent
-        overly-large simulations from getting run
-    maxMiller: maximum miller index to submit, so that be default miller indices
-        above 3 won't get submitted by accident
+    atoms       atoms object to relax
+    fw_name     dictionary of tags/etc to use as the fireworks name
+    vasp_setngs dictionary of vasp settings to pass to Vasp()
+    max_atoms   max number of atoms to submit, mainly as a way to prevent overly-large
+                simulations from getting run
+    max_miller  maximum miller index to submit, so that be default miller indices
+                above 3 won't get submitted by accident
     """
-    if len(atomin) > threshold:
-        print 'too many atoms! '+str(namein)
+    # Notify the user if they try to create a firework with too many atoms
+    if len(atoms) > max_atoms:
+        print('Not making firework because there are too many atoms in %s' % str(fw_name))
         return
-    if 'miller' in namein and np.max(eval(str(namein['miller']))) > maxMiller:
-        print 'too high miller! '+str(namein)
+    # Notify the user if they try to create a firework with a high miller index
+    if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
+        print('Not making firework because the miller index exceeds the maximum of %s in %s' % (max_miller, str(fw_name)))
         return
+
     # Generate a string representation that we can pass to the job as input
-    atom_hex = atoms_to_hex(atomin)
+    atom_hex = atoms_to_hex(atoms)
     # Two steps - write the input structure to an input file, then relax that traj file
     write_surface = PyTask(func='fireworks_helper_scripts.atoms_hex_to_file',
                            args=['slab_in.traj',
@@ -133,21 +137,21 @@ def make_firework(atomin, namein, vaspin, threshold=50, maxMiller=2):
     opt_bulk = PyTask(func='vasp_scripts.runVasp',
                       args=['slab_in.traj',
                             'slab_relaxed.traj',
-                            vaspin],
+                            vasp_setngs],
                       stored_data_varname='opt_results')
 
     # Package the tasks into a firework, the fireworks into a workflow,
     # and submit the workflow to the launchpad
-    namein['user']=getpass.getuser()
-    firework = Firework([write_surface, opt_bulk], name=namein)
+    fw_name['user'] = getpass.getuser()
+    firework = Firework([write_surface, opt_bulk], name=fw_name)
     return firework
 
 
 def running_fireworks(name_dict, launchpad):
     """
     Return the running, ready, or completed fireworks on the launchpad with a given name
-    namedict: name dictionary to search for
-    launchpad: launchpad to use
+    name_dict   name dictionary to search for
+    launchpad   launchpad to use
     """
     # Make a mongo query
     name = {}
@@ -164,8 +168,7 @@ def running_fireworks(name_dict, launchpad):
             else:
                 name['name.%s'%key] = name_dict[key]
 
-    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
-    # or defused.
+    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled or defused.)
     fw_ids = launchpad.get_fw_ids(name)
     fw_list = []
     for fwid in fw_ids:
@@ -173,9 +176,34 @@ def running_fireworks(name_dict, launchpad):
         if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
             fw_list.append(fwid)
     # Return the matching fireworks
-    if len(fw_list)==0:
-        print('No matching FW: '+str(name))
+    if len(fw_list) == 0:
+        print('Na matching FW:  %s' % name)
     return fw_list
+
+
+def get_firework_info(fw):
+    """
+    Given a Fireworks ID, this function will return the "atoms" [class] and
+    "vasp_settings" [str] used to perform the relaxation
+    """
+    atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
+    atoms_hex_to_file('atom_temp.traj', atomshex)
+    atoms = ase.io.read('atom_temp.traj')
+    starting_atoms = ase.io.read('atom_temp.traj', index=0)
+    vasp_settings = fw.name['vasp_settings']
+    # Guess the pseudotential version if it's not present
+    if 'pp_version' not in vasp_settings:
+        if 'arjuna' in fw.launches[-1].fworker.name:
+            vasp_settings['pp_version'] = '5.4'
+        else:
+            vasp_settings['pp_version'] = '5.3.5'
+        vasp_settings['pp_guessed'] = True
+    if 'gga' not in vasp_settings:
+        settings = Vasp.xc_defaults[vasp_settings['xc']]
+        for key in settings:
+            vasp_settings[key] = settings[key]
+    vasp_settings = vasp_settings_to_str(vasp_settings)
+    return atoms, starting_atoms, atomshex, vasp_settings
 
 
 def get_aux_db():
@@ -187,195 +215,219 @@ def get_aux_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
-# Given a Fireworks ID, this function will return the "atoms" [class] and
-# "vasp_settings" [str] used to perform the relaxation
-def get_firework_info(fw):
-    atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
-    atoms_hex_to_file('atom_temp.traj', atomshex)
-    atoms = ase.io.read('atom_temp.traj')
-    starting_atoms = ase.io.read('atom_temp.traj', index=0)
-    vasp_settings = fw.name['vasp_settings']
-    #Guess the pseudotential version if it's not present
-    if 'pp_version' not in vasp_settings:
-        if 'arjuna' in fw.launches[-1].fworker.name:
-            vasp_settings['pp_version']='5.4'
-        else:
-            vasp_settings['pp_version']='5.3.5'
-        vasp_settings['pp_guessed']=True
-    if 'gga' not in vasp_settings:
-        settings=Vasp.xc_defaults[vasp_settings['xc']]
-        for key in settings:
-            vasp_settings[key]=settings[key]
-    vasp_settings = vasp_settings_to_str(vasp_settings)
-    return atoms, starting_atoms, atomshex, vasp_settings
 
 class DumpBulkGasToAuxDB(luigi.Task):
     """
-    This class will load the results from the Primary FireWorks database into the
-    Auxiliary vasp.mongo database.
+    This class will load the results for bulk and slab relaxations from the Primary FireWorks
+    database into the Auxiliary vasp.mongo database.
     """
-    
+
     def run(self):
-        launchpad = get_launchpad()
+        lpad = get_launchpad()
 
         # Create a class, "con", that has methods to interact with the database.
-        with get_aux_db() as MD:
+        with get_aux_db() as aux_db:
 
             # A list of integers containing the Fireworks job ID numbers that have been
             # added to the database already
-            all_inserted_fireworks = [a['fwid'] for a in MD.find({'fwid':{'$exists':True}})]
+            fws = [a['fwid'] for a in aux_db.find({'fwid':{'$exists':True}})]
 
-            # Given a Fireworks ID, this function will return the "atoms" [class] and
-            # "vasp_settings" [str] used to perform the relaxation
+            # Get all of the completed fireworks for unit cells and gases
+            fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'unit cell optimization'}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'gas phase optimization'})
 
-            # Get all of the completed fireworks
-            optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'unit cell optimization'}) + \
-                               launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'gas phase optimization'})
-
-            # For each fireworks object, turn the results into a mongo doc and submit
-            # into the database
-            for fwid in optimization_fws:
-                if fwid not in all_inserted_fireworks:
-                    fw = launchpad.get_fw_by_id(fwid)
+            # For each fireworks object, turn the results into a mongo doc
+            for fwid in fws_cmpltd:
+                if fwid not in fws:
                     # Get the information from the class we just pulled from the launchpad
+                    fw = lpad.get_fw_by_id(fwid)
                     atoms, starting_atoms, trajectory, vasp_settings = get_firework_info(fw)
+
+                    # Initialize the mongo document, doc, and the populate it with the fw info
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
-                    #fw.name['vasp_settings']=vasp_settings
                     doc['fwname'] = fw.name
-                    if 'miller' in fw.name:
-                        if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
-                            doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     doc['fwid'] = fwid
                     doc['directory'] = fw.launches[-1].launch_dir
+                    # fw.name['vasp_settings'] = vasp_settings
                     if fw.name['calculation_type'] == 'unit cell optimization':
                         doc['type'] = 'bulk'
                     elif fw.name['calculation_type'] == 'gas phase optimization':
                         doc['type'] = 'gas'
+                    # Convert the miller indices from strings to integers
+                    if 'miller' in fw.name:
+                        if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                            doc['fwname']['miller'] = eval(doc['fwname']['miller'])
 
-                    MD.write(doc)
+                    # Write the doc onto the Auxiliary database
+                    aux_db.write(doc)
+                    print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                          % (doc['type'], fw.name, fwid))
 
 
 class DumpSurfacesToAuxDB(luigi.Task):
     """
-    This class will load the results from the Primary FireWorks database into the
-    Auxiliary vasp.mongo database.
+    This class will load the results for surface relaxations from the Primary FireWorks database
+    into the Auxiliary vasp.mongo database.
     """
 
     def requires(self):
-        launchpad = get_launchpad()
+        lpad = get_launchpad()
 
         # A list of integers containing the Fireworks job ID numbers that have been
         # added to the database already
-        with get_aux_db() as MD:
-            all_inserted_fireworks = [a['fwid'] for a in MD.find({'fwid':{'$exists':True}})]
+        with get_aux_db() as aux_db:
+            fws = [a['fwid'] for a in aux_db.find({'fwid':{'$exists':True}})]
 
-        optimization_fws = launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'slab optimization'}) + \
-                           launchpad.get_fw_ids({'state':'COMPLETED','name.calculation_type':'slab+adsorbate optimization'})
+        # Get all of the completed fireworks for slabs and slab+ads
+        fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
+                                      'name.calculation_type':'slab optimization'}) + \
+                     lpad.get_fw_ids({'state':'COMPLETED',
+                                      'name.calculation_type':'slab+adsorbate optimization'})
+
+        # Trouble-shooting code
         #random.seed(42)
-        #random.shuffle(optimization_fws)
-        #optimization_fws=optimization_fws[-60:]
-        optimization_fws.reverse()
-        toreturn=[]
-        self.toadd=[]
-        self.toadd_missingshift=[]
-        for fwid in optimization_fws:
-           if fwid not in all_inserted_fireworks:
-               fw = launchpad.get_fw_by_id(fwid)
-               # Get the information from the class we just pulled from the launchpad
-               atoms, starting_atoms, trajectory, vasp_settings = get_firework_info(fw)
-               keys=['gga','encut','zab_vdw','lbeefens','luse_vdw','pp','pp_version']
-               settings=OrderedDict()
-               for key in keys:
-                   if key in vasp_settings:
-                       settings[key]=vasp_settings[key]
-               if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
-                   miller = eval(fw.name['miller'])
-               else:
-                   miller = fw.name['miller']
-               #print(fw.name['mpid'])
-               if 'shift' not in fw.name:
-                   toreturn.append(GenerateSurfaces({'bulk':default_parameter_bulk(mpid=fw.name['mpid'],settings=settings),
-                                                 'slab': default_parameter_slab(miller=miller, top=True,shift=0., settings=settings)}))
-                   self.toadd_missingshift.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
-               else:
-                   self.toadd.append([atoms, starting_atoms, trajectory, vasp_settings,fw,fwid])
+        #random.shuffle(fws_cmpltd)
+        #fws_cmpltd=fws_cmpltd[-60:]
+        fws_cmpltd.reverse()
 
+        # `surfaces` will be a list of the different surfaces that we need to generate before
+        # we are able to dump them to the Auxiliary DB.
+        surfaces = []
+        # `to_dump` will be a list of lists. Each sublist contains information we need to dump
+        # a surface from the Primary DB to the Auxiliary DB
+        self.to_dump = []
+        self.missing_shift_to_dump = []
 
-        return toreturn
+        # For each fireworks object, turn the results into a mongo doc
+        for fwid in fws_cmpltd:
+            if fwid not in fws:
+                # Get the information from the class we just pulled from the launchpad
+                fw = lpad.get_fw_by_id(fwid)
+                atoms, starting_atoms, trajectory, vasp_settings = get_firework_info(fw)
+                # Prepare to add VASP settings to the doc
+                keys = ['gga', 'encut', 'zab_vdw', 'lbeefens', 'luse_vdw', 'pp', 'pp_version']
+                settings = OrderedDict()
+                for key in keys:
+                    if key in vasp_settings:
+                        settings[key] = vasp_settings[key]
+                # Convert the miller indices from strings to integers
+                if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                    miller = eval(fw.name['miller'])
+                else:
+                    miller = fw.name['miller']
+                #print(fw.name['mpid'])
+
+                # Create the surfaces
+                if 'shift' not in fw.name:
+                    surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
+                                                                                     settings=settings),
+                                                      'slab': default_parameter_slab(miller=miller,
+                                                                                     top=True,
+                                                                                     shift=0.,
+                                                                                     settings=settings)}))
+                    self.missing_shift_to_dump.append([atoms, starting_atoms, trajectory,
+                                                       vasp_settings, fw, fwid])
+                else:
+                    # Pass the list of surfaces to dump to `self` so that it can be called by the
+                    #`run' method
+                    self.to_dump.append([atoms, starting_atoms, trajectory,
+                                         vasp_settings, fw, fwid])
+
+        # Establish that we need to create the surfaces before dumping them
+        return surfaces
 
     def run(self):
-        selfinput=self.input()
-        with get_aux_db() as MD:
-            count=0
-            for atoms, starting_atoms, trajectory, vasp_settings,fw,fwid in self.toadd_missingshift+self.toadd:
+        selfinput = self.input()
+
+        # Create a class, "aux_db", that has methods to interact with the database.
+        with get_aux_db() as aux_db:
+
+            # Start a counter for how many surfaces we will be guessing shifts for
+            n_missing_shift = 0
+
+            # Pull out the information for each surface that we put into to_dump
+            for atoms, starting_atoms, trajectory, vasp_settings, fw, fwid \
+                in self.missing_shift_to_dump + self.to_dump:
+                # Initialize the mongo document, doc, and the populate it with the fw info
                 doc = mongo_doc(atoms)
                 doc['initial_configuration'] = mongo_doc(starting_atoms)
                 doc['fwname'] = fw.name
-                if 'miller' in fw.name:
-                    if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
-                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                 doc['fwid'] = fwid
                 doc['directory'] = fw.launches[-1].launch_dir
-
                 if fw.name['calculation_type'] == 'slab optimization':
                     doc['type'] = 'slab'
                 elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                     doc['type'] = 'slab+adsorbate'
-                
+                # Convert the miller indices from strings to integers
+                if 'miller' in fw.name:
+                    if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
+
+                '''
+                This next paragraph of code (i.e., the lines until the next blank line)
+                addresses our old results that were saved without shift values. Here, we
+                guess what the shift is and declare it before saving it to the database.
+                '''
                 if 'shift' not in doc['fwname']:
-                    slab_list_unrelaxed = pickle.load(selfinput[count].open())                    
-                    atomlist_unrelaxed=[mongo_doc_atoms(slab) for slab in slab_list_unrelaxed if slab['tags']['top'] == fw.name['top']]
- 
-                    if len(atomlist_unrelaxed)>1:
+                    slab_list_unrelaxed = pickle.load(selfinput[n_missing_shift].open())
+                    n_missing_shift += 1
+                    atomlist_unrelaxed = [mongo_doc_atoms(slab)
+                                          for slab in slab_list_unrelaxed
+                                          if slab['tags']['top'] == fw.name['top']]
+                    if len(atomlist_unrelaxed) > 1:
                         print(atomlist_unrelaxed)
                         print(fw)
-                        #We use the average coordination as a descriptor of the structure,
-                        #there should be a pretty large change with different shifts
+                        # We use the average coordination as a descriptor of the structure,
+                        # there should be a pretty large change with different shifts
                         def getCoord(x):
                             return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
-
-                        #Get the coordination for the unrelaxed surface w/ correct shift
-                        if doc['type']=='slab':
-                            reference_coord=getCoord(starting_atoms)
-                        elif doc['type']=='slab+adsorbate':
-                            num_adsorbate_atoms={'':0,'OH':2,'CO':2,'C':1,'H':1,'O':1}[fw.name['adsorbate']]
-                            if num_adsorbate_atoms>0:
-                                starting_blank=starting_atoms[0:-num_adsorbate_atoms]
+                        # Get the coordination for the unrelaxed surface w/ correct shift
+                        if doc['type'] == 'slab':
+                            reference_coord = getCoord(starting_atoms)
+                        elif doc['type'] == 'slab+adsorbate':
+                            try:
+                                num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
+                            except KeyError:
+                                print("%s is not recognizable by GASpy's adsorbates dictionary. \
+                                      Please add it to `num_adsorbate_atoms` \
+                                      in `DumpSurfacesToAuxDB`" % fw.name['adsorbate'])
+                            if num_adsorbate_atoms > 0:
+                                starting_blank = starting_atoms[0:-num_adsorbate_atoms]
                             else:
-                                starting_blank=starting_atoms
-                            reference_coord=getCoord(starting_blank)
-                        #get the coordination for each unrelaxed surface
-                        unrelaxed_coord=map(getCoord,atomlist_unrelaxed)
-
-                        #We want to minimize the distance in these dictionaries
-                        def getDist(x,y):
-                            vals=[]
+                                starting_blank = starting_atoms
+                            reference_coord = getCoord(starting_blank)
+                        # Get the coordination for each unrelaxed surface
+                        unrelaxed_coord = map(getCoord, atomlist_unrelaxed)
+                        # We want to minimize the distance in these dictionaries
+                        def getDist(x, y):
+                            vals = []
                             for key in x:
                                 vals.append(x[key]-y[key])
                             return np.linalg.norm(vals)
-
-                        #Get the distances to the reference coordinations
-                        dist=map(lambda x: getDist(x,reference_coord),unrelaxed_coord)
-
-                        #Grab the atoms object that minimized this distance
-                        shift=slab_list_unrelaxed[np.argmin(dist)]['tags']['shift']
+                        # Get the distances to the reference coordinations
+                        dist = map(lambda x: getDist(x, reference_coord), unrelaxed_coord)
+                        # Grab the atoms object that minimized this distance
+                        shift = slab_list_unrelaxed[np.argmin(dist)]['tags']['shift']
                         doc['fwname']['shift'] = float(np.round(shift, 4))
-                        doc['fwname']['shift_guessed']=True
+                        doc['fwname']['shift_guessed'] = True
                     else:
                         doc['fwname']['shift'] = 0
-                        doc['fwname']['shift_guessed']=True
-                MD.write(doc)
-                count+=1
+                        doc['fwname']['shift_guessed'] = True
 
-        #Touch the token
+                aux_db.write(doc)
+                print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                      % (doc['type'], fw.name, fwid))
+
+        # Touch the token to indicate that we've written to the database
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/DumpToAuxDB.token')
-
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/DumpToAuxDB.token')
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -383,8 +435,8 @@ class UpdateAllDB(luigi.WrapperTask):
     Dump from the Primary database to the Auxiliary database, and then dump from the
     Auxiliary database to the Local database
     """
-    writeDB=luigi.BoolParameter()
-    Nprocess=luigi.IntParameter(0)
+    writeDB = luigi.BoolParameter()
+    Nprocess = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -392,19 +444,25 @@ class UpdateAllDB(luigi.WrapperTask):
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         """
+
+        # Dump from the Primary DB to the Aux DB
         DumpBulkGasToAuxDB().run()
         yield DumpSurfacesToAuxDB()
-        # Get every row in the mongo database of completed fireworks results
-        relaxed_rows = get_aux_db().find({'type':'slab+adsorbate'})
 
-        # Get all of the current fwid entries in the db
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
-            fwidlist = [row.fwid for row in conAds.select()]
+        # Get every row in the Aux database
+        rows = get_aux_db().find({'type':'slab+adsorbate'})
+        # Get all of the current fwid entries in the local DB
+        with connect(LOCAL_DB_PATH+'/adsorption_energy_database.db') as enrg_db:
+            fwids = [row.fwid for row in enrg_db.select()]
 
-        count=1
         # For each adsorbate/configuration, make a task to write the results to the output database
-        for row in relaxed_rows:
-            if row['fwid'] not in fwidlist and row['fwname']['adsorbate'] != '' and ((self.Nprocess==0) or (self.Nprocess>0 and count<self.Nprocess)):
+        for i, row in enumerate(rows):
+            # Only make the task if 1) the fireworks task is not already in the database,
+            # 2) there is an adsorbate, and 3) ...something I don't know about.
+            if (row['fwid'] not in fwids
+                    and row['fwname']['adsorbate'] != ''
+                    and ((self.Nprocess == 0) or (self.Nprocess > 0 and i+1 < self.Nprocess))):
+                # Pull information from the Aux DB
                 mpid = row['fwname']['mpid']
                 miller = row['fwname']['miller']
                 adsorption_site = row['fwname']['adsorption_site']
@@ -413,25 +471,31 @@ class UpdateAllDB(luigi.WrapperTask):
                 num_slab_atoms = row['fwname']['num_slab_atoms']
                 slabrepeat = row['fwname']['slabrepeat']
                 shift = row['fwname']['shift']
-                keys=['gga','encut','zab_vdw','lbeefens','luse_vdw','pp','pp_version']
-                settings=OrderedDict()
+                keys = ['gga', 'encut', 'zab_vdw', 'lbeefens', 'luse_vdw', 'pp', 'pp_version']
+                settings = OrderedDict()
                 for key in keys:
                     if key in row['fwname']['vasp_settings']:
-                        settings[key]=row['fwname']['vasp_settings'][key]                        
-                parameters = {'bulk':default_parameter_bulk(mpid,settings=settings),
-                              'gas':default_parameter_gas(gasname='CO',settings=settings),
-                              'slab':default_parameter_slab(miller=miller, shift=shift, top=top,settings=settings),
+                        settings[key] = row['fwname']['vasp_settings'][key]
+                # Create the nested dictionary of information that we will store in the Aux DB
+                parameters = {'bulk':default_parameter_bulk(mpid, settings=settings),
+                              'gas':default_parameter_gas(gasname='CO', settings=settings),
+                              'slab':default_parameter_slab(miller=miller,
+                                                            shift=shift,
+                                                            top=top,
+                                                            settings=settings),
                               'adsorption':default_parameter_adsorption(adsorbate=adsorbate,
                                                                         num_slab_atoms=num_slab_atoms,
                                                                         slabrepeat=slabrepeat,
-                                                                        adsorption_site=adsorption_site,settings=settings)
-                             }
+                                                                        adsorption_site=adsorption_site,
+                                                                        settings=settings)}
+                # Dump to the local DB if we told Luigi to do so. We may do so by adding the
+                # `--writeDB` flag when calling Luigi. If we do not dump to the local DB, then
+                # we fingerprint the slab+adsorbate system
                 if self.writeDB:
                     yield DumpToLocalDB(parameters)
                 else:
-                    yield FingerprintStructure(parameters)
+                    yield FingerprintRelaxedAdslab(parameters)
 
-                count+=1
 
 class SubmitToFW(luigi.Task):
     """
@@ -446,23 +510,24 @@ class SubmitToFW(luigi.Task):
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """
-        This function compares a search dictionary with another dictionary row,
-        and returns true if all entries in search match the corresponding entry in row
-        """
-        def logical_fun(row, search):
-            rowdict = row.__dict__
-            for key in search:
-                if key not in rowdict:
-                    return False
-                elif rowdict[key] != search[key]:
-                    return False
-            return True
+#         def logical_fun(row, search):
+#             """
+#             This function compares a search dictionary with another dictionary row,
+#             and returns true if all entries in search match the corresponding entry in row
+#             """
+#             rowdict = row.__dict__
+#             for key in search:
+#                 if key not in rowdict:
+#                     return False
+#                 elif rowdict[key] != search[key]:
+#                     return False
+#             return True
 
         # Define a dictionary that will be used to search the Auxiliary database and find
         # the correct entry
         if self.calctype == 'gas':
-            search_strings = {'type':'gas', 'fwname.gasname':self.parameters['gas']['gasname']}
+            search_strings = {'type':'gas',
+                              'fwname.gasname':self.parameters['gas']['gasname']}
             for key in self.parameters['gas']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s'%key] = self.parameters['gas']['vasp_settings'][key]
         elif self.calctype == 'slab':
@@ -480,7 +545,6 @@ class SubmitToFW(luigi.Task):
                               'fwname.mpid':self.parameters['bulk']['mpid']}
             for key in self.parameters['bulk']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s'%key] = self.parameters['bulk']['vasp_settings'][key]
-            
         elif self.calctype == 'slab+adsorbate':
             search_strings = {'type':'slab+adsorbate',
                               'fwname.miller':list(self.parameters['slab']['miller']),
@@ -493,32 +557,35 @@ class SubmitToFW(luigi.Task):
                     search_strings['fwname.vasp_settings.%s'%key] = self.parameters['adsorption']['vasp_settings'][key]
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
-
+        # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
-            shift=search_strings['fwname.shift']
-            search_strings['fwname.shift'] = {'$gte':shift-1e-4, '$lte':shift+1e-4}
-            #search_strings['fwname.shift'] = np.round(search_strings['fwname.shift'], 4)
+            shift = search_strings['fwname.shift']
+            search_strings['fwname.shift'] = {'$gta': shift - 1e-4, '$lte': shift + 1e-4}
+            #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
-        with get_aux_db() as MD:
-            self.matching_row = list(MD.find(search_strings))
-        #print('search string: '+str(search_strings))
+        with get_aux_db() as aux_db:
+            self.matching_row = list(aux_db.find(search_strings))
+        #print('Search string:  %s', % search_strings)
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
             if self.calctype == 'slab':
-                return [GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'], slab=self.parameters['slab'])),
-                        GenerateSurfaces(OrderedDict(unrelaxed=True,bulk=self.parameters['bulk'], slab=self.parameters['slab']))]
+                return [GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'],
+                                                     slab=self.parameters['slab'])),
+                        GenerateSurfaces(OrderedDict(unrelaxed=True,
+                                                     bulk=self.parameters['bulk'],
+                                                     slab=self.parameters['slab']))]
             if self.calctype == 'slab+adsorbate':
-                #return the base structure, and all possible matching ones for the surface
+                # Return the base structure, and all possible matching ones for the surface
                 search_strings = {'type':'slab+adsorbate',
-                              'fwname.miller':list(self.parameters['slab']['miller']),
-                              'fwname.top':self.parameters['slab']['top'],
-                              'fwname.mpid':self.parameters['bulk']['mpid'],
-                              'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
-                with get_aux_db() as MD:
-                    self.matching_rows_all_calcs = list(MD.find(search_strings))
-                return FingerprintGeneratedStructures(self.parameters)
+                                  'fwname.miller':list(self.parameters['slab']['miller']),
+                                  'fwname.top':self.parameters['slab']['top'],
+                                  'fwname.mpid':self.parameters['bulk']['mpid'],
+                                  'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
+                with get_aux_db() as aux_db:
+                    self.matching_rows_all_calcs = list(aux_db.find(search_strings))
+                return FingerprintUnrelaxedAdslabs(self.parameters)
             if self.calctype == 'bulk':
                 return GenerateBulk({'bulk':self.parameters['bulk']})
             if self.calctype == 'gas':
@@ -531,11 +598,14 @@ class SubmitToFW(luigi.Task):
         if len(self.matching_row) > 0:
             with self.output().temporary_path() as self.temp_output_path:
                 pickle.dump(self.matching_row, open(self.temp_output_path, 'w'))
+
         # Otherwise, we're missing a structure, so we need to submit whatever the
         # requirement returned
         else:
             launchpad = get_launchpad()
             tosubmit = []
+
+            # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
                 name = {'vasp_settings':self.parameters['bulk']['vasp_settings'],
                         'mpid':self.parameters['bulk']['mpid'],
@@ -543,6 +613,8 @@ class SubmitToFW(luigi.Task):
                 if len(running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name, self.parameters['bulk']['vasp_settings']))
+
+            # A way to append `tosubmit`, but specialized for gas relaxations
             if self.calctype == 'gas':
                 name = {'vasp_settings':self.parameters['gas']['vasp_settings'],
                         'gasname':self.parameters['gas']['gasname'],
@@ -550,59 +622,59 @@ class SubmitToFW(luigi.Task):
                 if len(running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name, self.parameters['gas']['vasp_settings']))
+
+            # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input()[0].open())
+                # An earlier version of GASpy did not correctly log the slab shift, and so many
+                # of our calculations/results do no have shifts. If there is either zero or more
+                # one shift value, then this next paragraph (i.e., all of the following code
+                # before the next blank line) deals with it in a "hacky" way. We may eventually
+                # remove this paragraph.
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
-                            and slab['tags']['top'] == self.parameters['slab']['top']
-                           ]
+                            if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
+                            and slab['tags']['top'] == self.parameters['slab']['top']]
                 if len(atomlist) > 1:
-                    print('matching atoms! something is weird')
-                    print(self.input()[0].fn)
-                elif len(atomlist)==0:
-                    #We couldn't find the desired shift value in the surfaces
-                    #generated for the relaxed bulk, so we need to try to find
-                    #it by comparison with the reference (unrelaxed) surfaces
+                    print('We have more than one slab system with identical shifts:\n%s' \
+                          % self.input()[0].fn)
+                elif len(atomlist) == 0:
+                    # We couldn't find the desired shift value in the surfaces
+                    # generated for the relaxed bulk, so we need to try to find
+                    # it by comparison with the reference (unrelaxed) surfaces
                     slab_list_unrelaxed = pickle.load(self.input()[1].open())
-                    atomlist_unrelaxed=[mongo_doc_atoms(slab) for slab in slab_list_unrelaxed
-                            if float(np.round(slab['tags']['shift'],2)) == float(np.round(self.parameters['slab']['shift'],2))
-                            and slab['tags']['top'] == self.parameters['slab']['top']
-                           ]
+                    atomlist_unrelaxed = [mongo_doc_atoms(slab) for slab in slab_list_unrelaxed
+                                          if float(np.round(slab['tags']['shift'], 2)) == \
+                                             float(np.round(self.parameters['slab']['shift'], 2))
+                                          and slab['tags']['top'] == self.parameters['slab']['top']]
                     #if len(atomlist_unrelaxed)==0:
                     #    print(slab_list_unrelaxed)
                     #    print('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
-
-                    #we need all of the relaxed slabs in atoms form:
+                    # we need all of the relaxed slabs in atoms form:
                     all_relaxed_surfaces = [mongo_doc_atoms(slab) for slab in slab_list
-                            if slab['tags']['top'] == self.parameters['slab']['top']
-                           ]
-
-                    #We use the average coordination as a descriptor of the structure,
-                    #there should be a pretty large change with different shifts
+                                            if slab['tags']['top'] == self.parameters['slab']['top']]
+                    # We use the average coordination as a descriptor of the structure,
+                    # there should be a pretty large change with different shifts
                     def getCoord(x):
                         return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
-
-                    #Get the coordination for the unrelaxed surface w/ correct shift
-                    reference_coord=getCoord(atomlist_unrelaxed[0])
-                    
-                    #get the coordination for each relaxed surface
-                    relaxed_coord=map(getCoord,all_relaxed_surfaces)
-
-                    #We want to minimize the distance in these dictionaries
-                    def getDist(x,y):
-                        vals=[]
+                    # Get the coordination for the unrelaxed surface w/ correct shift
+                    reference_coord = getCoord(atomlist_unrelaxed[0])
+                    # get the coordination for each relaxed surface
+                    relaxed_coord = map(getCoord, all_relaxed_surfaces)
+                    # We want to minimize the distance in these dictionaries
+                    def getDist(x, y):
+                        vals = []
                         for key in x:
                             vals.append(x[key]-y[key])
                         return np.linalg.norm(vals)
-                    
-                    #Get the distances to the reference coordinations
-                    dist=map(lambda x: getDist(x,reference_coord),relaxed_coord)
-                    
-                    #Grab the atoms object that minimized this distance
-                    atoms=all_relaxed_surfaces[np.argmin(dist)]
-                    print('Unable to find a slab with the correct shift, but found one with max position difference of %1.4f!'%np.min(dist))
+                    # Get the distances to the reference coordinations
+                    dist = map(lambda x: getDist(x, reference_coord), relaxed_coord)
+                    # Grab the atoms object that minimized this distance
+                    atoms = all_relaxed_surfaces[np.argmin(dist)]
+                    print('Unable to find a slab with the correct shift, but found one with max \
+                          position difference of %1.4f!'%np.min(dist))
 
-                elif len(atomlist)==1:
+                # If there is a shift value in the results, then continue as normal.
+                elif len(atomlist) == 1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
                         'mpid':self.parameters['bulk']['mpid'],
@@ -614,11 +686,17 @@ class SubmitToFW(luigi.Task):
                 print(name)
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
+
+            # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
                 fpd_structs = pickle.load(self.input().open())
                 def matchFP(entry, fp):
+                    '''
+                    This function checks to see if the first argument, `entry`, matches
+                    a fingerprint, `fp`
+                    '''
                     for key in fp:
-                        if type(entry[key]) == list:
+                        if isinstance(entry[key], list):
                             if sorted(entry[key]) != sorted(fp[key]):
                                 return False
                         else:
@@ -634,10 +712,11 @@ class SubmitToFW(luigi.Task):
                 else:
                     if self.parameters['adsorption']['adsorbates'][0]['name'] != '':
                         matching_rows = [row for row in fpd_structs
-                                         if row['adsorption_site'] == self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
+                                         if row['adsorption_site'] == \
+                                            self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_rows = [row for row in fpd_structs]
-                if len(matching_rows)==0:
+                if len(matching_rows) == 0:
                     print('No rows matching the desired FP/Site!')
                     print('Desired sites:')
                     print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
@@ -646,31 +725,17 @@ class SubmitToFW(luigi.Task):
                     print(self.input().fn)
                     print(self.parameters)
 
+                # If there is no adsorbate, then trim the matching_rows to the first row we found.
+                # Otherwise, trim the matching_rows to `numtosubmit`, a user-specified value that
+                # decides the maximum number of fireworks that we want to submit.
                 if self.parameters['adsorption']['adsorbates'][0]['name'] == '':
                     matching_rows = matching_rows[0:1]
                 elif 'numtosubmit' in self.parameters['adsorption']:
                     matching_rows = matching_rows[0:self.parameters['adsorption']['numtosubmit']]
 
+                # Add each of the matchi rows to `tosubmit`
                 for row in matching_rows:
-                    #First, let's see if we can find a reasonable guess for the row:
-                    #guess_rows=[row2 for row2 in self.matching_rows_all_calcs if matchFP(fingerprint(row2['atoms'],),row)]
-                    guess_rows=[]
-                    #We've found another calculation with exactly the same fingerprint
-                    if len(guess_rows)>0:
-                        guess=guess_rows[0]
-
-                        #Get the initial adsorption site of the identified row
-                        ads_site=np.array(map(eval,guess['fwname']['adsorption_site'].strip().split()[1:4]))
-                        atoms=row['atoms']
-                        atomsguess=guess['atoms']
-                        
-                        #For each adsorbate atom, move it the same relative amount as in the guessed configuration
-                        lenAdsorbates=len(Atoms(self.parameters['adsorption']['adsorbates'][0]['name']))
-                        for ind in range(-lenAdsorbates,len(atoms)):
-                            atoms[ind].position+=atomsguess[ind].position-ads_site
-                    else:
-                        atoms=row['atoms']
-
+                    # The name of our firework is actually a dictionary, as defined here
                     name = {'mpid':self.parameters['bulk']['mpid'],
                             'miller':self.parameters['slab']['miller'],
                             'top':self.parameters['slab']['top'],
@@ -681,68 +746,113 @@ class SubmitToFW(luigi.Task):
                             'num_slab_atoms':self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat':self.parameters['adsorption']['slabrepeat'],
                             'calculation_type':'slab+adsorbate optimization'}
-                    if len(guess_rows)>0:
-                        name['guessed_from']={'xc':guess['fwname']['vasp_settings']['xc'],'encut':guess['fwname']['vasp_settings']['encut']}
+                    # If there is no adsorbate, then the 'adsorption_site' key is irrelevant
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
+
+                    '''
+                    This next paragraph (i.e., code until the next blank line) is a prototyping
+                    skeleton for GASpy Issue #14
+                    '''
+                    # First, let's see if we can find a reasonable guess for the row:
+                    # guess_rows=[row2 for row2 in self.matching_rows_all_calcs if matchFP(fingerprint(row2['atoms'], ), row)]
+                    guess_rows = []
+                    # We've found another calculation with exactly the same fingerprint
+                    if len(guess_rows) > 0:
+                        guess = guess_rows[0]
+                        # Get the initial adsorption site of the identified row
+                        ads_site = np.array(map(eval, guess['fwname']['adsorption_site'].strip().split()[1:4]))
+                        atoms = row['atoms']
+                        atomsguess = guess['atoms']
+                        # For each adsorbate atom, move it the same relative amount as in the guessed configuration
+                        lenAdsorbates = len(Atoms(self.parameters['adsorption']['adsorbates'][0]['name']))
+                        for ind in range(-lenAdsorbates, len(atoms)):
+                            atoms[ind].position += atomsguess[ind].position-ads_site
+                    else:
+                        atoms = row['atoms']
+                    if len(guess_rows) > 0:
+                        name['guessed_from'] = {'xc':guess['fwname']['vasp_settings']['xc'],
+                                                'encut':guess['fwname']['vasp_settings']['encut']}
+
+                    # Add the firework if it's not already running
                     if len(running_fireworks(name, launchpad)) == 0:
                         tosubmit.append(make_firework(atoms,
                                                       name,
                                                       self.parameters['adsorption']['vasp_settings']))
-                    tosubmit=[a for a in tosubmit if a is not None]
+                    # Filter out any blanks we may have introduced earlier, and then trim the
+                    # number of submissions to our maximum.
+                    tosubmit = [a for a in tosubmit if a is not None]
                     if 'numtosubmit' in self.parameters['adsorption']:
-                        matching_rows = tosubmit[0:self.parameters['adsorption']['numtosubmit']]
+                        if len(tosubmit) > self.parameters['adsorption']['numtosubmit']:
+                            tosubmit = tosubmit[0:self.parameters['adsorption']['numtosubmit']]
+                            break
 
             # If we've found a structure that needs submitting, do so
-            print 'tosubmit: '+str(tosubmit)
-            tosubmit = [a for a in tosubmit if a is not None]
+            tosubmit = [a for a in tosubmit if a is not None]   # Trim blanks
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                print wflow
+                print('Just submitted the following Fireworks:\n%s' % tosubmit)
+                print('The workflow for these Fireworks:\n%s' % wflow)
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
+    '''
+    This class pulls a bulk structure from Materials Project and then converts it to an ASE atoms
+    object
+    '''
     parameters = luigi.DictParameter()
 
     def run(self):
+        # Connect to the Materials Project database
         with MPRester("MGOdX3P4nI18eKvE") as m:
+            # Pull out the PyMatGen structure and convert it to an ASE atoms object
             structure = m.get_structure_by_material_id(self.parameters['bulk']['mpid'])
-            # convert the structure class to an ASE atoms class...
             atoms = AseAtomsAdaptor.get_atoms(structure)
+            # Dump the atoms object into our pickles
             with self.output().temporary_path() as self.temp_output_path:
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+
 
 class GenerateGas(luigi.Task):
     parameters = luigi.DictParameter()
 
     def run(self):
         atoms = g2[self.parameters['gas']['gasname']]
-        atoms.positions+=10.
-        atoms.cell=[20,20,20]
-        atoms.pbc=[True,True,True]
+        atoms.positions += 10.
+        atoms.cell = [20, 20, 20]
+        atoms.pbc = [True, True, True]
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+
 
 class GenerateSurfaces(luigi.Task):
+    '''
+    This class uses PyMatGen to create surfaces (i.e., slabs cut from a bulk) from ASE atoms objects
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == True:
+        '''
+        If the bulk does not need to be relaxed, we simply pull it from Materials Project using
+        GenerateBulk. If it needs to be relaxed, then we submit it to Fireworks.
+        '''
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
             return GenerateBulk(parameters={'bulk':self.parameters['bulk']})
         else:
             return SubmitToFW(calctype='bulk', parameters={'bulk':self.parameters['bulk']})
 
     def run(self):
+        # Preparation work with ASE and PyMatGen before we start creating the slabs
         atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
         structure = AseAtomsAdaptor.get_structure(atoms)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
@@ -753,7 +863,8 @@ class GenerateSurfaces(luigi.Task):
         slabs = gen.get_slabs(**self.parameters['slab']['get_slab_settings'])
         slabsave = []
         for slab in slabs:
-            # If there's only one matching slab the shift doesn't matter so we'll just label it '0'
+            # If this slab is the only one in the set with this miller index, then the shift doesn't
+            # matter... so we set the shift as zero.
             if len([a for a in slabs if a.miller_index == slab.miller_index]) == 1:
                 shift = 0
             else:
@@ -761,13 +872,12 @@ class GenerateSurfaces(luigi.Task):
 
             # Create an atoms class for this particular slab, "atoms_slab"
             atoms_slab = AseAtomsAdaptor.get_atoms(slab)
-            # Then reorient the "atoms_slab" class so that the surface of the slab is pointing upwards
-            # in the z-direction
+            # Then reorient the "atoms_slab" class so that the surface of the slab is pointing
+            # upwards in the z-direction
             rotate(atoms_slab,
                    atoms_slab.cell[2], (0, 0, 1),
                    atoms_slab.cell[0], [1, 0, 0],
                    rotate_cell=True)
-
             # Save the slab, but only if it isn't already in the database
             tags = {'type':'slab',
                     'top':True,
@@ -778,9 +888,8 @@ class GenerateSurfaces(luigi.Task):
                     'relaxed':False,
                     'slab_generate_settings':self.parameters['slab']['slab_generate_settings'],
                     'get_slab_settings':self.parameters['slab']['get_slab_settings']}
-            slabdoc = mongo_doc(set_constraints(atoms_slab, len(atoms_slab)))
+            slabdoc = mongo_doc(constrain_slab(atoms_slab, len(atoms_slab)))
             slabdoc['tags'] = tags
-
             slabsave.append(slabdoc)
 
             # If the top of the cut is not identical to the bottom, then save the bottom slab to the
@@ -801,7 +910,7 @@ class GenerateSurfaces(luigi.Task):
                 atoms_slab.rotate('x', math.pi, rotate_cell=True)
 
                 # and if it is not in the database, then save it.
-                slabdoc = mongo_doc(set_constraints(atoms_slab, len(atoms_slab)))
+                slabdoc = mongo_doc(constrain_slab(atoms_slab, len(atoms_slab)))
                 tags = {'type':'slab',
                         'top':False,
                         'mpid':self.parameters['bulk']['mpid'],
@@ -820,13 +929,22 @@ class GenerateSurfaces(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class GenerateAdsorbatesMarker(luigi.Task):
+class GenerateSiteMarkers(luigi.Task):
+    '''
+    This class will take a set of slabs, enumerate the adsorption sites on the slab, add a marker
+    on the sites (i.e., Uranium), and then save the Uranium+slab systems into our pickles
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
+        '''
+        If the system we are trying to create markers for is unrelaxed, then we only need
+        to create the bulk and surfaces. If the system should be relaxed, then we need to
+        submit the bulk and the slab to Fireworks.
+        '''
         if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
             return [GenerateSurfaces(parameters=OrderedDict(unrelaxed=True,
                                                             bulk=self.parameters['bulk'],
@@ -835,29 +953,24 @@ class GenerateAdsorbatesMarker(luigi.Task):
         else:
             return [SubmitToFW(calctype='slab',
                                parameters=OrderedDict(bulk=self.parameters['bulk'],
-                                                    slab=self.parameters['slab'])),
+                                                      slab=self.parameters['slab'])),
                     SubmitToFW(calctype='bulk',
                                parameters={'bulk':self.parameters['bulk']})]
 
     def run(self):
+        # Defire our marker, a uraniom Atoms object. Then pull out the slabs and bulk
         adsorbate = {'name':'U', 'atoms':Atoms('U')}
+        slabs = pickle.load(self.input()[0].open())
+        bulk = mongo_doc_atoms(pickle.load(self.input()[1].open())[0])
 
-        slab_list = pickle.load(self.input()[0].open())
-        bulk_atoms = mongo_doc_atoms(pickle.load(self.input()[1].open())[0])
-
-        slabsave = []
-
-
-        # For each slab, find all the adsorbates and add them to slabsave
-        for slab in slab_list:
-
-            # "bulk_atoms" [atoms class] and "slab_atoms" [atoms class] are the first bulk structure
-            # and first slab structure, respectively, that we find in the database that corresponds
-            # to the slab that we are looking at. Note that these lines ignore any possible repeats
-            # of bulk or slab structures in the database.
+        # Initialize `adslabs_to_save`, which will be a list containing marked slabs (i.e.,
+        # adslabs) for us to save
+        adslabs_to_save = []
+        for slab in slabs:
+            # "slab_atoms" [atoms class] is the first slab structure in Aux DB that corresponds
+            # to the slab that we are looking at. Note that thise any possible repeats of the slab
+            # in the database.
             slab_atoms = mongo_doc_atoms(slab)
-            # Initialize "sites" [list]
-            sites = []
 
             # Repeat the atoms in the slab to get a cell that is at least as large as the "mix_xy"
             # parameter we set above.
@@ -866,15 +979,15 @@ class GenerateAdsorbatesMarker(luigi.Task):
             slabrepeat = (nx, ny, 1)
             slab_atoms.adsorbate_info = ''
             slab_atoms_repeat = slab_atoms.repeat(slabrepeat)
-
-            # Work on each adsorbate-slab pair (for this particular slab). Note that "adsorbate"
-            # will be a dictionary containing the atoms class and the name of the adsorbate.
+            # Only generate markers if the number of atoms in our repeated slab lie below our
+            # maximum slab size
             if len(slab_atoms_repeat) < self.parameters['adsorption']['max_slab_size']:
-                sites = find_adsorption_sites(slab_atoms, bulk_atoms)
-                site_list = sites
 
-                # Work on each adsorption site for this adsorbate-slab pair
-                for site in site_list:
+                # Find the adsorption sites. Then for each site we find, we create a dictionary
+                # of tags to describe the site. Then we save the tags to our pickles.
+                sites = find_adsorption_sites(slab_atoms, bulk)
+                for site in sites:
+                    # Populate the `tags` dictionary with various information
                     if 'unrelaxed' in self.parameters:
                         shift = slab['tags']['shift']
                         top = slab['tags']['top']
@@ -883,9 +996,6 @@ class GenerateAdsorbatesMarker(luigi.Task):
                         shift = self.parameters['slab']['shift']
                         top = self.parameters['slab']['top']
                         miller = self.parameters['slab']['miller']
-
-                    # "tags" [dictionary] contains various information about the
-                    # slab+adsorbate system
                     tags = {'type':'slab+adsorbate',
                             'adsorption_site':str(np.round(site, decimals=2)),
                             'slabrepeat':str(slabrepeat),
@@ -894,30 +1004,29 @@ class GenerateAdsorbatesMarker(luigi.Task):
                             'miller':miller,
                             'shift':shift,
                             'relaxed':False}
-
-                    # Make a local copies of our "slab_atoms" and "adsorbate" classes...
-                    slab_copy = slab_atoms_repeat.copy()
-                    adsorbate_copy = adsorbate['atoms'].copy()
+                    # Then add the adsorbate marker on top of the slab. Note that we use a local,
+                    # deep copy of the marker because the marker was created outside of this loop.
+                    _adsorbate = adsorbate['atoms'].copy()
                     # Move the adsorbate onto the adsorption site...
-                    adsorbate_copy.translate(site)
-                    # Put the adsorbate onto the slab to create the "ads_atoms"
-                    # adsorbate+slab system...
-                    ads_atoms = slab_copy + adsorbate_copy
-                    tags['atoms'] = ads_atoms
+                    _adsorbate.translate(site)
+                    # Put the adsorbate onto the slab and add the adslab system to the tags
+                    adslab = slab + _adsorbate
+                    tags['atoms'] = adslab
 
-                    # and finally ad the system to the database along with some extra information.
-                    slabsave.append(tags)
+                    # Finally, add the information to list of things to save
+                    adslabs_to_save.append(tags)
 
+        # Save the marked systems to our pickles
         with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump(slabsave, open(self.temp_output_path, 'w'))
+            pickle.dump(adslabs_to_save, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class GenerateAdsorbates(luigi.Task):
+class GenerateAdslabs(luigi.Task):
     """
-    This class takes a set of adsorbate positions from generate_adsorbates_marker and replaces
+    This class takes a set of adsorbate positions from GenerateSiteMarkers and replaces
     the marker (a uranium atom) with the correct adsorbate. Adding an adsorbate is done in two
     steps (marker enumeration, then replacement) so that the hard work of enumerating all
     adsorption sites is only done once and reused for every adsorbate
@@ -932,31 +1041,29 @@ class GenerateAdsorbates(luigi.Task):
         """
         parameters_no_adsorbate = copy.deepcopy(self.parameters)
         del parameters_no_adsorbate['adsorption']['adsorbates']
-        return GenerateAdsorbatesMarker(parameters_no_adsorbate)
+        return GenerateSiteMarkers(parameters_no_adsorbate)
 
     def run(self):
         # Load the configurations
         adsorbate_configs = pickle.load(self.input().open())
+
         # For each configuration replace the marker with the adsorbate
         for adsorbate_config in adsorbate_configs:
-            atoms = adsorbate_config['atoms']
-
-            # Delete the marker
-            adsorbate_position = atoms[-1].position
-            del atoms[-1]
-
-            # Load the adsorbate
-            ads_atoms = pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex'))
-
-            # Translate the adsorbate to the marker position and add it
-            ads_atoms.translate(adsorbate_position)
-            numslabatoms = len(atoms)
-            atoms = atoms + ads_atoms
-
+            # Load the atoms object for the slab and adsorbate
+            slab = adsorbate_config['atoms']
+            ads = pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex'))
+            # Find the position of the marker/adsorbate and the number of slab atoms, which we will
+            # use later
+            ads_pos = slab[-1].position
+            num_slab_atoms = len(slab)
+            # Delete the marker on the slab, and then put the adsorbate onto it
+            del slab[-1]
+            ads.translate(ads_pos)
+            adslab = slab + ads
             # Set constraints and update the list of dictionaries with the correct atoms
             # object adsorbate name
-            atoms.set_constraint()
-            adsorbate_config['atoms'] = set_constraints(atoms, numslabatoms)
+            adslab.set_constraint()
+            adsorbate_config['atoms'] = constrain_slab(adslab, num_slab_atoms)
             adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
 
         # Save the generated list of adsorbate configurations to a pkl file
@@ -964,7 +1071,7 @@ class GenerateAdsorbates(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -979,16 +1086,24 @@ class CalculateEnergy(luigi.Task):
         We need the relaxed slab, the relaxed slab+adsorbate, and relaxed CO/H2/H2O gas
         structures/energies
         """
+        # Initialize the list of things that need to be done before we can calculate the
+        # adsorption enegies
         toreturn = []
+        # First, we need to relax the slab+adsorbate system
         toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
+        # Then, we need to relax the slab. We do this by taking the adsorbate off and
+        # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
+        # calculation because of our code infrasttructure.
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
+        # Lastly, we need to relax the base gases.
         for gasname in ['CO', 'H2', 'H2O']:
             param = copy.deepcopy({'gas':self.parameters['gas']})
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
-        # toreturn is a list of [slab+adsorbate,slab,CO,H2,H2O] relaxed structures
+        # Now we put it all together.
+        print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1019,8 +1134,7 @@ class CalculateEnergy(luigi.Task):
         gas_energy = 0
         for ads in self.parameters['adsorption']['adsorbates']:
             gas_energy += np.sum(map(lambda x: mono_atom_energies[x],
-                                     adsorbate_dictionary(ads['name']).get_chemical_symbols())
-                                )
+                                     ads_dict(ads['name']).get_chemical_symbols))
 
         # Calculate the adsorption energy
         dE = slab_ads_energy - slab_blank_energy - gas_energy
@@ -1045,18 +1159,20 @@ class CalculateEnergy(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
+        print('Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 def fingerprint(atoms, siteind):
     """
-    This function is used to fingerprint an atoms object
-    atoms: atoms object to fingerprint
-    siteind: the position of the binding atom in the adsorbate (assumed to be the first atom
-    of the adsorbate)
+    This function is used to fingerprint an atoms object, where the "fingerprint" is a dictionary
+    of properties that we believe may be adsorption motifs.
+    atoms       atoms object to fingerprint
+    siteind     the position of the binding atom in the adsorbate (assumed to be the first atom
+                of the adsorbate)
     """
-
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so we can
     # keep track of it in the coordination calculation
     atoms = atoms[0:siteind+1]
@@ -1075,6 +1191,7 @@ def fingerprint(atoms, siteind):
     coordinated_symbols = [a for a in coordinated_symbols if a not in ['U']]
     # Turn the [list] of [unicode] values into a single [unicode]
     coordination = '-'.join(sorted(coordinated_symbols))
+
     # Make a [list] of human-readable coordination sites [unicode] for all of the slab atoms
     # that are coordinated to the adsorbate, "neighborcoord"
     neighborcoord = []
@@ -1093,11 +1210,10 @@ def fingerprint(atoms, siteind):
         coord_symbols.sort()
         # Turn the [list] of [unicode] values into a single [unicode]
         neighborcoord.append(i.species_string+':'+'-'.join(coord_symbols))
-        
+
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
     coordinated_atoms_nextnearest = vcf.get_coordinated_sites(siteind, 0.2)
-
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string, coordinated_atoms_nextnearest)
     # Take out atoms that we assume are not part of the slab
@@ -1105,12 +1221,15 @@ def fingerprint(atoms, siteind):
     # Turn the [list] of [unicode] values into a single [unicode]
     coordination_nextnearest = '-'.join(sorted(coordinated_symbols_nextnearest))
 
-    # Return a dictionary with each of the fingerprints.  Any key/value pair can be added here
+    # Return a dictionary with each of the fingerprints. Any key/value pair can be added here
     # and will propagate up the chain
-    return {'coordination':coordination, 'neighborcoord':neighborcoord, 'natoms':len(atoms),'nextnearestcoordination':coordination_nextnearest}
+    return {'coordination':coordination,
+            'neighborcoord':neighborcoord,
+            'natoms':len(atoms),
+            'nextnearestcoordination':coordination_nextnearest}
 
 
-class FingerprintStructure(luigi.Task):
+class FingerprintRelaxedAdslab(luigi.Task):
     """
     This class takes relaxed structures from our Pickles, fingerprints them, then adds the
     fingerprints back to our Pickles
@@ -1119,9 +1238,12 @@ class FingerprintStructure(luigi.Task):
 
     def requires(self):
         """
-        We want the blank slab to know how many slab atoms there are, as well as the lowest-energy
-        matching slab which calculateEnergy will get for us
+        Our first requirement is CalculateEnergy, which relaxes the slab+ads system. Our second
+        requirement is to relax the slab+ads system again, but without the adsorbates. We do this
+        to ensure that the "blank slab" we are using in the adsorption calculations has the same
+        number of slab atoms as the slab+ads system.
         """
+        # Here, we take the adsorbate off the slab+ads system
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
                                                          atoms=pickle.dumps(Atoms('')).
@@ -1131,72 +1253,80 @@ class FingerprintStructure(luigi.Task):
                            calctype='slab+adsorbate')]
 
     def run(self):
+        ''' We fingerprint the slab+adsorbate system both before and after relaxation. '''
+        # Load the atoms objects for the lowest-energy slab+adsorbate (adslab) system and the
+        # blank slab (slab)
+        adslab = pickle.load(self.input()[0].open())
+        slab = pickle.load(self.input()[1].open())
 
-        # Load the lowest-energy configuration
-        best_sys = pickle.load(self.input()[0].open())
-        blank_entry = pickle.load(self.input()[1].open())
+        # The atoms object for the adslab prior to relaxation
+        adslab0 = mongo_doc_atoms(adslab['slab+ads']['initial_configuration'])
+        # The number of atoms in the slab also happens to be the index for the first atom
+        # of the adsorbate (in the adslab system)
+        slab_natoms = slab[0]['atoms']['natoms']
+        ads_ind = slab_natoms
 
-        # Make a human-readable adsorption site, "coordination" [unicode] (e.g., "Ag-Ag-Ag")
-        initial_config = mongo_doc_atoms(best_sys['slab+ads']['initial_configuration'])
-
-        expected_slab_atoms = blank_entry[0]['atoms']['natoms']
-
-        if expected_slab_atoms == len(best_sys['atoms']):
+        # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
+        if slab_natoms == len(adslab['atoms']):
             fp_final = {}
-            fp_init={}
+            fp_init = {}
         else:
             # Calculate fingerprints for the initial and final state
-            fp_final = fingerprint(best_sys['atoms'], expected_slab_atoms)
-            fp_init = fingerprint(initial_config, expected_slab_atoms)
+            fp_final = fingerprint(adslab['atoms'], ads_ind)
+            fp_init = fingerprint(adslab0, ads_ind)
 
         # Save the the fingerprints of the final and initial state as a list in a pickle file
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class FingerprintGeneratedStructures(luigi.Task):
+class FingerprintUnrelaxedAdslabs(luigi.Task):
     """
-    This class takes unrelaxed structures from our Pickles, fingerprints them, then adds the
-    fingerprints back to our Pickles
+    This class takes unrelaxed slab+adsorbate (adslab) systems from our pickles, fingerprints the
+    adslab, fingerprints the slab (without an adsorbate), and then adds fingerprints back to our
+    Pickles. Note that we fingerprint the slab because we may have had to repeat the original slab
+    to add the adsorbate onto it, and if so then we also need to fingerprint the repeated slab.
     """
     parameters = luigi.DictParameter()
+
     def requires(self):
-        # Get the unrelaxed adsorbates and surfaces
-        param = copy.deepcopy(self.parameters)
-        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
-        return [GenerateAdsorbates(self.parameters),
-                GenerateAdsorbates(parameters=param)]
+        '''
+        We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
+        '''
+        # Make a copy of `parameters` for our slab, but then we take off the adsorbate
+        param_slab = copy.deepcopy(self.parameters)
+        param_slab['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
+        return [GenerateAdslabs(self.parameters),
+                GenerateAdslabs(parameters=param_slab)]
 
     def run(self):
-        # Load the lowest-energy configuration
-        atomslist = pickle.load(self.input()[0].open())
-        surfaces = pickle.load(self.input()[1].open())
-        # Get the number of slab atoms
-        if len(atomslist) > 0:
-            expected_slab_atoms = len(surfaces[0]['atoms'])
-            # len(surfaces[0]['atoms']['atoms'])*np.prod(eval(atomslist[0]['slabrepeat']))
+        # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the number of
+        # slab atoms
+        adslabs = pickle.load(self.input()[0].open())
+        slab = pickle.load(self.input()[1].open())
+        expected_slab_atoms = len(slab[0]['atoms'])
+        # len(slabs[0]['atoms']['atoms'])*np.prod(eval(adslabs[0]['slabrepeat']))
 
-            for entry in atomslist:
-                if entry['adsorbate'] == '':
-                    # We're looking at no adsorbates'
-                    fp = {}
-                else:
-                    # Fingerprint the structure
-                    fp = fingerprint(entry['atoms'], expected_slab_atoms)
-
-                # Add the fingerprints to the dictionary
-                for key in fp:
-                    entry[key] = fp[key]
+        # Fingerprint each adslab
+        for adslab in adslabs:
+            # Don't bother if the adslab happens to be bare
+            if adslab['adsorbate'] == '':
+                fp = {}
+            else:
+                fp = fingerprint(adslab['atoms'], expected_slab_atoms)
+            # Add the fingerprints to the dictionary
+            for key in fp:
+                adslab[key] = fp[key]
 
         # Write
         with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump(atomslist, open(self.temp_output_path, 'w'))
+            pickle.dump(adslabs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
 class DumpToLocalDB(luigi.Task):
@@ -1209,7 +1339,7 @@ class DumpToLocalDB(luigi.Task):
         and the bulk structure
         """
         return [CalculateEnergy(self.parameters),
-                FingerprintStructure(self.parameters),
+                FingerprintRelaxedAdslab(self.parameters),
                 SubmitToFW(calctype='bulk',
                            parameters={'bulk':self.parameters['bulk']})]
 
@@ -1225,30 +1355,29 @@ class DumpToLocalDB(luigi.Task):
         fingerprints = pickle.load(self.input()[1].open())
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
-        for fp in [fp_init,fp_final]:
-            for key in ['neighborcoord','nextnearestcoordination','coordination']:
+        for fp in [fp_init, fp_final]:
+            for key in ['neighborcoord', 'nextnearestcoordination', 'coordination']:
                 if key not in fp:
-                    fp[key]=''
-        
+                    fp[key] = ''
+
         def unit_vector(vector):
             """ Returns the unit vector of the vector.  """
             return vector / np.linalg.norm(vector)
 
         def angle_between(v1, v2):
-            """ Returns the angle in radians between vectors 'v1' and 'v2'::
-            """
+            """ Returns the angle in radians between vectors 'v1' and 'v2'::  """
             v1_u = unit_vector(v1)
             v2_u = unit_vector(v2)
             return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-        
-        if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO','OH']:
-            angle=angle_between(best_sys[-1].position-best_sys[-2].position,best_sys.cell[2])
-            if self.parameters['slab']['top']==False:
-                angle=np.abs(angle-math.pi)
-        else:
-            angle=0.
 
-        angle=angle/2./np.pi*360
+        if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO', 'OH']:
+            angle = angle_between(best_sys[-1].position-best_sys[-2].position, best_sys.cell[2])
+            if self.parameters['slab']['top'] is False:
+                angle = np.abs(angle-math.pi)
+        else:
+            angle = 0.
+
+        angle = angle/2./np.pi*360
 
         #calculate the maximum movement of surface atoms during the relaxation
         #first, calculate the number of adsorbate atoms
@@ -1290,13 +1419,13 @@ class DumpToLocalDB(luigi.Task):
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
-            if key=='pp_version':
-                criteria[key] = VSP_STNGS[key]+'.'
+            if key == 'pp_version':
+                criteria[key] = VSP_STNGS[key] + '.'
             else:
                 criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
-        with connect(GASpy_DB_loc+'/adsorption_energy_database.db') as conAds:
+        with connect(LOCAL_DB_PATH+'/adsorption_energy_database.db') as conAds:
             conAds.write(best_sys, **criteria)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -1305,7 +1434,8 @@ class DumpToLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-       return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+
 
 class DumpSitesLocalDB(luigi.Task):
     """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
@@ -1313,10 +1443,10 @@ class DumpSitesLocalDB(luigi.Task):
 
     def requires(self):
         """ Get the generated adsorbate configurations """
-        return FingerprintGeneratedStructures(self.parameters)
+        return FingerprintUnrelaxedAdslabs(self.parameters)
 
     def run(self):
-        with connect(GASpy_DB_loc+'/enumerated_adsorption_sites.db') as con:
+        with connect(LOCAL_DB_PATH+'/enumerated_adsorption_sites.db') as con:
             # Load the configurations
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
@@ -1344,27 +1474,41 @@ class DumpSitesLocalDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASpy_DB_loc+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-def new_default_settings(xc):
-    if xc=='rpbe':
-        settings=OrderedDict(gga='RP',pp='PBE')
+def default_xc_settings(xc):
+    '''
+    This function is where we populate the default calculation settings we want for each
+    specific xc (exchange correlational)
+    '''
+    if xc == 'rpbe':
+        settings = OrderedDict(gga='RP', pp='PBE')
     else:
-        settings=OrderedDict(Vasp.xc_defaults[xc])
+        settings = OrderedDict(Vasp.xc_defaults[xc])
+
     return settings
+
 
 def default_calc_settings(xc):
-    settings=OrderedDict({'encut':350,'pp_version':'5.4'})
-    default_settings=new_default_settings(xc)
+    '''
+    This function defines the default calculational settings for GASpy to use
+    '''
+    # Standard settings to use regardless of xc (exchange correlational)
+    settings = OrderedDict({'encut':350, 'pp_version':'5.4'})
+
+    # Call on the default_xc_settings function to define the rest of the settings
+    default_settings = default_xc_settings(xc)
     for key in default_settings:
-        settings[key]=default_settings[key]
+        settings[key] = default_settings[key]
+
     return settings
+
 
 def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
     """ Generate some default parameters for a slab and expected relaxation settings """
-    if type(settings)==str:
-        settings=default_calc_settings(settings)
+    if isinstance(settings, str):
+        settings = default_calc_settings(settings)
     return OrderedDict(miller=miller,
                        top=top,
                        shift=shift,
@@ -1375,7 +1519,8 @@ def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
                                                  isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
-                                                 ediffg=-0.03,**settings),
+                                                 ediffg=-0.03,
+                                                 **settings),
                        slab_generate_settings=OrderedDict(min_slab_size=7.,
                                                           min_vacuum_size=20.,
                                                           lll_reduce=False,
@@ -1390,8 +1535,8 @@ def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
 
 def default_parameter_gas(gasname, settings='beef-vdw'):
     """ Generate some default parameters for a gas and expected relaxation settings """
-    if type(settings)==str:
-        settings=default_calc_settings(settings)
+    if isinstance(settings, str):
+        settings = default_calc_settings(settings)
     return OrderedDict(gasname=gasname,
                        relaxed=True,
                        vasp_settings=OrderedDict(ibrion=2,
@@ -1402,14 +1547,13 @@ def default_parameter_gas(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-
-def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=500.):
+def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
     """ Generate some default parameters for a bulk and expected relaxation settings """
-    if type(settings)==str:
-        settings=default_calc_settings(settings)
-    #We're getting a handle to a dictionary, so need to copy before modifying
-    settings=copy.deepcopy(settings)
-    settings['encut']=encutBulk
+    if isinstance(settings, str):
+        settings = default_calc_settings(settings)
+    # We're getting a handle to a dictionary, so need to copy before modifying
+    settings = copy.deepcopy(settings)
+    settings['encut'] = encutBulk
     return OrderedDict(mpid=mpid,
                        relaxed=True,
                        vasp_settings=OrderedDict(ibrion=1,
@@ -1418,8 +1562,8 @@ def default_parameter_bulk(mpid, settings='beef-vdw',encutBulk=500.):
                                                  isym=0,
                                                  ediff=1e-8,
                                                  kpts=[10, 10, 10],
-                                                 prec='Accurate',**settings))
-
+                                                 prec='Accurate',
+                                                 **settings))
 
 
 def default_parameter_adsorption(adsorbate,
@@ -1431,8 +1575,8 @@ def default_parameter_adsorption(adsorbate,
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings
     """
-    if type(settings)==str:
-        settings=default_calc_settings(settings)
+    if isinstance(settings, str):
+        settings = default_calc_settings(settings)
     adsorbateStructures = {'CO':{'atoms':Atoms('CO', positions=[[0.,0.,0.],[0.,0.,1.2]]),  'name':'CO'},
                            'H':{'atoms':Atoms('H',   positions=[[0.,0.,-0.5]]),            'name':'H'},
                            'O':{'atoms':Atoms('O',   positions=[[0.,0.,0.]]),              'name':'O'},
@@ -1458,4 +1602,5 @@ def default_parameter_adsorption(adsorbate,
                                                  isym=0,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
-                                                 ediffg=-0.03,**settings))
+                                                 ediffg=-0.03,
+                                                 **settings))
