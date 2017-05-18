@@ -38,6 +38,7 @@ import luigi
 
 LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
+
 def get_launchpad():
     ''' This function contains the information about our FireWorks LaunchPad '''
     return LaunchPad(host='mongodb01.nersc.gov',
@@ -1463,7 +1464,7 @@ class DumpSitesLocalDB(luigi.Task):
                                                                  x['neighborcoord']]),
                                                   configs),
                                               return_index=True)
-            # For each configuration, write a row to the dtabase
+            # For each configuration, write a row to the database
             for i in unq_inds:
                 config = configs[i]
                 con.write(config['atoms'],
@@ -1475,7 +1476,7 @@ class DumpSitesLocalDB(luigi.Task):
                           adsorption_site=config['adsorption_site'],
                           coordination=config['coordination'],
                           neighborcoord=str(config['neighborcoord']),
-                          nextnearestcoordination=str(config['nextnearestcoordination']))   # Plus tags
+                          nextnearestcoordination=str(config['nextnearestcoordination']))
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
