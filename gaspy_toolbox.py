@@ -175,6 +175,8 @@ def running_fireworks(name_dict, launchpad):
         if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
             fw_list.append(fwid)
     # Return the matching fireworks
+    if len(fw_list) == 0:
+        print('Na matching FW:  %s' % name)
     return fw_list
 
 
@@ -296,6 +298,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
         # `to_dump` will be a list of lists. Each sublist contains information we need to dump
         # a surface from the Primary DB to the Auxiliary DB
         self.to_dump = []
+        self.missing_shift_to_dump = []
 
         # For each fireworks object, turn the results into a mongo doc
         for fwid in fws_cmpltd:
@@ -317,15 +320,20 @@ class DumpSurfacesToAuxDB(luigi.Task):
                 #print(fw.name['mpid'])
 
                 # Create the surfaces
-                surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
-                                                                                 settings=settings),
-                                                  'slab': default_parameter_slab(miller=miller,
-                                                                                 top=True,
-                                                                                 shift=0.,
-                                                                                 settings=settings)}))
-                # Pass the list of surfaces to dump to `self` so that it can be called by the `run'
-                # method
-                self.to_dump.append([atoms, starting_atoms, trajectory, vasp_settings, fw, fwid])
+                if 'shift' not in fw.name:
+                    surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
+                                                                                     settings=settings),
+                                                      'slab': default_parameter_slab(miller=miller,
+                                                                                     top=True,
+                                                                                     shift=0.,
+                                                                                     settings=settings)}))
+                    self.missing_shift_to_dump.append([atoms, starting_atoms, trajectory,
+                                                       vasp_settings, fw, fwid])
+                else:
+                    # Pass the list of surfaces to dump to `self` so that it can be called by the
+                    #`run' method
+                    self.to_dump.append([atoms, starting_atoms, trajectory,
+                                         vasp_settings, fw, fwid])
 
         # Establish that we need to create the surfaces before dumping them
         return surfaces
@@ -336,11 +344,12 @@ class DumpSurfacesToAuxDB(luigi.Task):
         # Create a class, "aux_db", that has methods to interact with the database.
         with get_aux_db() as aux_db:
 
-            #print('self.input len: %d' % len(self.input()))
-            #print('to_dump len: %d' % len(self.to_dump))
+            # Start a counter for how many surfaces we will be guessing shifts for
+            n_missing_shift = 0
 
-            # Perform a dump for each surface that we put into to_dump
-            for i, (atoms, starting_atoms, trajectory, vasp_settings, fw, fwid) in enumerate(self.to_dump):
+            # Pull out the information for each surface that we put into to_dump
+            for atoms, starting_atoms, trajectory, vasp_settings, fw, fwid \
+                in self.missing_shift_to_dump + self.to_dump:
                 # Initialize the mongo document, doc, and the populate it with the fw info
                 doc = mongo_doc(atoms)
                 doc['initial_configuration'] = mongo_doc(starting_atoms)
@@ -355,14 +364,18 @@ class DumpSurfacesToAuxDB(luigi.Task):
                 if 'miller' in fw.name:
                     if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
                         doc['fwname']['miller'] = eval(doc['fwname']['miller'])
-                # If there is no shift key in fwname, then guess what the shift is and add it to the
-                # Aux DB
+
+                '''
+                This next paragraph of code (i.e., the lines until the next blank line)
+                addresses our old results that were saved without shift values. Here, we
+                guess what the shift is and declare it before saving it to the database.
+                '''
                 if 'shift' not in doc['fwname']:
-                    slab_list_unrelaxed = pickle.load(selfinput[i].open())
+                    slab_list_unrelaxed = pickle.load(selfinput[n_missing_shift].open())
+                    n_missing_shift += 1
                     atomlist_unrelaxed = [mongo_doc_atoms(slab)
                                           for slab in slab_list_unrelaxed
                                           if slab['tags']['top'] == fw.name['top']]
-
                     if len(atomlist_unrelaxed) > 1:
                         print(atomlist_unrelaxed)
                         print(fw)
@@ -370,7 +383,6 @@ class DumpSurfacesToAuxDB(luigi.Task):
                         # there should be a pretty large change with different shifts
                         def getCoord(x):
                             return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
-
                         # Get the coordination for the unrelaxed surface w/ correct shift
                         if doc['type'] == 'slab':
                             reference_coord = getCoord(starting_atoms)
@@ -379,8 +391,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                                 num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
                             except KeyError:
                                 print("%s is not recognizable by GASpy's adsorbates dictionary. \
-                                      Please add it to `num_adsorbate_atoms` in "\)
-                                        + "`DumpSurfacesToAuxDB`" % fw.name['adsorbate']
+                                      Please add it to `num_adsorbate_atoms` \
+                                      in `DumpSurfacesToAuxDB`" % fw.name['adsorbate'])
                             if num_adsorbate_atoms > 0:
                                 starting_blank = starting_atoms[0:-num_adsorbate_atoms]
                             else:
@@ -388,17 +400,14 @@ class DumpSurfacesToAuxDB(luigi.Task):
                             reference_coord = getCoord(starting_blank)
                         # Get the coordination for each unrelaxed surface
                         unrelaxed_coord = map(getCoord, atomlist_unrelaxed)
-
                         # We want to minimize the distance in these dictionaries
                         def getDist(x, y):
                             vals = []
                             for key in x:
                                 vals.append(x[key]-y[key])
                             return np.linalg.norm(vals)
-
                         # Get the distances to the reference coordinations
                         dist = map(lambda x: getDist(x, reference_coord), unrelaxed_coord)
-
                         # Grab the atoms object that minimized this distance
                         shift = slab_list_unrelaxed[np.argmin(dist)]['tags']['shift']
                         doc['fwname']['shift'] = float(np.round(shift, 4))
@@ -549,11 +558,14 @@ class SubmitToFW(luigi.Task):
                 search_strings['fwname.adsorption_site'] = self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
-            search_strings['fwname.shift'] = np.round(search_strings['fwname.shift'], 4)
+            shift = search_strings['fwname.shift']
+            search_strings['fwname.shift'] = {'$gta': shift - 1e-4, '$lte': shift + 1e-4}
+            #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
         with get_aux_db() as aux_db:
             self.matching_row = list(aux_db.find(search_strings))
+        #print('Search string:  %s', % search_strings)
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
@@ -670,6 +682,7 @@ class SubmitToFW(luigi.Task):
                         'vasp_settings':self.parameters['slab']['vasp_settings'],
                         'calculation_type':'slab optimization',
                         'num_slab_atoms':len(atoms)}
+                print(name)
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
 
@@ -1390,7 +1403,10 @@ class DumpToLocalDB(luigi.Task):
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
-            criteria[key] = VSP_STNGS[key]
+            if key == 'pp_version':
+                criteria[key] = VSP_STNGS[key] + '.'
+            else:
+                criteria[key] = VSP_STNGS[key]
 
         # Write the entry into the database
         with connect(LOCAL_DB_PATH+'/adsorption_energy_database.db') as conAds:
@@ -1451,7 +1467,7 @@ def default_xc_settings(xc):
     specific xc (exchange correlational)
     '''
     if xc == 'rpbe':
-        settings = OrderedDict(gga='RP', xc='PBE', pp='PBE')
+        settings = OrderedDict(gga='RP', pp='PBE')
     else:
         settings = OrderedDict(Vasp.xc_defaults[xc])
 
@@ -1515,7 +1531,7 @@ def default_parameter_gas(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=800.):
+def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
     """ Generate some default parameters for a bulk and expected relaxation settings """
     if isinstance(settings, str):
         settings = default_calc_settings(settings)
@@ -1527,6 +1543,7 @@ def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=800.):
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
+                                                 isym=0,
                                                  ediff=1e-8,
                                                  kpts=[10, 10, 10],
                                                  prec='Accurate',
