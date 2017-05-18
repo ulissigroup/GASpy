@@ -22,6 +22,7 @@ from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.structure_analyzer import average_coordination_number
 from ase.db import connect
 from ase import Atoms
+from ase.geometry import find_mic
 import ase.io
 from ase.build import rotate
 from ase.constraints import *
@@ -566,7 +567,7 @@ class SubmitToFW(luigi.Task):
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
-            search_strings['fwname.shift'] = {'$gta': shift - 1e-4, '$lte': shift + 1e-4}
+            search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
             #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
@@ -729,6 +730,7 @@ class SubmitToFW(luigi.Task):
                     print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
                     print('Available Sites:')
                     print(fpd_structs)
+                    print(self.input().fn)
                     print(self.parameters)
 
                 # If there is no adsorbate, then trim the matching_rows to the first row we found.
@@ -1016,7 +1018,7 @@ class GenerateSiteMarkers(luigi.Task):
                     # Move the adsorbate onto the adsorption site...
                     _adsorbate.translate(site)
                     # Put the adsorbate onto the slab and add the adslab system to the tags
-                    adslab = slab + _adsorbate
+                    adslab = slab_atoms_repeat.copy() + _adsorbate
                     tags['atoms'] = adslab
 
                     # Finally, add the information to list of things to save
@@ -1190,7 +1192,7 @@ def fingerprint(atoms, siteind):
     vcf = VoronoiCoordFinder(struct)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.8)
+    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.7)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
     # Take out atoms that we assume are not part of the slab
@@ -1385,6 +1387,19 @@ class DumpToLocalDB(luigi.Task):
             angle = 0.
         angle = angle/2./np.pi*360
 
+        #calculate the maximum movement of surface atoms during the relaxation
+        #first, calculate the number of adsorbate atoms
+        num_adsorbate_atoms=len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
+        #get just the slab atoms of the initial and final state
+        slab_atoms_final=best_sys[0:-num_adsorbate_atoms]
+        slab_atoms_initial=mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[0:-num_adsorbate_atoms]
+        #Calculate the distances for each atom
+        distances=slab_atoms_final.positions-slab_atoms_initial.positions
+        #Reduce the distances in case atoms wrapped around (the minimum image convention)
+        dist,Dlen=find_mic(distances,slab_atoms_final.cell,slab_atoms_final.pbc)
+        #Calculate the max movement of the surface atoms
+        max_surface_movement=np.max(Dlen)
+
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
                     'mpid':self.parameters['bulk']['mpid'],
@@ -1407,7 +1422,8 @@ class DumpToLocalDB(luigi.Task):
                     'fwid':best_sys_pkl['slab+ads']['fwid'],
                     'slabfwid':best_sys_pkl['slab']['fwid'],
                     'bulkfwid':bulk[bulkmin]['fwid'],
-                    'adsorbate_angle':angle}
+                    'adsorbate_angle':angle,
+                    'max_surface_movement':max_surface_movement}
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
