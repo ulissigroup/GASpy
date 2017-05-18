@@ -1,4 +1,4 @@
-#+TITLE:  GASpy:  Generalized Adsorption Simulation Package for Python
+#+TITLE:  GASpy:  Generalized Adsorption Simulator for Python
 #+date:  04 April 2017
 
 * Purpose
