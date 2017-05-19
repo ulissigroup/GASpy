@@ -37,6 +37,7 @@ from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 from vasp import Vasp
 import luigi
 
+
 LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
@@ -444,8 +445,14 @@ class UpdateAllDB(luigi.WrapperTask):
     Dump from the Primary database to the Auxiliary database, and then dump from the
     Auxiliary database to the Local database
     """
+    # write_db is a boolean. If false, we only execute FingerprintRelaxedAdslabs, which
+    # submits calculations to Fireworks (if needed). If writeDB is true, then we still
+    # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
     writeDB = luigi.BoolParameter()
-    Nprocess = luigi.IntParameter(0)
+    # max_dumps is the maximum number of calculation sets to dump. If it's set to zero,
+    # then there is no limit. This is used to limit the scope of a DB update for 
+    # debugging purposes.
+    max_dumps = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -467,10 +474,11 @@ class UpdateAllDB(luigi.WrapperTask):
         # For each adsorbate/configuration, make a task to write the results to the output database
         for i, row in enumerate(rows):
             # Only make the task if 1) the fireworks task is not already in the database,
-            # 2) there is an adsorbate, and 3) ...something I don't know about.
+            # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of rows
+            # to dump.
             if (row['fwid'] not in fwids
                     and row['fwname']['adsorbate'] != ''
-                    and ((self.Nprocess == 0) or (self.Nprocess > 0 and i+1 < self.Nprocess))):
+                    and ((self.max_dumps == 0) or (self.max_dumps > 0 and i < self.max_dumps))):
                 # Pull information from the Aux DB
                 mpid = row['fwname']['mpid']
                 miller = row['fwname']['miller']

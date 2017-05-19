@@ -48,8 +48,12 @@ class UpdateDBs(luigi.WrapperTask):
     just use fireworks, but calling fireworks from a remote cluster is slow. So we speed
     up the calls by dumping the data to mlab, where querying is fast.
     """
-    nowrite=luigi.BoolParameter()
-    Nprocess=luigi.IntParameter(0)
+    # If nowrite = luigi.BoolParameter(True), then we write to the database.
+    # If nowrite = luigi.BoolParameter(False), then only FingerprintRelaxedAdslabs.
+    # Note that if no argument is passed to BoolParameter, it defaults to False.
+    nowrite = luigi.BoolParameter()
+    # The maximum number of rows to dump to the Local DB. Enter zero if you want no limit.
+    Nprocess = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -58,9 +62,9 @@ class UpdateDBs(luigi.WrapperTask):
         method.
         """
         if self.nowrite:
-            yield UpdateAllDB(Nprocess=self.Nprocess,writeDB=False)
+            yield UpdateAllDB(Nprocess=self.Nprocess, writeDB=False)
         else:
-            yield UpdateAllDB(Nprocess=self.Nprocess,writeDB=True)
+            yield UpdateAllDB(Nprocess=self.Nprocess, writeDB=True)
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
