@@ -188,6 +188,11 @@ class StudyCoordinationSites(luigi.WrapperTask):
                                   'gas':default_parameter_gas('CO',settings=self.xc),
                                   'adsorption':ads_parameter}
                         yield CalculateEnergy(parameters=parameters)
+                        parameters = {"bulk": default_parameter_bulk(row.mpid,settings=self.xc),
+                                  'slab':default_parameter_slab(list(eval(row.miller)), not(row.top), row.shift,settings=self.xc),
+                                  'gas':default_parameter_gas('CO',settings=self.xc),
+                                  'adsorption':ads_parameter}
+                        yield CalculateEnergy(parameters=parameters)
                         count+=1
 
 
@@ -227,6 +232,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                      'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
                      'Fe', 'V', 'Si', 'Sn', 'Sb']
         # whitelist=['Pd','Cu','Au','Ag']
+
         restricted_elements = [el for el in all_elements if el not in whitelist]
 
         # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
@@ -348,6 +354,11 @@ class PredictAndSubmit(luigi.WrapperTask):
                                                     'nextnearestcoordination':row.nextnearestcoordination}
             parameters = {'bulk': default_parameter_bulk(row.mpid,settings=self.xc),
                               'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift,settings=self.xc),
+                              'gas':default_parameter_gas('CO',settings=self.xc),
+                              'adsorption':ads_parameter}
+            yield CalculateEnergy(parameters=parameters)
+            parameters = {'bulk': default_parameter_bulk(row.mpid,settings=self.xc),
+                              'slab':default_parameter_slab(list(eval(row.miller)), not(row.top), row.shift,settings=self.xc),
                               'gas':default_parameter_gas('CO',settings=self.xc),
                               'adsorption':ads_parameter}
             yield CalculateEnergy(parameters=parameters)
