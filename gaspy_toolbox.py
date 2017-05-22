@@ -10,6 +10,7 @@ import copy
 import math
 from math import ceil
 # import random
+from pprint import pprint
 import cPickle as pickle
 import getpass
 import numpy as np
@@ -22,6 +23,7 @@ from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.structure_analyzer import average_coordination_number
 from ase.db import connect
 from ase import Atoms
+from ase.geometry import find_mic
 import ase.io
 from ase.build import rotate
 from ase.constraints import *
@@ -35,7 +37,9 @@ from vasp.mongo import MongoDatabase, mongo_doc, mongo_doc_atoms
 from vasp import Vasp
 import luigi
 
+
 LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
+
 
 def get_launchpad():
     ''' This function contains the information about our FireWorks LaunchPad '''
@@ -61,15 +65,15 @@ def ads_dict(adsorbate):
     try:
         atoms = Atoms(adsorbate)
     except ValueError:
-        print("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
+        pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
               % adsorbate)
 
-    # If that doesn't work, then look for the adsorbate in the "atom_dict" object
-    try:
-        atoms = atom_dict[adsorbate]
-    except KeyError:
-        print("%s is not is GASpy's dictionary. You need to construct it manually and add it to \
-              the ads_dict function in gaspy_toolbox.py")
+        # If that doesn't work, then look for the adsorbate in the "atom_dict" object
+        try:
+            atoms = atom_dict[adsorbate]
+        except KeyError:
+            print('%s is not is GASpy dictionary. You need to construct it manually and add it to \
+                  the ads_dict function in gaspy_toolbox.py' % adsorbate)
 
     # Return the atoms
     return atoms
@@ -106,6 +110,14 @@ def constrain_slab(atoms, n_atoms, z_cutoff=3.):
     return _atoms
 
 
+#We use this function to determine which side is the "top" side
+#def calculate_top(atoms,num_adsorbate_atoms=0):
+#    if num_adsorbate_atoms>0:
+#        atoms=atoms[0:-num_adsorbate_atoms]
+#    zpos=atoms.positions[:,2]
+#    return np.sum((zpos-zpos.mean())*atoms.get_masses())>0
+
+
 def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     """
     This function makes a simple vasp relaxation firework
@@ -119,11 +131,11 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     """
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
-        print('Not making firework because there are too many atoms in %s' % str(fw_name))
+        pprint('Not making firework because there are too many atoms in %s' % str(fw_name))
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
-        print('Not making firework because the miller index exceeds the maximum of %s in %s' % (max_miller, str(fw_name)))
+        pprint('Not making firework because the miller index exceeds the maximum of %s in %s' % (max_miller, str(fw_name)))
         return
 
     # Generate a string representation that we can pass to the job as input
@@ -131,8 +143,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     # Two steps - write the input structure to an input file, then relax that traj file
     write_surface = PyTask(func='fireworks_helper_scripts.atoms_hex_to_file',
                            args=['slab_in.traj',
-                                 atom_hex]
-                          )
+                                 atom_hex])
     opt_bulk = PyTask(func='vasp_scripts.runVasp',
                       args=['slab_in.traj',
                             'slab_relaxed.traj',
@@ -176,7 +187,7 @@ def running_fireworks(name_dict, launchpad):
             fw_list.append(fwid)
     # Return the matching fireworks
     if len(fw_list) == 0:
-        print('Na matching FW:  %s' % name)
+        pprint('Na matching FW:  %s' % name)
     return fw_list
 
 
@@ -262,7 +273,7 @@ class DumpBulkGasToAuxDB(luigi.Task):
 
                     # Write the doc onto the Auxiliary database
                     aux_db.write(doc)
-                    print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                    pprint('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
                           % (doc['type'], fw.name, fwid))
 
 
@@ -319,6 +330,11 @@ class DumpSurfacesToAuxDB(luigi.Task):
                     miller = fw.name['miller']
                 #print(fw.name['mpid'])
 
+                '''
+                This next paragraph of code (i.e., the lines until the next blank line)
+                addresses our old results that were saved without shift values. Here, we
+                re-create a surface so that we can guess what its shift is later on.
+                '''
                 # Create the surfaces
                 if 'shift' not in fw.name:
                     surfaces.append(GenerateSurfaces({'bulk': default_parameter_bulk(mpid=fw.name['mpid'],
@@ -330,6 +346,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                     self.missing_shift_to_dump.append([atoms, starting_atoms, trajectory,
                                                        vasp_settings, fw, fwid])
                 else:
+
                     # Pass the list of surfaces to dump to `self` so that it can be called by the
                     #`run' method
                     self.to_dump.append([atoms, starting_atoms, trajectory,
@@ -368,7 +385,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                 '''
                 This next paragraph of code (i.e., the lines until the next blank line)
                 addresses our old results that were saved without shift values. Here, we
-                guess what the shift is and declare it before saving it to the database.
+                guess what the shift is (based on information from the surface we created before
+                in the "requires" function) and declare it before saving it to the database.
                 '''
                 if 'shift' not in doc['fwname']:
                     slab_list_unrelaxed = pickle.load(selfinput[n_missing_shift].open())
@@ -377,8 +395,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                                           for slab in slab_list_unrelaxed
                                           if slab['tags']['top'] == fw.name['top']]
                     if len(atomlist_unrelaxed) > 1:
-                        print(atomlist_unrelaxed)
-                        print(fw)
+                        pprint(atomlist_unrelaxed)
+                        pprint(fw)
                         # We use the average coordination as a descriptor of the structure,
                         # there should be a pretty large change with different shifts
                         def getCoord(x):
@@ -390,7 +408,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                             try:
                                 num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
                             except KeyError:
-                                print("%s is not recognizable by GASpy's adsorbates dictionary. \
+                                pprint("%s is not recognizable by GASpy's adsorbates dictionary. \
                                       Please add it to `num_adsorbate_atoms` \
                                       in `DumpSurfacesToAuxDB`" % fw.name['adsorbate'])
                             if num_adsorbate_atoms > 0:
@@ -417,7 +435,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                         doc['fwname']['shift_guessed'] = True
 
                 aux_db.write(doc)
-                print('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
+                pprint('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
                       % (doc['type'], fw.name, fwid))
 
         # Touch the token to indicate that we've written to the database
@@ -431,11 +449,18 @@ class DumpSurfacesToAuxDB(luigi.Task):
 
 class UpdateAllDB(luigi.WrapperTask):
     """
-    Dump from the Primary database to the Auxiliary database, and then dump from the
-    Auxiliary database to the Local database
+    First, dump from the Primary database to the Auxiliary database.
+    Then, dump from the Auxiliary database to the Local adsorption energy database.
+    Finally, re-request the adsorption energies to re-initialize relaxations & FW submissions.
     """
-    writeDB = luigi.BoolParameter()
-    Nprocess = luigi.IntParameter(0)
+    # write_db is a boolean. If false, we only execute FingerprintRelaxedAdslabs, which
+    # submits calculations to Fireworks (if needed). If writeDB is true, then we still
+    # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
+    writeDB = luigi.BoolParameter(False)
+    # max_dumps is the maximum number of calculation sets to dump. If it's set to zero,
+    # then there is no limit. This is used to limit the scope of a DB update for 
+    # debugging purposes.
+    max_dumps = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -457,10 +482,11 @@ class UpdateAllDB(luigi.WrapperTask):
         # For each adsorbate/configuration, make a task to write the results to the output database
         for i, row in enumerate(rows):
             # Only make the task if 1) the fireworks task is not already in the database,
-            # 2) there is an adsorbate, and 3) ...something I don't know about.
+            # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of rows
+            # to dump.
             if (row['fwid'] not in fwids
                     and row['fwname']['adsorbate'] != ''
-                    and ((self.Nprocess == 0) or (self.Nprocess > 0 and i+1 < self.Nprocess))):
+                    and ((self.max_dumps == 0) or (self.max_dumps > 0 and i < self.max_dumps))):
                 # Pull information from the Aux DB
                 mpid = row['fwname']['mpid']
                 miller = row['fwname']['miller']
@@ -487,6 +513,10 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                         slabrepeat=slabrepeat,
                                                                         adsorption_site=adsorption_site,
                                                                         settings=settings)}
+
+                # Flag for hitting max_dump
+                if i+1 == self.max_dumps:
+                    print('Reached the maximum number of calculations, %s' % self.max_dumps)
                 # Dump to the local DB if we told Luigi to do so. We may do so by adding the
                 # `--writeDB` flag when calling Luigi. If we do not dump to the local DB, then
                 # we fingerprint the slab+adsorbate system
@@ -559,7 +589,7 @@ class SubmitToFW(luigi.Task):
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
-            search_strings['fwname.shift'] = {'$gta': shift - 1e-4, '$lte': shift + 1e-4}
+            search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
             #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
@@ -589,7 +619,6 @@ class SubmitToFW(luigi.Task):
                 return GenerateBulk({'bulk':self.parameters['bulk']})
             if self.calctype == 'gas':
                 return GenerateGas({'gas':self.parameters['gas']})
-
 
     def run(self):
         # If there are matching entries, this is easy, just dump the matching entries
@@ -625,16 +654,17 @@ class SubmitToFW(luigi.Task):
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input()[0].open())
-                # An earlier version of GASpy did not correctly log the slab shift, and so many
-                # of our calculations/results do no have shifts. If there is either zero or more
-                # one shift value, then this next paragraph (i.e., all of the following code
-                # before the next blank line) deals with it in a "hacky" way. We may eventually
-                # remove this paragraph.
+                '''
+                An earlier version of GASpy did not correctly log the slab shift, and so many
+                of our calculations/results do no have shifts. If there is either zero or more
+                one shift value, then this next paragraph (i.e., all of the following code
+                before the next blank line) deals with it in a "hacky" way.
+                '''
                 atomlist = [mongo_doc_atoms(slab) for slab in slab_list
                             if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
                             and slab['tags']['top'] == self.parameters['slab']['top']]
                 if len(atomlist) > 1:
-                    print('We have more than one slab system with identical shifts:\n%s' \
+                    pprint('We have more than one slab system with identical shifts:\n%s' \
                           % self.input()[0].fn)
                 elif len(atomlist) == 0:
                     # We couldn't find the desired shift value in the surfaces
@@ -646,8 +676,8 @@ class SubmitToFW(luigi.Task):
                                              float(np.round(self.parameters['slab']['shift'], 2))
                                           and slab['tags']['top'] == self.parameters['slab']['top']]
                     #if len(atomlist_unrelaxed)==0:
-                    #    print(slab_list_unrelaxed)
-                    #    print('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
+                    #    pprint(slab_list_unrelaxed)
+                    #    pprint('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
                     # we need all of the relaxed slabs in atoms form:
                     all_relaxed_surfaces = [mongo_doc_atoms(slab) for slab in slab_list
                                             if slab['tags']['top'] == self.parameters['slab']['top']]
@@ -669,7 +699,7 @@ class SubmitToFW(luigi.Task):
                     dist = map(lambda x: getDist(x, reference_coord), relaxed_coord)
                     # Grab the atoms object that minimized this distance
                     atoms = all_relaxed_surfaces[np.argmin(dist)]
-                    print('Unable to find a slab with the correct shift, but found one with max \
+                    pprint('Unable to find a slab with the correct shift, but found one with max \
                           position difference of %1.4f!'%np.min(dist))
 
                 # If there is a shift value in the results, then continue as normal.
@@ -682,7 +712,7 @@ class SubmitToFW(luigi.Task):
                         'vasp_settings':self.parameters['slab']['vasp_settings'],
                         'calculation_type':'slab optimization',
                         'num_slab_atoms':len(atoms)}
-                print(name)
+                pprint(name)
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
 
@@ -716,12 +746,13 @@ class SubmitToFW(luigi.Task):
                     else:
                         matching_rows = [row for row in fpd_structs]
                 if len(matching_rows) == 0:
-                    print('No rows matching the desired FP/Site!')
-                    print('Desired sites:')
-                    print(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
-                    print('Available Sites:')
-                    print(fpd_structs)
-                    print(self.parameters)
+                    pprint('No rows matching the desired FP/Site!')
+                    pprint('Desired sites:')
+                    pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
+                    pprint('Available Sites:')
+                    pprint(fpd_structs)
+                    pprint(self.input().fn)
+                    pprint(self.parameters)
 
                 # If there is no adsorbate, then trim the matching_rows to the first row we found.
                 # Otherwise, trim the matching_rows to `numtosubmit`, a user-specified value that
@@ -790,8 +821,8 @@ class SubmitToFW(luigi.Task):
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                print('Just submitted the following Fireworks:\n%s' % tosubmit)
-                print('The workflow for these Fireworks:\n%s' % wflow)
+                pprint('Just submitted the following Fireworks:\n%s' % tosubmit)
+                pprint('The workflow for these Fireworks:\n%s' % wflow)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
@@ -877,8 +908,9 @@ class GenerateSurfaces(luigi.Task):
                    atoms_slab.cell[0], [1, 0, 0],
                    rotate_cell=True)
             # Save the slab, but only if it isn't already in the database
+            top = True
             tags = {'type':'slab',
-                    'top':True,
+                    'top':top,
                     'mpid':self.parameters['bulk']['mpid'],
                     'miller':self.parameters['slab']['miller'],
                     'shift':shift,
@@ -910,7 +942,7 @@ class GenerateSurfaces(luigi.Task):
                 # and if it is not in the database, then save it.
                 slabdoc = mongo_doc(constrain_slab(atoms_slab, len(atoms_slab)))
                 tags = {'type':'slab',
-                        'top':False,
+                        'top':not(top),
                         'mpid':self.parameters['bulk']['mpid'],
                         'miller':self.parameters['slab']['miller'],
                         'shift':shift,
@@ -1008,7 +1040,7 @@ class GenerateSiteMarkers(luigi.Task):
                     # Move the adsorbate onto the adsorption site...
                     _adsorbate.translate(site)
                     # Put the adsorbate onto the slab and add the adslab system to the tags
-                    adslab = slab + _adsorbate
+                    adslab = slab_atoms_repeat.copy() + _adsorbate
                     tags['atoms'] = adslab
 
                     # Finally, add the information to list of things to save
@@ -1087,21 +1119,25 @@ class CalculateEnergy(luigi.Task):
         # Initialize the list of things that need to be done before we can calculate the
         # adsorption enegies
         toreturn = []
+
         # First, we need to relax the slab+adsorbate system
         toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
+
         # Then, we need to relax the slab. We do this by taking the adsorbate off and
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
-        # calculation because of our code infrasttructure.
+        # calculation because of our code infrastructure.
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
+
         # Lastly, we need to relax the base gases.
         for gasname in ['CO', 'H2', 'H2O']:
             param = copy.deepcopy({'gas':self.parameters['gas']})
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
+
         # Now we put it all together.
-        print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+        pprint('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1132,7 +1168,7 @@ class CalculateEnergy(luigi.Task):
         gas_energy = 0
         for ads in self.parameters['adsorption']['adsorbates']:
             gas_energy += np.sum(map(lambda x: mono_atom_energies[x],
-                                     ads_dict(ads['name']).get_chemical_symbols))
+                                     ads_dict(ads['name']).get_chemical_symbols()))
 
         # Calculate the adsorption energy
         dE = slab_ads_energy - slab_blank_energy - gas_energy
@@ -1157,7 +1193,7 @@ class CalculateEnergy(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
-        print('Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+        pprint('Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
@@ -1328,7 +1364,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
 
 
 class DumpToLocalDB(luigi.Task):
-    """ This class dumps the adsorption energies from our pickles to a local ASE database. """
+    """ This class dumps the adsorption energies from our pickles to our Local energies DB """
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -1358,24 +1394,37 @@ class DumpToLocalDB(luigi.Task):
                 if key not in fp:
                     fp[key] = ''
 
+        # Create and use tools to calculate the angle between the bond length of the diatomic
+        # adsorbate and the z-direction of the bulk. We are not currently calculating triatomics
+        # or larger.
         def unit_vector(vector):
             """ Returns the unit vector of the vector.  """
             return vector / np.linalg.norm(vector)
-
         def angle_between(v1, v2):
             """ Returns the angle in radians between vectors 'v1' and 'v2'::  """
             v1_u = unit_vector(v1)
             v2_u = unit_vector(v2)
             return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-
         if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO', 'OH']:
             angle = angle_between(best_sys[-1].position-best_sys[-2].position, best_sys.cell[2])
             if self.parameters['slab']['top'] is False:
-                angle = np.abs(angle-math.pi)
+                angle = np.abs(angle - math.pi)
         else:
             angle = 0.
-
         angle = angle/2./np.pi*360
+
+        #calculate the maximum movement of surface atoms during the relaxation
+        #first, calculate the number of adsorbate atoms
+        num_adsorbate_atoms=len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
+        #get just the slab atoms of the initial and final state
+        slab_atoms_final=best_sys[0:-num_adsorbate_atoms]
+        slab_atoms_initial=mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[0:-num_adsorbate_atoms]
+        #Calculate the distances for each atom
+        distances=slab_atoms_final.positions-slab_atoms_initial.positions
+        #Reduce the distances in case atoms wrapped around (the minimum image convention)
+        dist,Dlen=find_mic(distances,slab_atoms_final.cell,slab_atoms_final.pbc)
+        #Calculate the max movement of the surface atoms
+        max_surface_movement=np.max(Dlen)
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
@@ -1399,7 +1448,8 @@ class DumpToLocalDB(luigi.Task):
                     'fwid':best_sys_pkl['slab+ads']['fwid'],
                     'slabfwid':best_sys_pkl['slab']['fwid'],
                     'bulkfwid':bulk[bulkmin]['fwid'],
-                    'adsorbate_angle':angle}
+                    'adsorbate_angle':angle,
+                    'max_surface_movement':max_surface_movement}
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
@@ -1421,8 +1471,12 @@ class DumpToLocalDB(luigi.Task):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class DumpSitesLocalDB(luigi.Task):
-    """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
+class UpdateEnumerations(luigi.Task):
+    '''
+    This class re-requests the enumeration of adsorption sites to re-initialize our various
+    generating functions. It then dumps any completed site enumerations into our Local DB
+    for adsorption sites.
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -1439,7 +1493,7 @@ class DumpSitesLocalDB(luigi.Task):
                                                                  x['neighborcoord']]),
                                                   configs),
                                               return_index=True)
-            # For each configuration, write a row to the dtabase
+            # For each configuration, write a row to the database
             for i in unq_inds:
                 config = configs[i]
                 con.write(config['atoms'],
@@ -1451,7 +1505,7 @@ class DumpSitesLocalDB(luigi.Task):
                           adsorption_site=config['adsorption_site'],
                           coordination=config['coordination'],
                           neighborcoord=str(config['neighborcoord']),
-                          nextnearestcoordination=str(config['nextnearestcoordination']))   # Plus tags
+                          nextnearestcoordination=str(config['nextnearestcoordination']))
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
