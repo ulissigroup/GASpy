@@ -41,6 +41,28 @@ import luigi
 LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
+def print_dict(d, indent=0):
+    ''' This function prings a nested dictionary, but in a prettier format '''
+    if isinstance(d, dict):
+        for key, value in d.iteritems():
+            # If the dictionary key is `spec`, then it's going to print out a bunch of
+            # messy looking things we don't care about. So skip it.
+            if key != spec:
+                print '\t' * indent + str(key)
+                if isinstance(value, dict) or isinstance(value, list):
+                    print_dict(value, indent+1)
+                else:
+                    print '\t' * (indent+1) + str(value)
+    elif isinstance(d, list):
+        for item in d:
+            if isinstance(item, dict) or isinstance(item, list):
+                print_dict(item, indent+1)
+            else:
+                print '\t' * (indent+1) + str(item)
+    else:
+        pass
+
+
 def get_launchpad():
     ''' This function contains the information about our FireWorks LaunchPad '''
     return LaunchPad(host='mongodb01.nersc.gov',
@@ -273,8 +295,9 @@ class DumpBulkGasToAuxDB(luigi.Task):
 
                     # Write the doc onto the Auxiliary database
                     aux_db.write(doc)
-                    pprint('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
-                          % (doc['type'], fw.name, fwid))
+                    print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
+                          % (doc['type'], fwid))
+                    print_dict(fw.name)
 
 
 class DumpSurfacesToAuxDB(luigi.Task):
@@ -395,8 +418,8 @@ class DumpSurfacesToAuxDB(luigi.Task):
                                           for slab in slab_list_unrelaxed
                                           if slab['tags']['top'] == fw.name['top']]
                     if len(atomlist_unrelaxed) > 1:
-                        pprint(atomlist_unrelaxed)
-                        pprint(fw)
+                        #pprint(atomlist_unrelaxed)
+                        #pprint(fw)
                         # We use the average coordination as a descriptor of the structure,
                         # there should be a pretty large change with different shifts
                         def getCoord(x):
@@ -435,8 +458,9 @@ class DumpSurfacesToAuxDB(luigi.Task):
                         doc['fwname']['shift_guessed'] = True
 
                 aux_db.write(doc)
-                pprint('Dumped a %s firework into the Auxiliary DB:  %s (FW ID %s)' \
-                      % (doc['type'], fw.name, fwid))
+                print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
+                      % (doc['type'], fwid))
+                print_dict(fw.name)
 
         # Touch the token to indicate that we've written to the database
         with self.output().temporary_path() as self.temp_output_path:
@@ -457,10 +481,10 @@ class UpdateAllDB(luigi.WrapperTask):
     # submits calculations to Fireworks (if needed). If writeDB is true, then we still
     # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
     writeDB = luigi.BoolParameter(False)
-    # max_dumps is the maximum number of calculation sets to dump. If it's set to zero,
+    # max_processes is the maximum number of calculation sets to dump. If it's set to zero,
     # then there is no limit. This is used to limit the scope of a DB update for 
     # debugging purposes.
-    max_dumps = luigi.IntParameter(0)
+    max_processes = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -481,12 +505,16 @@ class UpdateAllDB(luigi.WrapperTask):
 
         # For each adsorbate/configuration, make a task to write the results to the output database
         for i, row in enumerate(rows):
+            # Break the loop if we reach the maxmimum number of processes
+            if i+1 == self.max_processes:
+                break
+
             # Only make the task if 1) the fireworks task is not already in the database,
             # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of rows
             # to dump.
             if (row['fwid'] not in fwids
                     and row['fwname']['adsorbate'] != ''
-                    and ((self.max_dumps == 0) or (self.max_dumps > 0 and i < self.max_dumps))):
+                    and ((self.max_processes == 0) or (self.max_processes > 0 and i < self.max_processes))):
                 # Pull information from the Aux DB
                 mpid = row['fwname']['mpid']
                 miller = row['fwname']['miller']
@@ -515,8 +543,8 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                         settings=settings)}
 
                 # Flag for hitting max_dump
-                if i+1 == self.max_dumps:
-                    print('Reached the maximum number of calculations, %s' % self.max_dumps)
+                if i+1 == self.max_processes:
+                    print('Reached the maximum number of processes, %s' % self.max_processes)
                 # Dump to the local DB if we told Luigi to do so. We may do so by adding the
                 # `--writeDB` flag when calling Luigi. If we do not dump to the local DB, then
                 # we fingerprint the slab+adsorbate system
@@ -664,7 +692,7 @@ class SubmitToFW(luigi.Task):
                             if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
                             and slab['tags']['top'] == self.parameters['slab']['top']]
                 if len(atomlist) > 1:
-                    pprint('We have more than one slab system with identical shifts:\n%s' \
+                    print('We have more than one slab system with identical shifts:\n%s' \
                           % self.input()[0].fn)
                 elif len(atomlist) == 0:
                     # We couldn't find the desired shift value in the surfaces
@@ -699,7 +727,7 @@ class SubmitToFW(luigi.Task):
                     dist = map(lambda x: getDist(x, reference_coord), relaxed_coord)
                     # Grab the atoms object that minimized this distance
                     atoms = all_relaxed_surfaces[np.argmin(dist)]
-                    pprint('Unable to find a slab with the correct shift, but found one with max \
+                    print('Unable to find a slab with the correct shift, but found one with max \
                           position difference of %1.4f!'%np.min(dist))
 
                 # If there is a shift value in the results, then continue as normal.
@@ -712,7 +740,7 @@ class SubmitToFW(luigi.Task):
                         'vasp_settings':self.parameters['slab']['vasp_settings'],
                         'calculation_type':'slab optimization',
                         'num_slab_atoms':len(atoms)}
-                pprint(name)
+                #print(name)
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
 
@@ -745,14 +773,14 @@ class SubmitToFW(luigi.Task):
                                             self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_rows = [row for row in fpd_structs]
-                if len(matching_rows) == 0:
-                    pprint('No rows matching the desired FP/Site!')
-                    pprint('Desired sites:')
-                    pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
-                    pprint('Available Sites:')
-                    pprint(fpd_structs)
-                    pprint(self.input().fn)
-                    pprint(self.parameters)
+                #if len(matching_rows) == 0:
+                    #print('No rows matching the desired FP/Site!')
+                    #print('Desired sites:')
+                    #pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
+                    #print('Available Sites:')
+                    #pprint(fpd_structs)
+                    #pprint(self.input().fn)
+                    #pprint(self.parameters)
 
                 # If there is no adsorbate, then trim the matching_rows to the first row we found.
                 # Otherwise, trim the matching_rows to `numtosubmit`, a user-specified value that
@@ -762,7 +790,7 @@ class SubmitToFW(luigi.Task):
                 elif 'numtosubmit' in self.parameters['adsorption']:
                     matching_rows = matching_rows[0:self.parameters['adsorption']['numtosubmit']]
 
-                # Add each of the matchi rows to `tosubmit`
+                # Add each of the matchig rows to `tosubmit`
                 for row in matching_rows:
                     # The name of our firework is actually a dictionary, as defined here
                     name = {'mpid':self.parameters['bulk']['mpid'],
@@ -821,8 +849,10 @@ class SubmitToFW(luigi.Task):
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                pprint('Just submitted the following Fireworks:\n%s' % tosubmit)
-                pprint('The workflow for these Fireworks:\n%s' % wflow)
+                print('Just submitted the following Fireworks:')
+                for i, submit in enumerate(tosubmit):
+                    print('    Submission number %s' % i)
+                    print_dict(submit, indent=8)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
@@ -1007,7 +1037,7 @@ class GenerateSiteMarkers(luigi.Task):
             nx = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab_atoms.cell[0])))
             ny = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab_atoms.cell[1])))
             slabrepeat = (nx, ny, 1)
-            slab_atoms.adsorbate_info = ''
+            slab_atoms.info['adsorbate_info'] = ''
             slab_atoms_repeat = slab_atoms.repeat(slabrepeat)
             # Only generate markers if the number of atoms in our repeated slab lie below our
             # maximum slab size
@@ -1137,7 +1167,7 @@ class CalculateEnergy(luigi.Task):
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
 
         # Now we put it all together.
-        pprint('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+        print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1337,8 +1367,8 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
                 GenerateAdslabs(parameters=param_slab)]
 
     def run(self):
-        # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the number of
-        # slab atoms
+        # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the number
+        # of slab atoms
         adslabs = pickle.load(self.input()[0].open())
         slab = pickle.load(self.input()[1].open())
         expected_slab_atoms = len(slab[0]['atoms'])

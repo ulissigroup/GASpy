@@ -53,7 +53,7 @@ class UpdateDBs(luigi.WrapperTask):
     # Note that you may over-write this parameter by passing a value via the command line.
     nowrite = luigi.BoolParameter(False)
     # The maximum number of rows to dump to the Local DB. Enter zero if you want no limit.
-    Nprocess = luigi.IntParameter(0)
+    max_processes = luigi.IntParameter(0)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -62,9 +62,9 @@ class UpdateDBs(luigi.WrapperTask):
         method.
         """
         if self.nowrite:
-            yield UpdateAllDB(Nprocess=self.Nprocess, writeDB=False)
+            yield UpdateAllDB(max_processes=self.max_processes, writeDB=False)
         else:
-            yield UpdateAllDB(Nprocess=self.Nprocess, writeDB=True)
+            yield UpdateAllDB(max_processes=self.max_processes, writeDB=True)
 
 
 class ExampleSingleSiteSubmission(luigi.WrapperTask):
