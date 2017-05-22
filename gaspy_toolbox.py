@@ -68,12 +68,12 @@ def ads_dict(adsorbate):
         pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
               % adsorbate)
 
-    # If that doesn't work, then look for the adsorbate in the "atom_dict" object
-    try:
-        atoms = atom_dict[adsorbate]
-    except KeyError:
-        pprint("%s is not is GASpy's dictionary. You need to construct it manually and add it to \
-              the ads_dict function in gaspy_toolbox.py")
+        # If that doesn't work, then look for the adsorbate in the "atom_dict" object
+        try:
+            atoms = atom_dict[adsorbate]
+        except KeyError:
+            print('%s is not is GASpy dictionary. You need to construct it manually and add it to \
+                  the ads_dict function in gaspy_toolbox.py' % adsorbate)
 
     # Return the atoms
     return atoms
@@ -108,6 +108,14 @@ def constrain_slab(atoms, n_atoms, z_cutoff=3.):
     # Enact the constraints on the local atoms class
     _atoms.set_constraint(constraints)
     return _atoms
+
+
+#We use this function to determine which side is the "top" side
+#def calculate_top(atoms,num_adsorbate_atoms=0):
+#    if num_adsorbate_atoms>0:
+#        atoms=atoms[0:-num_adsorbate_atoms]
+#    zpos=atoms.positions[:,2]
+#    return np.sum((zpos-zpos.mean())*atoms.get_masses())>0
 
 
 def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
@@ -900,8 +908,9 @@ class GenerateSurfaces(luigi.Task):
                    atoms_slab.cell[0], [1, 0, 0],
                    rotate_cell=True)
             # Save the slab, but only if it isn't already in the database
+            top = True
             tags = {'type':'slab',
-                    'top':True,
+                    'top':top,
                     'mpid':self.parameters['bulk']['mpid'],
                     'miller':self.parameters['slab']['miller'],
                     'shift':shift,
@@ -933,7 +942,7 @@ class GenerateSurfaces(luigi.Task):
                 # and if it is not in the database, then save it.
                 slabdoc = mongo_doc(constrain_slab(atoms_slab, len(atoms_slab)))
                 tags = {'type':'slab',
-                        'top':False,
+                        'top':not(top),
                         'mpid':self.parameters['bulk']['mpid'],
                         'miller':self.parameters['slab']['miller'],
                         'shift':shift,
@@ -1159,7 +1168,7 @@ class CalculateEnergy(luigi.Task):
         gas_energy = 0
         for ads in self.parameters['adsorption']['adsorbates']:
             gas_energy += np.sum(map(lambda x: mono_atom_energies[x],
-                                     ads_dict(ads['name']).get_chemical_symbols))
+                                     ads_dict(ads['name']).get_chemical_symbols()))
 
         # Calculate the adsorption energy
         dE = slab_ads_energy - slab_blank_energy - gas_energy
@@ -1209,7 +1218,7 @@ def fingerprint(atoms, siteind):
     vcf = VoronoiCoordFinder(struct)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.7)
+    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.8)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
     # Take out atoms that we assume are not part of the slab
