@@ -20,7 +20,7 @@ from collections import OrderedDict
 import random
 import cPickle as pickle
 # from multiprocessing import Pool
-from gaspy_toolbox import DumpSitesLocalDB
+from gaspy_toolbox import UpdateEnumerations
 from gaspy_toolbox import FingerprintUnrelaxedAdslabs
 from gaspy_toolbox import default_parameter_bulk
 from gaspy_toolbox import default_parameter_gas
@@ -50,8 +50,8 @@ class UpdateDBs(luigi.WrapperTask):
     """
     # If nowrite = luigi.BoolParameter(True), then we write to the database.
     # If nowrite = luigi.BoolParameter(False), then only FingerprintRelaxedAdslabs.
-    # Note that if no argument is passed to BoolParameter, it defaults to False.
-    nowrite = luigi.BoolParameter()
+    # Note that you may over-write this parameter by passing a value via the command line.
+    nowrite = luigi.BoolParameter(False)
     # The maximum number of rows to dump to the Local DB. Enter zero if you want no limit.
     Nprocess = luigi.IntParameter(0)
     def requires(self):
@@ -114,9 +114,9 @@ class StudyCoordinationSites(luigi.WrapperTask):
     This class is meant to be called by Luigi to begin relaxations of a particular set of
     adsorption sites.
     """
-    xc=luigi.Parameter('beef-vdw')
-    matchingXC=luigi.BoolParameter(False)
-    Nsubmit=luigi.IntParameter(100)
+    xc = luigi.Parameter('beef-vdw')
+    matchingXC = luigi.BoolParameter(False)
+    Nsubmit = luigi.IntParameter(100)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -128,24 +128,25 @@ class StudyCoordinationSites(luigi.WrapperTask):
         # Get all of the enumerated configurations
         with connect(DB_LOC+'/enumerated_adsorption_sites.db') as con:
             rows = [row for row in con.select()]
-        
-        rows=[row for row in rows if np.max(map(eval,row.miller[1:-1].split('.')))<=2]
 
-        calc_settings=default_calc_settings(self.xc)
-                
+        rows = [row for row in rows if np.max(map(eval,row.miller[1:-1].split('.'))) <= 2]
+
+        calc_settings = default_calc_settings(self.xc)
+
         # Get all of the adsorption energies we've already calculated
         with connect(DB_LOC+'/adsorption_energy_database.db') as con:
             if self.matchingXC:
-                if calc_settings['pp_version']=='5.3.5':
-                    pp_to_match='5.3.5'
+                if calc_settings['pp_version'] == '5.3.5':
+                    pp_to_match = '5.3.5'
                 else:
-                    pp_to_match='5.4.'
-                resultRows = [row for row in con.select() if row.gga==calc_settings['gga'] 
-                              and row.pp==calc_settings['pp'] 
-                              and row.encut==calc_settings['encut'] 
-                              and row.pp_version==pp_to_match]
+                    pp_to_match = '5.4.'
+                resultRows = [row for row in con.select()
+                              if row.gga == calc_settings['gga']
+                              and row.pp == calc_settings['pp']
+                              and row.encut == calc_settings['encut']
+                              and row.pp_version == pp_to_match]
             else:
-                resultRows = [row for row in con.select() ]
+                resultRows = [row for row in con.select()]
 
         # Find all of the unique sites at the first level of coordination for enumerated
         # configurations
@@ -165,34 +166,39 @@ class StudyCoordinationSites(luigi.WrapperTask):
             if len(unique_coord[ind].split('-')) <= 1 and ind not in ind_to_run:
                 ind_to_run += [ind]
 
-        ind_to_run=sorted(ind_to_run,key=lambda x: len(unique_coord[x].split('-')))
+        ind_to_run = sorted(ind_to_run, key=lambda x: len(unique_coord[x].split('-')))
         #ind_to_run.reverse()
 
         # For each configuration, submit
-        count=0
+        count = 0
         for ind in ind_to_run:
-            if count<self.Nsubmit:
+            if count < self.Nsubmit:
                 print('Let\'s try %s!'%unique_coord[ind])
-                indices, natoms = zip(*[[i, rows[i].natoms] for i in range(len(inverse)) if inverse[i] == ind ])
+                indices, natoms = zip(*[[i, rows[i].natoms]
+                                        for i in range(len(inverse))
+                                        if inverse[i] == ind])
                 rowind = indices[np.argmin(natoms)]
                 row = rows[rowind]
                 print(row.miller)
                 print(row.mpid)
-                for adsorbate in ['CO','H','OH','O','C']:
+                for adsorbate in ['CO', 'H', 'OH', 'O', 'C']:
                     if len([result for result in resultRows
                             if result.adsorbate == adsorbate
                             and (result.coordination == row.coordination
-                                 or result.initial_coordination == row.coordination) 
+                                 or result.initial_coordination == row.coordination)
                            ]
-                          ) ==0:
-                        ads_parameter = default_parameter_adsorption(adsorbate,settings=self.xc)
+                          ) == 0:
+                        ads_parameter = default_parameter_adsorption(adsorbate, settings=self.xc)
                         ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
-                        parameters = {"bulk": default_parameter_bulk(row.mpid,settings=self.xc),
-                                  'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift,settings=self.xc),
-                                  'gas':default_parameter_gas('CO',settings=self.xc),
-                                  'adsorption':ads_parameter}
+                        parameters = {"bulk": default_parameter_bulk(row.mpid, settings=self.xc),
+                                      'slab': default_parameter_slab(list(eval(row.miller)),
+                                                                     row.top,
+                                                                     row.shift,
+                                                                     settings=self.xc),
+                                      'gas': default_parameter_gas('CO', settings=self.xc),
+                                      'adsorption': ads_parameter}
                         yield CalculateEnergy(parameters=parameters)
-                        count+=1
+                        count += 1
 
 
 class EnumerateAlloys(luigi.WrapperTask):
@@ -263,15 +269,13 @@ class EnumerateAlloys(luigi.WrapperTask):
         for facets in all_miller:
             for facet in facets:
                 if self.writeDB:
-                    yield DumpSitesLocalDB(parameters=OrderedDict(unrelaxed=True,
-                                                                  bulk=default_parameter_bulk(facet[0]),
-                                                                  slab=default_parameter_slab(facet[1], True, 0),
-                                                                  gas=default_parameter_gas('CO'),
-                                                                  adsorption=default_parameter_adsorption('U',
-                                                                                                           "[  3.36   1.16  24.52]",
-                                                                                                           "(1, 1)", 24)
-                                                                    )
-                                             )
+                    yield UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
+                                                                    bulk=default_parameter_bulk(facet[0]),
+                                                                    slab=default_parameter_slab(facet[1], True, 0),
+                                                                    gas=default_parameter_gas('CO'),
+                                                                    adsorption=default_parameter_adsorption('U',
+                                                                                                             "[  3.36   1.16  24.52]",
+                                                                                                             "(1, 1)", 24)))
                 else:
                     yield FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed=True,
                                                                                 bulk=default_parameter_bulk(facet[0]),
@@ -347,11 +351,11 @@ class PredictAndSubmit(luigi.WrapperTask):
                                     if ncoord_inverse[i] == ind])
             rowind = indices[np.argmin(natoms)]
             row = matching[rowind][1]
-            ads_parameter = default_parameter_adsorption('CO',settings=self.xc)
+            ads_parameter = default_parameter_adsorption('CO', settings=self.xc)
             ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
                                                     'nextnearestcoordination':row.nextnearestcoordination}
-            parameters = {'bulk': default_parameter_bulk(row.mpid,settings=self.xc),
-                              'slab':default_parameter_slab(list(eval(row.miller)), row.top, row.shift,settings=self.xc),
-                              'gas':default_parameter_gas('CO',settings=self.xc),
-                              'adsorption':ads_parameter}
+            parameters = {'bulk': default_parameter_bulk(row.mpid, settings=self.xc),
+                          'slab': default_parameter_slab(list(eval(row.miller)), row.top, row.shift,settings=self.xc),
+                          'gas': default_parameter_gas('CO', settings=self.xc),
+                          'adsorption': ads_parameter}
             yield CalculateEnergy(parameters=parameters)

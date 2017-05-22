@@ -135,8 +135,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     # Two steps - write the input structure to an input file, then relax that traj file
     write_surface = PyTask(func='fireworks_helper_scripts.atoms_hex_to_file',
                            args=['slab_in.traj',
-                                 atom_hex]
-                          )
+                                 atom_hex])
     opt_bulk = PyTask(func='vasp_scripts.runVasp',
                       args=['slab_in.traj',
                             'slab_relaxed.traj',
@@ -442,13 +441,14 @@ class DumpSurfacesToAuxDB(luigi.Task):
 
 class UpdateAllDB(luigi.WrapperTask):
     """
-    Dump from the Primary database to the Auxiliary database, and then dump from the
-    Auxiliary database to the Local database
+    First, dump from the Primary database to the Auxiliary database.
+    Then, dump from the Auxiliary database to the Local adsorption energy database.
+    Finally, re-request the adsorption energies to re-initialize relaxations & FW submissions.
     """
     # write_db is a boolean. If false, we only execute FingerprintRelaxedAdslabs, which
     # submits calculations to Fireworks (if needed). If writeDB is true, then we still
     # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
-    writeDB = luigi.BoolParameter()
+    writeDB = luigi.BoolParameter(False)
     # max_dumps is the maximum number of calculation sets to dump. If it's set to zero,
     # then there is no limit. This is used to limit the scope of a DB update for 
     # debugging purposes.
@@ -505,6 +505,10 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                         slabrepeat=slabrepeat,
                                                                         adsorption_site=adsorption_site,
                                                                         settings=settings)}
+
+                # Flag for hitting max_dump
+                if i+1 == self.max_dumps:
+                    print('Reached the maximum number of calculations, %s' % self.max_dumps)
                 # Dump to the local DB if we told Luigi to do so. We may do so by adding the
                 # `--writeDB` flag when calling Luigi. If we do not dump to the local DB, then
                 # we fingerprint the slab+adsorbate system
@@ -607,7 +611,6 @@ class SubmitToFW(luigi.Task):
                 return GenerateBulk({'bulk':self.parameters['bulk']})
             if self.calctype == 'gas':
                 return GenerateGas({'gas':self.parameters['gas']})
-
 
     def run(self):
         # If there are matching entries, this is easy, just dump the matching entries
@@ -1107,19 +1110,23 @@ class CalculateEnergy(luigi.Task):
         # Initialize the list of things that need to be done before we can calculate the
         # adsorption enegies
         toreturn = []
+
         # First, we need to relax the slab+adsorbate system
         toreturn.append(SubmitToFW(parameters=self.parameters, calctype='slab+adsorbate'))
+
         # Then, we need to relax the slab. We do this by taking the adsorbate off and
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
         # calculation because of our code infrastructure.
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
+
         # Lastly, we need to relax the base gases.
         for gasname in ['CO', 'H2', 'H2O']:
             param = copy.deepcopy({'gas':self.parameters['gas']})
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
+
         # Now we put it all together.
         pprint('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
@@ -1348,7 +1355,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
 
 
 class DumpToLocalDB(luigi.Task):
-    """ This class dumps the adsorption energies from our pickles to a local ASE database. """
+    """ This class dumps the adsorption energies from our pickles to our Local energies DB """
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -1455,8 +1462,12 @@ class DumpToLocalDB(luigi.Task):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class DumpSitesLocalDB(luigi.Task):
-    """ This class dumps enumerated adsorption sites from our Pickles to a local ASE db """
+class UpdateEnumerations(luigi.Task):
+    '''
+    This class re-requests the enumeration of adsorption sites to re-initialize our various
+    generating functions. It then dumps any completed site enumerations into our Local DB
+    for adsorption sites.
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
