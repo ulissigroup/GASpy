@@ -1232,10 +1232,12 @@ class CalculateEnergy(luigi.Task):
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
         for ads in self.parameters['adsorption']['adsorbates']:
-            print('Finished CalculateEnergy for %s on %s %s:  %s eV' % (ads,
-                                                                        self.parameters['bulk']['mpid'],
-                                                                        self.parameters['slab']['miller'],
-                                                                        dE))
+            print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' \
+                  % (ads['name'],
+                     ads['adsorption_site'],
+                     self.parameters['bulk']['mpid'],
+                     self.parameters['slab']['miller'],
+                     dE))
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
