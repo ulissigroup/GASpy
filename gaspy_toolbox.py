@@ -42,23 +42,28 @@ LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
 def print_dict(d, indent=0):
-    ''' This function prings a nested dictionary, but in a prettier format '''
+    '''
+    This function prings a nested dictionary, but in a prettier format.
+    Inputs:
+        d       The nested dictionary to print
+        indent  How many tabs to start the printing at
+    '''
     if isinstance(d, dict):
         for key, value in d.iteritems():
             # If the dictionary key is `spec`, then it's going to print out a bunch of
             # messy looking things we don't care about. So skip it.
-            if key != spec:
-                print '\t' * indent + str(key)
+            if key != 'spec':
+                print('\t' * indent + str(key))
                 if isinstance(value, dict) or isinstance(value, list):
                     print_dict(value, indent+1)
                 else:
-                    print '\t' * (indent+1) + str(value)
+                    print('\t' * (indent+1) + str(value))
     elif isinstance(d, list):
         for item in d:
             if isinstance(item, dict) or isinstance(item, list):
                 print_dict(item, indent+1)
             else:
-                print '\t' * (indent+1) + str(item)
+                print('\t' * (indent+1) + str(item))
     else:
         pass
 
@@ -153,11 +158,13 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     """
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
-        pprint('Not making firework because there are too many atoms in %s' % str(fw_name))
+        print('        Not making firework because there are too many atoms in the following FW:')
+        print_dict(fw.name, indent=3)
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
-        pprint('Not making firework because the miller index exceeds the maximum of %s in %s' % (max_miller, str(fw_name)))
+        print('        Not making firework because the miller index exceeds the maximum of %s' % max_miller)
+        print_dict(fw.name, indent=3)
         return
 
     # Generate a string representation that we can pass to the job as input
@@ -209,7 +216,8 @@ def running_fireworks(name_dict, launchpad):
             fw_list.append(fwid)
     # Return the matching fireworks
     if len(fw_list) == 0:
-        pprint('Na matching FW:  %s' % name)
+        print('        No matching FW for:')
+        print_dict(name, indent=3)
     return fw_list
 
 
@@ -297,7 +305,7 @@ class DumpBulkGasToAuxDB(luigi.Task):
                     aux_db.write(doc)
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
                           % (doc['type'], fwid))
-                    print_dict(fw.name)
+                    print_dict(fw.name, indent=1)
 
 
 class DumpSurfacesToAuxDB(luigi.Task):
@@ -460,7 +468,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                 aux_db.write(doc)
                 print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
                       % (doc['type'], fwid))
-                print_dict(fw.name)
+                print_dict(fw.name, indent=1)
 
         # Touch the token to indicate that we've written to the database
         with self.output().temporary_path() as self.temp_output_path:
@@ -852,7 +860,7 @@ class SubmitToFW(luigi.Task):
                 print('Just submitted the following Fireworks:')
                 for i, submit in enumerate(tosubmit):
                     print('    Submission number %s' % i)
-                    print_dict(submit, indent=8)
+                    print_dict(submit, indent=2)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
@@ -1223,7 +1231,11 @@ class CalculateEnergy(luigi.Task):
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
-        pprint('Finish relaxation & calculations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+        for ads in self.parameters['adsorption']['adsorbates']:
+            print('Finished CalculateEnergy for %s on %s %s:  %s eV' % (ads,
+                                                                        self.parameters['bulk']['mpid'],
+                                                                        self.parameters['slab']['miller'],
+                                                                        dE))
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
