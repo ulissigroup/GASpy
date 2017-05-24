@@ -162,7 +162,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
         print_dict(fw_name, indent=3)
         return
     # Notify the user if they try to create a firework with a high miller index
-    if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
+    if 'miller' in fw_name and (np.max(eval(str(fw_name['miller']))) > max_miller):
         print('        Not making firework because the miller index exceeds the maximum of %s' \
               % max_miller)
         print_dict(fw_name, indent=3)
@@ -679,8 +679,7 @@ class SubmitToFW(luigi.Task):
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name,
                                                   self.parameters['bulk']['vasp_settings'],
-                                                  max_atoms=self.parameters['bulk']['max_atoms'],
-                                                  max_miller=self.parameters['slab']['miller']))
+                                                  max_atoms=self.parameters['bulk']['max_atoms']))
 
             # A way to append `tosubmit`, but specialized for gas relaxations
             if self.calctype == 'gas':
@@ -758,7 +757,7 @@ class SubmitToFW(luigi.Task):
                     tosubmit.append(make_firework(atoms, name,
                                                   self.parameters['slab']['vasp_settings'],
                                                   max_atoms=self.parameters['bulk']['max_atoms'],
-                                                  max_miller=self.parameters['slab']['miller']))
+                                                  max_miller=self.parameters['bulk']['max_miller']))
 
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
@@ -852,7 +851,7 @@ class SubmitToFW(luigi.Task):
                         tosubmit.append(make_firework(atoms, name,
                                                       self.parameters['adsorption']['vasp_settings'],
                                                       max_atoms=self.parameters['bulk']['max_atoms'],
-                                                      max_miller=self.parameters['slab']['miller']))
+                                                      max_miller=self.parameters['bulk']['max_miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
                     # number of submissions to our maximum.
                     tosubmit = [a for a in tosubmit if a is not None]
@@ -1645,6 +1644,7 @@ def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
     return OrderedDict(mpid=mpid,
                        relaxed=True,
                        max_atoms=50,
+                       max_miller=2,
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
