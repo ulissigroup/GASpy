@@ -690,8 +690,7 @@ class SubmitToFW(luigi.Task):
                 if len(running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name,
-                                                  self.parameters['gas']['vasp_settings'],
-                                                  max_atoms=self.parameters(['bulk']['max_atoms']),
+                                                  self.parameters['gas']['vasp_settings']))
 
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
