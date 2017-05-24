@@ -159,12 +159,13 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
         print('        Not making firework because there are too many atoms in the following FW:')
-        print_dict(fw.name, indent=3)
+        print_dict(fw_name, indent=3)
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and np.max(eval(str(fw_name['miller']))) > max_miller:
-        print('        Not making firework because the miller index exceeds the maximum of %s' % max_miller)
-        print_dict(fw.name, indent=3)
+        print('        Not making firework because the miller index exceeds the maximum of %s' \
+              % max_miller)
+        print_dict(fw_name, indent=3)
         return
 
     # Generate a string representation that we can pass to the job as input
@@ -490,7 +491,7 @@ class UpdateAllDB(luigi.WrapperTask):
     # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
     writeDB = luigi.BoolParameter(False)
     # max_processes is the maximum number of calculation sets to dump. If it's set to zero,
-    # then there is no limit. This is used to limit the scope of a DB update for 
+    # then there is no limit. This is used to limit the scope of a DB update for
     # debugging purposes.
     max_processes = luigi.IntParameter(0)
     def requires(self):
@@ -676,7 +677,10 @@ class SubmitToFW(luigi.Task):
                         'calculation_type':'unit cell optimization'}
                 if len(running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
-                    tosubmit.append(make_firework(atoms, name, self.parameters['bulk']['vasp_settings']))
+                    tosubmit.append(make_firework(atoms, name,
+                                                  self.parameters['bulk']['vasp_settings'],
+                                                  max_atoms=self.parameters(['bulk']['max_atoms'],
+                                                  max_miller=self.parameters['slab']['miller']))
 
             # A way to append `tosubmit`, but specialized for gas relaxations
             if self.calctype == 'gas':
@@ -685,7 +689,9 @@ class SubmitToFW(luigi.Task):
                         'calculation_type':'gas phase optimization'}
                 if len(running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
-                    tosubmit.append(make_firework(atoms, name, self.parameters['gas']['vasp_settings']))
+                    tosubmit.append(make_firework(atoms, name,
+                                                  self.parameters['gas']['vasp_settings'],
+                                                  max_atoms=self.parameters(['bulk']['max_atoms'],
 
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
@@ -750,7 +756,10 @@ class SubmitToFW(luigi.Task):
                         'num_slab_atoms':len(atoms)}
                 #print(name)
                 if len(running_fireworks(name, launchpad)) == 0:
-                    tosubmit.append(make_firework(atoms, name, self.parameters['slab']['vasp_settings']))
+                    tosubmit.append(make_firework(atoms, name,
+                                                  self.parameters['slab']['vasp_settings'],
+                                                  max_atoms=self.parameters(['bulk']['max_atoms'],
+                                                  max_miller=self.parameters['slab']['miller']))
 
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
@@ -841,9 +850,10 @@ class SubmitToFW(luigi.Task):
 
                     # Add the firework if it's not already running
                     if len(running_fireworks(name, launchpad)) == 0:
-                        tosubmit.append(make_firework(atoms,
-                                                      name,
-                                                      self.parameters['adsorption']['vasp_settings']))
+                        tosubmit.append(make_firework(atoms, name,
+                                                      self.parameters['adsorption']['vasp_settings'],
+                                                      max_atoms=self.parameters(['bulk']['max_atoms'],
+                                                      max_miller=self.parameters['slab']['miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
                     # number of submissions to our maximum.
                     tosubmit = [a for a in tosubmit if a is not None]
@@ -1047,24 +1057,21 @@ class GenerateSiteMarkers(luigi.Task):
             slabrepeat = (nx, ny, 1)
             slab_atoms.info['adsorbate_info'] = ''
             slab_atoms_repeat = slab_atoms.repeat(slabrepeat)
-            # Only generate markers if the number of atoms in our repeated slab lie below our
-            # maximum slab size
-            if len(slab_atoms_repeat) < self.parameters['adsorption']['max_slab_size']:
 
-                # Find the adsorption sites. Then for each site we find, we create a dictionary
-                # of tags to describe the site. Then we save the tags to our pickles.
-                sites = find_adsorption_sites(slab_atoms, bulk)
-                for site in sites:
-                    # Populate the `tags` dictionary with various information
-                    if 'unrelaxed' in self.parameters:
-                        shift = slab['tags']['shift']
-                        top = slab['tags']['top']
-                        miller = slab['tags']['miller']
-                    else:
-                        shift = self.parameters['slab']['shift']
-                        top = self.parameters['slab']['top']
-                        miller = self.parameters['slab']['miller']
-                    tags = {'type':'slab+adsorbate',
+            # Find the adsorption sites. Then for each site we find, we create a dictionary
+            # of tags to describe the site. Then we save the tags to our pickles.
+            sites = find_adsorption_sites(slab_atoms, bulk)
+            for site in sites:
+                # Populate the `tags` dictionary with various information
+                if 'unrelaxed' in self.parameters:
+                    shift = slab['tags']['shift']
+                    top = slab['tags']['top']
+                    miller = slab['tags']['miller']
+                else:
+                    shift = self.parameters['slab']['shift']
+                    top = self.parameters['slab']['top']
+                    miller = self.parameters['slab']['miller']
+                tags = {'type':'slab+adsorbate',
                             'adsorption_site':str(np.round(site, decimals=2)),
                             'slabrepeat':str(slabrepeat),
                             'adsorbate':adsorbate['name'],
@@ -1072,17 +1079,17 @@ class GenerateSiteMarkers(luigi.Task):
                             'miller':miller,
                             'shift':shift,
                             'relaxed':False}
-                    # Then add the adsorbate marker on top of the slab. Note that we use a local,
-                    # deep copy of the marker because the marker was created outside of this loop.
-                    _adsorbate = adsorbate['atoms'].copy()
-                    # Move the adsorbate onto the adsorption site...
-                    _adsorbate.translate(site)
-                    # Put the adsorbate onto the slab and add the adslab system to the tags
-                    adslab = slab_atoms_repeat.copy() + _adsorbate
-                    tags['atoms'] = adslab
+                # Then add the adsorbate marker on top of the slab. Note that we use a local,
+                # deep copy of the marker because the marker was created outside of this loop.
+                _adsorbate = adsorbate['atoms'].copy()
+                # Move the adsorbate onto the adsorption site...
+                _adsorbate.translate(site)
+                # Put the adsorbate onto the slab and add the adslab system to the tags
+                adslab = slab_atoms_repeat.copy() + _adsorbate
+                tags['atoms'] = adslab
 
-                    # Finally, add the information to list of things to save
-                    adslabs_to_save.append(tags)
+                # Finally, add the information to list of things to save
+                adslabs_to_save.append(tags)
 
         # Save the marked systems to our pickles
         with self.output().temporary_path() as self.temp_output_path:
@@ -1577,7 +1584,7 @@ def default_calc_settings(xc):
     This function defines the default calculational settings for GASpy to use
     '''
     # Standard settings to use regardless of xc (exchange correlational)
-    settings = OrderedDict({'encut':350, 'pp_version':'5.4'})
+    settings = OrderedDict({'encut': 350, 'pp_version': '5.4'})
 
     # Call on the default_xc_settings function to define the rest of the settings
     default_settings = default_xc_settings(xc)
@@ -1638,6 +1645,7 @@ def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
     settings['encut'] = encutBulk
     return OrderedDict(mpid=mpid,
                        relaxed=True,
+                       max_atoms=50,
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
@@ -1670,7 +1678,6 @@ def default_parameter_adsorption(adsorbate,
     # This controls how many configurations get submitted if multiple configurations
     # match the criteria
     return OrderedDict(numtosubmit=1,
-                       max_slab_size=60,
                        min_xy=4.5,
                        relaxed=True,
                        num_slab_atoms=num_slab_atoms,
