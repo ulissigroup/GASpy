@@ -679,7 +679,7 @@ class SubmitToFW(luigi.Task):
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(make_firework(atoms, name,
                                                   self.parameters['bulk']['vasp_settings'],
-                                                  max_atoms=self.parameters(['bulk']['max_atoms']),
+                                                  max_atoms=self.parameters['bulk']['max_atoms'],
                                                   max_miller=self.parameters['slab']['miller']))
 
             # A way to append `tosubmit`, but specialized for gas relaxations
@@ -757,7 +757,7 @@ class SubmitToFW(luigi.Task):
                 if len(running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(make_firework(atoms, name,
                                                   self.parameters['slab']['vasp_settings'],
-                                                  max_atoms=self.parameters(['bulk']['max_atoms']),
+                                                  max_atoms=self.parameters['bulk']['max_atoms'],
                                                   max_miller=self.parameters['slab']['miller']))
 
             # A way to append `tosubmit`, but specialized for adslab relaxations
@@ -851,7 +851,7 @@ class SubmitToFW(luigi.Task):
                     if len(running_fireworks(name, launchpad)) == 0:
                         tosubmit.append(make_firework(atoms, name,
                                                       self.parameters['adsorption']['vasp_settings'],
-                                                      max_atoms=self.parameters(['bulk']['max_atoms']),
+                                                      max_atoms=self.parameters['bulk']['max_atoms'],
                                                       max_miller=self.parameters['slab']['miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
                     # number of submissions to our maximum.
