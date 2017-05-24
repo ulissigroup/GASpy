@@ -757,7 +757,7 @@ class SubmitToFW(luigi.Task):
                     tosubmit.append(make_firework(atoms, name,
                                                   self.parameters['slab']['vasp_settings'],
                                                   max_atoms=self.parameters['bulk']['max_atoms'],
-                                                  max_miller=self.parameters['bulk']['max_miller']))
+                                                  max_miller=self.parameters['slab']['max_miller']))
 
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
@@ -851,7 +851,7 @@ class SubmitToFW(luigi.Task):
                         tosubmit.append(make_firework(atoms, name,
                                                       self.parameters['adsorption']['vasp_settings'],
                                                       max_atoms=self.parameters['bulk']['max_atoms'],
-                                                      max_miller=self.parameters['bulk']['max_miller']))
+                                                      max_miller=self.parameters['slab']['max_miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
                     # number of submissions to our maximum.
                     tosubmit = [a for a in tosubmit if a is not None]
@@ -1598,6 +1598,7 @@ def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
         settings = default_calc_settings(settings)
     return OrderedDict(miller=miller,
                        top=top,
+                       max_miller=2,
                        shift=shift,
                        relaxed=True,
                        vasp_settings=OrderedDict(ibrion=2,
@@ -1644,7 +1645,6 @@ def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
     return OrderedDict(mpid=mpid,
                        relaxed=True,
                        max_atoms=50,
-                       max_miller=2,
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
