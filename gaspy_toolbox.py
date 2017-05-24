@@ -1175,7 +1175,7 @@ class CalculateEnergy(luigi.Task):
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
 
         # Now we put it all together.
-        print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
+        #print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1234,7 +1234,7 @@ class CalculateEnergy(luigi.Task):
         for ads in self.parameters['adsorption']['adsorbates']:
             print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' \
                   % (ads['name'],
-                     ads['adsorption_site'],
+                     self.parameters['adsorption']['adsorbates'][0]['fp']['coordination'],
                      self.parameters['bulk']['mpid'],
                      self.parameters['slab']['miller'],
                      dE))
