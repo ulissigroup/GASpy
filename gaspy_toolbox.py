@@ -1049,22 +1049,21 @@ class GenerateSiteMarkers(luigi.Task):
             slab_atoms_repeat = slab_atoms.repeat(slabrepeat)
             # Only generate markers if the number of atoms in our repeated slab lie below our
             # maximum slab size
-            if len(slab_atoms_repeat) < self.parameters['adsorption']['max_slab_size']:
-
-                # Find the adsorption sites. Then for each site we find, we create a dictionary
-                # of tags to describe the site. Then we save the tags to our pickles.
-                sites = find_adsorption_sites(slab_atoms, bulk)
-                for site in sites:
-                    # Populate the `tags` dictionary with various information
-                    if 'unrelaxed' in self.parameters:
-                        shift = slab['tags']['shift']
-                        top = slab['tags']['top']
-                        miller = slab['tags']['miller']
-                    else:
-                        shift = self.parameters['slab']['shift']
-                        top = self.parameters['slab']['top']
-                        miller = self.parameters['slab']['miller']
-                    tags = {'type':'slab+adsorbate',
+                
+            # Find the adsorption sites. Then for each site we find, we create a dictionary
+            # of tags to describe the site. Then we save the tags to our pickles.
+            sites = find_adsorption_sites(slab_atoms, bulk)
+            for site in sites:
+                # Populate the `tags` dictionary with various information
+                if 'unrelaxed' in self.parameters:
+                    shift = slab['tags']['shift']
+                    top = slab['tags']['top']
+                    miller = slab['tags']['miller']
+                else:
+                    shift = self.parameters['slab']['shift']
+                    top = self.parameters['slab']['top']
+                    miller = self.parameters['slab']['miller']
+                tags = {'type':'slab+adsorbate',
                             'adsorption_site':str(np.round(site, decimals=2)),
                             'slabrepeat':str(slabrepeat),
                             'adsorbate':adsorbate['name'],
@@ -1072,17 +1071,17 @@ class GenerateSiteMarkers(luigi.Task):
                             'miller':miller,
                             'shift':shift,
                             'relaxed':False}
-                    # Then add the adsorbate marker on top of the slab. Note that we use a local,
-                    # deep copy of the marker because the marker was created outside of this loop.
-                    _adsorbate = adsorbate['atoms'].copy()
-                    # Move the adsorbate onto the adsorption site...
-                    _adsorbate.translate(site)
-                    # Put the adsorbate onto the slab and add the adslab system to the tags
-                    adslab = slab_atoms_repeat.copy() + _adsorbate
-                    tags['atoms'] = adslab
+                # Then add the adsorbate marker on top of the slab. Note that we use a local,
+                # deep copy of the marker because the marker was created outside of this loop.
+                _adsorbate = adsorbate['atoms'].copy()
+                # Move the adsorbate onto the adsorption site...
+                _adsorbate.translate(site)
+                # Put the adsorbate onto the slab and add the adslab system to the tags
+                adslab = slab_atoms_repeat.copy() + _adsorbate
+                tags['atoms'] = adslab
 
-                    # Finally, add the information to list of things to save
-                    adslabs_to_save.append(tags)
+                # Finally, add the information to list of things to save
+                adslabs_to_save.append(tags)
 
         # Save the marked systems to our pickles
         with self.output().temporary_path() as self.temp_output_path:
