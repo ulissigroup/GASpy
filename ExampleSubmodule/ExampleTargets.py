@@ -174,41 +174,42 @@ class StudyCoordinationSites(luigi.WrapperTask):
         for ind in ind_to_run:
             if count < self.Nsubmit:
                 print('Let\'s try %s!'%unique_coord[ind])
-                indices, natoms = zip(*[[i, rows[i].natoms]
-                                        for i in range(len(inverse))
-                                        if inverse[i] == ind])
-                rowind = indices[np.argmin(natoms)]
-                row = rows[rowind]
-                print(row.miller)
-                print(row.mpid)
+                indices, natoms = zip(*sorted([[i, rows[i].natoms] for i in range(len(inverse)) if inverse[i] == ind ],key=lambda x: x[1]))
+
+                rowind = indices[0]
+                rowcoordination=rows[rowind].coordination
                 for adsorbate in ['CO', 'H', 'OH', 'O', 'C']:
                     if len([result for result in resultRows
                             if result.adsorbate == adsorbate
-                            and (result.coordination == row.coordination
-                                 or result.initial_coordination == row.coordination)
+                            and (result.coordination == rowcoordination
+                                 or result.initial_coordination == rowcoordination)
                            ]
                           ) == 0:
-                        # Submit once for the top of the slab
-                        ads_parameter = default_parameter_adsorption(adsorbate, settings=self.xc)
-                        ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
-                        parameters = {"bulk": default_parameter_bulk(row.mpid, settings=self.xc),
-                                      'slab': default_parameter_slab(list(eval(row.miller)),
-                                                                     row.top,
-                                                                     row.shift,
-                                                                     settings=self.xc),
-                                      'gas': default_parameter_gas('CO', settings=self.xc),
-                                      'adsorption': ads_parameter}
-                        yield CalculateEnergy(parameters=parameters)
-                        # Submit again for the bottom of the slab
-                        parameters = {"bulk": default_parameter_bulk(row.mpid, settings=self.xc),
-                                      'slab':default_parameter_slab(list(eval(row.miller)),
-                                                                    not(row.top),
-                                                                    row.shift,
-                                                                    settings=self.xc),
-                                      'gas':default_parameter_gas('CO', settings=self.xc),
-                                      'adsorption':ads_parameter}
-                        yield CalculateEnergy(parameters=parameters)
-                        count += 2
+                        for rowind in indices[0:2]:
+                            row=rows[rowind]
+                            print(row.miller)
+                            print(row.mpid)
+                            # Submit once for the top of the slab
+                            ads_parameter = default_parameter_adsorption(adsorbate, settings=self.xc)
+                            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination}
+                            parameters = {"bulk": default_parameter_bulk(row.mpid, settings=self.xc),
+                                          'slab': default_parameter_slab(list(eval(row.miller)),
+                                                                         row.top,
+                                                                         row.shift,
+                                                                         settings=self.xc),
+                                          'gas': default_parameter_gas('CO', settings=self.xc),
+                                          'adsorption': ads_parameter}
+                            yield CalculateEnergy(parameters=parameters)
+                            # Submit again for the bottom of the slab
+                            parameters = {"bulk": default_parameter_bulk(row.mpid, settings=self.xc),
+                                          'slab':default_parameter_slab(list(eval(row.miller)),
+                                                                        not(row.top),
+                                                                        row.shift,
+                                                                        settings=self.xc),
+                                          'gas':default_parameter_gas('CO', settings=self.xc),
+                                          'adsorption':ads_parameter}
+                            yield CalculateEnergy(parameters=parameters)
+                            count += 2
 
 
 class EnumerateAlloys(luigi.WrapperTask):
@@ -362,24 +363,25 @@ class PredictAndSubmit(luigi.WrapperTask):
                                     if ncoord_inverse[i] == ind])
             rowind = indices[np.argmin(natoms)]
             row = matching[rowind][1]
-            ads_parameter = default_parameter_adsorption('CO', settings=self.xc)
-            ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
-                                                    'nextnearestcoordination':row.nextnearestcoordination}
-            # Submit once for the top of the slab
-            parameters = {'bulk': default_parameter_bulk(row.mpid, settings=self.xc),
-                          'slab': default_parameter_slab(list(eval(row.miller)),
-                                                         row.top,
-                                                         row.shift,
-                                                         settings=self.xc),
-                          'gas': default_parameter_gas('CO', settings=self.xc),
-                          'adsorption': ads_parameter}
-            yield CalculateEnergy(parameters=parameters)
-            # Submit again for the bottom of the slab
-            parameters = {'bulk': default_parameter_bulk(row.mpid, settings=self.xc),
-                          'slab':default_parameter_slab(list(eval(row.miller)),
-                                                        not(row.top),
-                                                        row.shift,
-                                                        settings=self.xc),
-                          'gas':default_parameter_gas('CO', settings=self.xc),
-                          'adsorption':ads_parameter}
-            yield CalculateEnergy(parameters=parameters)
+            for adsorbate in ['CO','H']:
+                ads_parameter = default_parameter_adsorption(adsorbate, settings=self.xc)
+                ads_parameter['adsorbates'][0]['fp'] = {'coordination':row.coordination,
+                                                        'nextnearestcoordination':row.nextnearestcoordination}
+                # Submit once for the top of the slab
+                parameters = {'bulk': default_parameter_bulk(row.mpid, settings=self.xc),
+                              'slab': default_parameter_slab(list(eval(row.miller)),
+                                                             row.top,
+                                                             row.shift,
+                                                             settings=self.xc),
+                              'gas': default_parameter_gas('CO', settings=self.xc),
+                              'adsorption': ads_parameter}
+                yield CalculateEnergy(parameters=parameters)
+                # Submit again for the bottom of the slab
+                parameters = {'bulk': default_parameter_bulk(row.mpid, settings=self.xc),
+                              'slab':default_parameter_slab(list(eval(row.miller)),
+                                                            not(row.top),
+                                                            row.shift,
+                                                            settings=self.xc),
+                              'gas':default_parameter_gas('CO', settings=self.xc),
+                              'adsorption':ads_parameter}
+                yield CalculateEnergy(parameters=parameters)
