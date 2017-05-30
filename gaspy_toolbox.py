@@ -440,7 +440,7 @@ class DumpSurfacesToAuxDB(luigi.Task):
                             try:
                                 num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
                             except KeyError:
-                                pprint("%s is not recognizable by GASpy's adsorbates dictionary. \
+                                print("%s is not recognizable by GASpy's adsorbates dictionary. \
                                       Please add it to `num_adsorbate_atoms` \
                                       in `DumpSurfacesToAuxDB`" % fw.name['adsorbate'])
                             if num_adsorbate_atoms > 0:
@@ -597,12 +597,11 @@ class SubmitToFW(luigi.Task):
             for key in self.parameters['gas']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s'%key] = self.parameters['gas']['vasp_settings'][key]
         elif self.calctype == 'slab':
-            search_strings = {'type':'slab',
-                              'fwname.miller':
-                              list(self.parameters['slab']['miller']),
-                              'fwname.top':self.parameters['slab']['top'],
-                              'fwname.shift':self.parameters['slab']['shift'],
-                              'fwname.mpid':self.parameters['bulk']['mpid']}
+            search_strings = {'type': 'slab',
+                              'fwname.miller': list(self.parameters['slab']['miller']),
+                              'fwname.top': self.parameters['slab']['top'],
+                              'fwname.shift': self.parameters['slab']['shift'],
+                              'fwname.mpid': self.parameters['bulk']['mpid']}
             for key in self.parameters['slab']['vasp_settings']:
                 if key not in ['isym']:
                     search_strings['fwname.vasp_settings.%s'%key] = self.parameters['slab']['vasp_settings'][key]
@@ -633,6 +632,7 @@ class SubmitToFW(luigi.Task):
         with get_aux_db() as aux_db:
             self.matching_row = list(aux_db.find(search_strings))
         #print('Search string:  %s', % search_strings)
+
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
@@ -1239,7 +1239,7 @@ class CalculateEnergy(luigi.Task):
         for ads in self.parameters['adsorption']['adsorbates']:
             print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' \
                   % (ads['name'],
-                     self.parameters['adsorption']['adsorbates'][0]['fp']['coordination'],
+                     self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
                      self.parameters['bulk']['mpid'],
                      self.parameters['slab']['miller'],
                      dE))
