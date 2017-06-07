@@ -1462,18 +1462,28 @@ class DumpToLocalDB(luigi.Task):
             angle = 0.
         angle = angle/2./np.pi*360
 
-        #calculate the maximum movement of surface atoms during the relaxation
-        #first, calculate the number of adsorbate atoms
-        num_adsorbate_atoms=len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
-        #get just the slab atoms of the initial and final state
-        slab_atoms_final=best_sys[0:-num_adsorbate_atoms]
-        slab_atoms_initial=mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[0:-num_adsorbate_atoms]
-        #Calculate the distances for each atom
-        distances=slab_atoms_final.positions-slab_atoms_initial.positions
-        #Reduce the distances in case atoms wrapped around (the minimum image convention)
-        dist,Dlen=find_mic(distances,slab_atoms_final.cell,slab_atoms_final.pbc)
-        #Calculate the max movement of the surface atoms
-        max_surface_movement=np.max(Dlen)
+        '''
+        Calculate the maximum movement of surface atoms during the relaxation. then we do it again,
+        but for adsorbate atoms.
+        '''
+        # First, calculate the number of adsorbate atoms
+        num_adsorbate_atoms = len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
+        # Get just the slab atoms of the initial and final state
+        slab_atoms_final = best_sys[0:-num_adsorbate_atoms]
+        slab_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[0:-num_adsorbate_atoms]
+        # Calculate the distances for each atom
+        distances = slab_atoms_final.positions - slab_atoms_initial.positions
+        # Reduce the distances in case atoms wrapped around (the minimum image convention)
+        dist, Dlen = find_mic(distances, slab_atoms_final.cell, slab_atoms_final.pbc)
+        # Calculate the max movement of the surface atoms
+        max_surface_movement = np.max(Dlen)
+        # Repeat the procedure, but for adsorbates
+        # get just the slab atoms of the initial and final state
+        adsorbate_atoms_final = best_sys[-num_adsorbate_atoms:]
+        adsorbate_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[-num_adsorbate_atoms:]
+        distances = adsorbate_atoms_final.positions - adsorbate_atoms_initial.positions
+        dist, Dlen = find_mic(distances, slab_atoms_final.cell, slab_atoms_final.pbc)
+        max_adsorbate_movement = np.max(Dlen)
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
@@ -1498,7 +1508,8 @@ class DumpToLocalDB(luigi.Task):
                     'slabfwid':best_sys_pkl['slab']['fwid'],
                     'bulkfwid':bulk[bulkmin]['fwid'],
                     'adsorbate_angle':angle,
-                    'max_surface_movement':max_surface_movement}
+                    'max_surface_movement':max_surface_movement,
+                    'max_adsorbate_movement':max_adsorbate_movement}
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
