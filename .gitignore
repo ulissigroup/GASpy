@@ -29,6 +29,7 @@
 *.pkl
 *.traj
 *.token
+*.db
 
 # OS generated files #
 ######################
@@ -39,9 +40,6 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Submodule listings #
-.gitignore
 
 # Editor-backups #
 *.swp
