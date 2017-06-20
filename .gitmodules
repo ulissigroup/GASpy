@@ -6,4 +6,4 @@
 	url = git@github.com:ktran9891/GASpy_Sandbox.git
 [submodule "GASpy_feedback"]
 	path = GASpy_feedback
-	url = ./GASpy_feedback/
+	url = git@github.com:ktran9891/GASpy_feedback.git
