@@ -1,10 +1,13 @@
-"""
-This function is used in various scripts to convert a dictionary of vasp settings into a format that is acceptable by ase-db.
+'''
+This function is used in various scripts to convert a dictionary of vasp settings into a format
+that is acceptable by ase-db.
 Input
-    vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein may have a different type depending on the VASP setting.
+    vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein may have a
+                            different type depending on the VASP setting.
 Output
-    vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein is either an int, float, boolean, or string.
-"""
+    vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein is either
+                            an int, float, boolean, or string.
+'''
 
 def vasp_settings_to_str(vasp_settings):
     # Create a local copy to make sure we are not acting on the global copy(?)

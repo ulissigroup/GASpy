@@ -1,8 +1,8 @@
-"""
+'''
 This module houses various functions and classes that Luigi uses to set up calculations that can
 be submitted to Fireworks. This is intended to be used in conjunction with a submission file, an
 example of which is named "adsorbtionTargets.py".
-"""
+'''
 
 
 from collections import OrderedDict
@@ -78,12 +78,12 @@ def get_launchpad():
 
 
 def ads_dict(adsorbate):
-    """
+    '''
     This is a helper function to take an adsorbate as a string (e.g. 'CO') and attempt to
     return an atoms object for it, primarily as a way to count the number of constitutent
     atoms in the adsorbate. It also contains a skeleton for the user to manually add atoms
     objects to "atom_dict".
-    """
+    '''
     # First, add the manually-added adsorbates to the atom_dict lookup variable. Note that
     # 'H' is just an example. It won't actually be used here.
     atom_dict = {'H': Atoms('H')}
@@ -107,13 +107,13 @@ def ads_dict(adsorbate):
 
 
 def constrain_slab(atoms, n_atoms, z_cutoff=3.):
-    """
+    '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
     Inputs
     atoms       ASE-atoms class of the slab to be constrained
     n_atoms     number of slab atoms
     z_cutoff    The threshold to see if other atoms are in the same plane as the highest atom
-    """
+    '''
     # Initialize
     constraints = []        # This list will contain the various constraints we will impose
     _atoms = atoms.copy()   # Create a local copy of the atoms class to work on
@@ -146,7 +146,7 @@ def constrain_slab(atoms, n_atoms, z_cutoff=3.):
 
 
 def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
-    """
+    '''
     This function makes a simple vasp relaxation firework
     atoms       atoms object to relax
     fw_name     dictionary of tags/etc to use as the fireworks name
@@ -155,7 +155,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
                 simulations from getting run
     max_miller  maximum miller index to submit, so that be default miller indices
                 above 3 won't get submitted by accident
-    """
+    '''
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
         print('        Not making firework because there are too many atoms in the following FW:')
@@ -188,11 +188,11 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
 
 
 def running_fireworks(name_dict, launchpad):
-    """
+    '''
     Return the running, ready, or completed fireworks on the launchpad with a given name
     name_dict   name dictionary to search for
     launchpad   launchpad to use
-    """
+    '''
     # Make a mongo query
     name = {}
     # Turn a nested dictionary into a series of mongo queries
@@ -223,10 +223,10 @@ def running_fireworks(name_dict, launchpad):
 
 
 def get_firework_info(fw):
-    """
+    '''
     Given a Fireworks ID, this function will return the "atoms" [class] and
     "vasp_settings" [str] used to perform the relaxation
-    """
+    '''
     atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
     atoms_hex_to_file('atom_temp.traj', atomshex)
     atoms = ase.io.read('atom_temp.traj')
@@ -248,7 +248,7 @@ def get_firework_info(fw):
 
 
 def get_aux_db():
-    """ This is the information for the Auxiliary vasp.mongo database """
+    ''' This is the information for the Auxiliary vasp.mongo database '''
     return MongoDatabase(host='mongodb01.nersc.gov',
                          port=27017,
                          user='admin_zu_vaspsurfaces',
@@ -258,10 +258,10 @@ def get_aux_db():
 
 
 class DumpBulkGasToAuxDB(luigi.Task):
-    """
+    '''
     This class will load the results for bulk and slab relaxations from the Primary FireWorks
     database into the Auxiliary vasp.mongo database.
-    """
+    '''
 
     def run(self):
         lpad = get_launchpad()
@@ -310,10 +310,10 @@ class DumpBulkGasToAuxDB(luigi.Task):
 
 
 class DumpSurfacesToAuxDB(luigi.Task):
-    """
+    '''
     This class will load the results for surface relaxations from the Primary FireWorks database
     into the Auxiliary vasp.mongo database.
-    """
+    '''
 
     def requires(self):
         lpad = get_launchpad()
@@ -481,11 +481,11 @@ class DumpSurfacesToAuxDB(luigi.Task):
 
 
 class UpdateAllDB(luigi.WrapperTask):
-    """
+    '''
     First, dump from the Primary database to the Auxiliary database.
     Then, dump from the Auxiliary database to the Local adsorption energy database.
     Finally, re-request the adsorption energies to re-initialize relaxations & FW submissions.
-    """
+    '''
     # write_db is a boolean. If false, we only execute FingerprintRelaxedAdslabs, which
     # submits calculations to Fireworks (if needed). If writeDB is true, then we still
     # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
@@ -495,12 +495,12 @@ class UpdateAllDB(luigi.WrapperTask):
     # debugging purposes.
     max_processes = luigi.IntParameter(0)
     def requires(self):
-        """
+        '''
         Luigi automatically runs the `requires` method whenever we tell it to execute a
         class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
-        """
+        '''
 
         # Dump from the Primary DB to the Aux DB
         DumpBulkGasToAuxDB().run()
@@ -564,11 +564,11 @@ class UpdateAllDB(luigi.WrapperTask):
 
 
 class SubmitToFW(luigi.Task):
-    """
+    '''
     This class accepts a luigi.Task (e.g., relax a structure), then checks to see if
     this task is already logged in the Auxiliary vasp.mongo database. If it is not, then it
     submits the task to our Primary FireWorks database.
-    """
+    '''
     # Calctype is one of 'gas','slab','bulk','slab+adsorbate'
     calctype = luigi.Parameter()
 
@@ -577,10 +577,10 @@ class SubmitToFW(luigi.Task):
 
     def requires(self):
 #         def logical_fun(row, search):
-#             """
+#             '''
 #             This function compares a search dictionary with another dictionary row,
 #             and returns true if all entries in search match the corresponding entry in row
-#             """
+#             '''
 #             rowdict = row.__dict__
 #             for key in search:
 #                 if key not in rowdict:
@@ -1098,20 +1098,20 @@ class GenerateSiteMarkers(luigi.Task):
 
 
 class GenerateAdslabs(luigi.Task):
-    """
+    '''
     This class takes a set of adsorbate positions from GenerateSiteMarkers and replaces
     the marker (a uranium atom) with the correct adsorbate. Adding an adsorbate is done in two
     steps (marker enumeration, then replacement) so that the hard work of enumerating all
     adsorption sites is only done once and reused for every adsorbate
-    """
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """
+        '''
         We need the generated adsorbates with the marker atoms.  We delete
         parameters['adsorption']['adsorbates'] so that every generate_adsorbates_marker call
         looks the same, even with different adsorbates requested in this task
-        """
+        '''
         parameters_no_adsorbate = copy.deepcopy(self.parameters)
         del parameters_no_adsorbate['adsorption']['adsorbates']
         return GenerateSiteMarkers(parameters_no_adsorbate)
@@ -1148,17 +1148,17 @@ class GenerateAdslabs(luigi.Task):
 
 
 class CalculateEnergy(luigi.Task):
-    """
+    '''
     This class attempts to return the adsorption energy of a configuration relative to
     stoichiometric amounts of CO, H2, H2O
-    """
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """
+        '''
         We need the relaxed slab, the relaxed slab+adsorbate, and relaxed CO/H2/H2O gas
         structures/energies
-        """
+        '''
         # Initialize the list of things that need to be done before we can calculate the
         # adsorption enegies
         toreturn = []
@@ -1249,13 +1249,13 @@ class CalculateEnergy(luigi.Task):
 
 
 def fingerprint(atoms, siteind):
-    """
+    '''
     This function is used to fingerprint an atoms object, where the "fingerprint" is a dictionary
     of properties that we believe may be adsorption motifs.
     atoms       atoms object to fingerprint
     siteind     the position of the binding atom in the adsorbate (assumed to be the first atom
                 of the adsorbate)
-    """
+    '''
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so we can
     # keep track of it in the coordination calculation
     atoms = atoms[0:siteind+1]
@@ -1313,19 +1313,19 @@ def fingerprint(atoms, siteind):
 
 
 class FingerprintRelaxedAdslab(luigi.Task):
-    """
+    '''
     This class takes relaxed structures from our Pickles, fingerprints them, then adds the
     fingerprints back to our Pickles
-    """
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """
+        '''
         Our first requirement is CalculateEnergy, which relaxes the slab+ads system. Our second
         requirement is to relax the slab+ads system again, but without the adsorbates. We do this
         to ensure that the "blank slab" we are using in the adsorption calculations has the same
         number of slab atoms as the slab+ads system.
-        """
+        '''
         # Here, we take the adsorbate off the slab+ads system
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
@@ -1367,12 +1367,12 @@ class FingerprintRelaxedAdslab(luigi.Task):
 
 
 class FingerprintUnrelaxedAdslabs(luigi.Task):
-    """
+    '''
     This class takes unrelaxed slab+adsorbate (adslab) systems from our pickles, fingerprints the
     adslab, fingerprints the slab (without an adsorbate), and then adds fingerprints back to our
     Pickles. Note that we fingerprint the slab because we may have had to repeat the original slab
     to add the adsorbate onto it, and if so then we also need to fingerprint the repeated slab.
-    """
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -1413,14 +1413,14 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
 
 
 class DumpToLocalDB(luigi.Task):
-    """ This class dumps the adsorption energies from our pickles to our Local energies DB """
+    ''' This class dumps the adsorption energies from our pickles to our Local energies DB '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """
+        '''
         We want the lowest energy structure (with adsorption energy), the fingerprinted structure,
         and the bulk structure
-        """
+        '''
         return [CalculateEnergy(self.parameters),
                 FingerprintRelaxedAdslab(self.parameters),
                 SubmitToFW(calctype='bulk',
@@ -1447,10 +1447,10 @@ class DumpToLocalDB(luigi.Task):
         # adsorbate and the z-direction of the bulk. We are not currently calculating triatomics
         # or larger.
         def unit_vector(vector):
-            """ Returns the unit vector of the vector.  """
+            ''' Returns the unit vector of the vector.  '''
             return vector / np.linalg.norm(vector)
         def angle_between(v1, v2):
-            """ Returns the angle in radians between vectors 'v1' and 'v2'::  """
+            ''' Returns the angle in radians between vectors 'v1' and 'v2'::  '''
             v1_u = unit_vector(v1)
             v2_u = unit_vector(v2)
             return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
@@ -1540,7 +1540,7 @@ class UpdateEnumerations(luigi.Task):
     parameters = luigi.DictParameter()
 
     def requires(self):
-        """ Get the generated adsorbate configurations """
+        ''' Get the generated adsorbate configurations '''
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
     def run(self):
@@ -1604,7 +1604,7 @@ def default_calc_settings(xc):
 
 
 def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
-    """ Generate some default parameters for a slab and expected relaxation settings """
+    ''' Generate some default parameters for a slab and expected relaxation settings '''
     if isinstance(settings, str):
         settings = default_calc_settings(settings)
     return OrderedDict(miller=miller,
@@ -1633,7 +1633,7 @@ def default_parameter_slab(miller, top, shift, settings='beef-vdw'):
 
 
 def default_parameter_gas(gasname, settings='beef-vdw'):
-    """ Generate some default parameters for a gas and expected relaxation settings """
+    ''' Generate some default parameters for a gas and expected relaxation settings '''
     if isinstance(settings, str):
         settings = default_calc_settings(settings)
     return OrderedDict(gasname=gasname,
@@ -1647,7 +1647,7 @@ def default_parameter_gas(gasname, settings='beef-vdw'):
 
 
 def default_parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
-    """ Generate some default parameters for a bulk and expected relaxation settings """
+    ''' Generate some default parameters for a bulk and expected relaxation settings '''
     if isinstance(settings, str):
         settings = default_calc_settings(settings)
     # We're getting a handle to a dictionary, so need to copy before modifying
@@ -1671,10 +1671,10 @@ def default_parameter_adsorption(adsorbate,
                                  slabrepeat='(1, 1)',
                                  num_slab_atoms=0,
                                  settings='beef-vdw'):
-    """
+    '''
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings
-    """
+    '''
     if isinstance(settings, str):
         settings = default_calc_settings(settings)
     adsorbateStructures = {'CO':{'atoms':Atoms('CO', positions=[[0.,0.,0.],[0.,0.,1.2]]),  'name':'CO'},

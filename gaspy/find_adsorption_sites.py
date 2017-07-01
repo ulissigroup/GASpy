@@ -1,27 +1,31 @@
-"""
-This script/function calculates possible adsorption sites of a slab of atoms
-Inputs:
-  slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
-  bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
-Outputs:
-  sites       [list]          A list of [array]s, which contain the x-y-z coordinates [floats] of
-                              the adsorptions sites.
-"""
+'''
+The main function in this script is "find_adsorption_sites", which relies on
+`label_structure_with_surface'.
+'''
 
-# Import the necessary modules. Note: This script uses the "modifyAdsorption" branch of PyMatGen.
+# TODO:  Update our version of PyMatGen. This version of the code uses a forked
+# PyMatGen with additional capabilities, but the master branch of PyMatGen has since been
+# updated. We should start using it.
 import numpy as np
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 
 
-def label_structure_with_surface(slabAtoms,bulkAtoms):
-
+def label_structure_with_surface(slabAtoms, bulkAtoms):
+    '''
+    This script/function calculates possible adsorption sites of a slab of atoms
+    Inputs:
+        slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
+        bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
+    Outputs:
+        slab_struct
+    '''
     # Convert the slab and bulk from [atoms class]es to a
     # [structure class]es (i.e., from ASE format to PyMatGen format)
     slab_struct = AseAtomsAdaptor.get_structure(slabAtoms)
     bulk_struct = AseAtomsAdaptor.get_structure(bulkAtoms)
-    
+
     # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
     # be used to find adsorption sites
     vcf_surface = VoronoiCoordFinder(slab_struct)
@@ -30,8 +34,9 @@ def label_structure_with_surface(slabAtoms,bulkAtoms):
     # Get the chemical formula
     formula = np.unique(slabAtoms.get_chemical_symbols())
     # Initialize the keys for "cn_el" [dict], which will hold the [list of int] coordination
-    # numbers of each of atom in the bulk, with the key being the element. Coordination numbers of
-    # atoms that share an element with another atom in the bulk are addended to each element's list.
+    # numbers of each of atom in the bulk, with the key being the element. Coordination
+    # numbers of atoms that share an element with another atom in the bulk are addended to
+    # each element's list.
     cn_el = {}
     for element in formula:
         cn_el[element] = []
@@ -48,8 +53,8 @@ def label_structure_with_surface(slabAtoms,bulkAtoms):
         # Store this number in "cn_el" [dict]. Note that cn_el[el] will return a list of
         # coordination numbers for each atom whose element matches the "el" key.
         cn_el[el].append(num_neighbors)
-    # Calculate "mean_cn_el" [dict], which will hold the mean coordination number [float] of each
-    # element in the bulk
+    # Calculate "mean_cn_el" [dict], which will hold the mean coordination number [float] of
+    # each element in the bulk
     mean_cn_el = {}
     for element in formula:
         #mean_cn_el[element] = float(sum(cn_el[element]))/len(cn_el[element])
@@ -65,8 +70,8 @@ def label_structure_with_surface(slabAtoms,bulkAtoms):
     # or not the atom is on the surface.
     for i, atom in enumerate(slab_struct):
         # "cn_surf" [list of floats] holds the coordination numbers of the atoms in the slab.
-        # Note that we use a tolerance of 0.2 instead of 0.1. This may improve the scripts ability
-        # to identify adsorption sites.
+        # Note that we use a tolerance of 0.2 instead of 0.1. This may improve the scripts
+        # ability to identify adsorption sites.
         cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.2)))
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
@@ -83,16 +88,21 @@ def label_structure_with_surface(slabAtoms,bulkAtoms):
     # We add "new_site_properties" to "slab_struct" [PyMatGen structure class]
     new_site_properties = {'surface_properties':plate_surf, 'coord':cn_surf}
     slab_struct = slab_struct.copy(site_properties=new_site_properties)
-    
+
     return slab_struct
-    
 
-    
-# This function must be supplied with both "slabAtoms" and "bulkAtoms" (see above)
+
 def find_adsorption_sites(slabAtoms, bulkAtoms):
-
-    
-    slab_struct=label_structure_with_surface(slabAtoms,bulkAtoms)
+    '''
+    This script/function calculates possible adsorption sites of a slab of atoms
+    Inputs:
+        slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
+        bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
+    Outputs:
+        sites       [list]  A list of [array]s, which contain the x-y-z coordinates
+                            [floats] of the adsorptions sites.
+    '''
+    slab_struct = label_structure_with_surface(slabAtoms, bulkAtoms)
     # Finally, we call "AdsorbateSiteFinder", which is a function in a branch of PyMatGen,
     # to create "asf" [class]
     asf = AdsorbateSiteFinder(slab_struct)
