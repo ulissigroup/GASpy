@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import numpy as np
-from ..print_dict import print_dict
+from ..utils.print_dict import print_dict
 
 
 def running_fireworks(name_dict, launchpad):

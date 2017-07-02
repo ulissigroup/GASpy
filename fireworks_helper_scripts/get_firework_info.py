@@ -1,6 +1,6 @@
 import ase.io
 from vasp import Vasp
-from ..vasp_settings_to_str import vasp_settings_to_str
+from ..utils.vasp_settings_to_str import vasp_settings_to_str
 from atoms_hex_to_file import atoms_hex_to_file
 
 
