@@ -104,8 +104,8 @@ class SurfacesToAuxDB(luigi.Task):
         #fws_cmpltd=fws_cmpltd[-60:]
         fws_cmpltd.reverse()
 
-        # `surfaces` will be a list of the different surfaces that we need to generate before
-        # we are able to dump them to the Auxiliary DB.
+        # `surfaces` will be a list of the different surfaces that we need to 
+        # generate before we are able to dump them to the Auxiliary DB.
         surfaces = []
         # `to_dump` will be a list of lists. Each sublist contains information we need to dump
         # a surface from the Primary DB to the Auxiliary DB
