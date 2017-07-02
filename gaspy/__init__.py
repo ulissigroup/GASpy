@@ -1,6 +1,6 @@
 # Sub-packages
 import fireworks_helper_scripts
-import default_parameters
+import default
 
 # Functions
 from vasp_settings_to_str import vasp_settings_to_str

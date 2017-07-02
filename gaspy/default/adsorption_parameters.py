@@ -3,11 +3,11 @@ import cPickle as pickle
 from ase import Atoms
 from calc_settings import calc_settings
 
-def adsorption(adsorbate,
-               adsorption_site=None,
-               slabrepeat='(1, 1)',
-               num_slab_atoms=0,
-               settings='beef-vdw'):
+def adsorption_parameters(adsorbate,
+                          adsorption_site=None,
+                          slabrepeat='(1, 1)',
+                          num_slab_atoms=0,
+                          settings='beef-vdw'):
     '''
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings

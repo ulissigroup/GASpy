@@ -2,7 +2,7 @@ from collections import OrderedDict
 from calc_settings import calc_settings
 
 
-def parameter_slab(miller, top, shift, settings='beef-vdw'):
+def slab_parameters(miller, top, shift, settings='beef-vdw'):
     ''' Generate some default parameters for a slab and expected relaxation settings '''
     if isinstance(settings, str):
         settings = calc_settings(settings)

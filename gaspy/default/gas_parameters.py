@@ -2,7 +2,7 @@ from collections import OrderedDict
 from calc_settings import calc_settings
 
 
-def parameter_gas(gasname, settings='beef-vdw'):
+def gas_parameters(gasname, settings='beef-vdw'):
     ''' Generate some default parameters for a gas and expected relaxation settings '''
     if isinstance(settings, str):
         settings = calc_settings(settings)

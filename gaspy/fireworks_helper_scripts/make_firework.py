@@ -2,7 +2,7 @@ import getpass
 import numpy as np
 from fireworks import Firework, PyTask
 from atoms_to_hex import atoms_to_hex
-from print_dict import print_dict
+from ..print_dict import print_dict
 
 
 def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):

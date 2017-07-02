@@ -3,7 +3,7 @@ from collections import OrderedDict
 from calc_settings import calc_settings
 
 
-def parameter_bulk(mpid, settings='beef-vdw', encutBulk=500.):
+def bulk_parameters(mpid, settings='beef-vdw', encutBulk=500.):
     ''' Generate some default parameters for a bulk and expected relaxation settings '''
     if isinstance(settings, str):
         settings = calc_settings(settings)

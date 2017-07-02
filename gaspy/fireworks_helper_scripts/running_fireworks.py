@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import numpy as np
-from print_dict import print_dict
+from ..print_dict import print_dict
 
 
 def running_fireworks(name_dict, launchpad):
@@ -24,7 +24,8 @@ def running_fireworks(name_dict, launchpad):
             else:
                 name['name.%s'%key] = name_dict[key]
 
-    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled or defused.)
+    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
+    # or defused.)
     fw_ids = launchpad.get_fw_ids(name)
     fw_list = []
     for fwid in fw_ids:
