@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import luigi
-from gaspy import get_aux_db
+from ..utils import get_aux_db
 
 
 class SubmitToFW(luigi.Task):
