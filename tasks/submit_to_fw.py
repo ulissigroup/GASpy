@@ -1,6 +1,24 @@
+# Python modules
+import sys
 from collections import OrderedDict
+import cPickle as pickle
+# 3rd party modules
+import numpy as np
+from ase import Atoms
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.analysis.structure_analyzer import average_coordination_number
+from vasp.mongo import mongo_doc_atoms
+from fireworks import Workflow
 import luigi
-from ..utils import get_aux_db
+# GASpy modules
+import generate
+import fingerprint
+sys.path.append('..')
+from gaspy.utils import get_aux_db, print_dict
+from gaspy.fireworks_helper_scripts import get_launchpad, running_fireworks, make_firework
+
+
+LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
 
 
 class SubmitToFW(luigi.Task):
@@ -82,11 +100,11 @@ class SubmitToFW(luigi.Task):
         # generate the necessary unrelaxed structure
         if len(self.matching_row) == 0:
             if self.calctype == 'slab':
-                return [GenerateSurfaces(OrderedDict(bulk=self.parameters['bulk'],
-                                                     slab=self.parameters['slab'])),
-                        GenerateSurfaces(OrderedDict(unrelaxed=True,
-                                                     bulk=self.parameters['bulk'],
-                                                     slab=self.parameters['slab']))]
+                return [generate.Slabs(OrderedDict(bulk=self.parameters['bulk'],
+                                                   slab=self.parameters['slab'])),
+                        generate.Slabs(OrderedDict(unrelaxed=True,
+                                                   bulk=self.parameters['bulk'],
+                                                   slab=self.parameters['slab']))]
             if self.calctype == 'slab+adsorbate':
                 # Return the base structure, and all possible matching ones for the surface
                 search_strings = {'type':'slab+adsorbate',
@@ -96,11 +114,11 @@ class SubmitToFW(luigi.Task):
                                   'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
                 with get_aux_db() as aux_db:
                     self.matching_rows_all_calcs = list(aux_db.find(search_strings))
-                return FingerprintUnrelaxedAdslabs(self.parameters)
+                return fingerprint.UnrelaxedAdslabs(self.parameters)
             if self.calctype == 'bulk':
-                return GenerateBulk({'bulk':self.parameters['bulk']})
+                return generate.Bulk({'bulk':self.parameters['bulk']})
             if self.calctype == 'gas':
-                return GenerateGas({'gas':self.parameters['gas']})
+                return generate.Gas({'gas':self.parameters['gas']})
 
     def run(self):
         # If there are matching entries, this is easy, just dump the matching entries

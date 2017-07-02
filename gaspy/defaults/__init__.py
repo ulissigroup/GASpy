@@ -1,6 +1,0 @@
-from calc_settings import calc_settings
-from xc_settings import xc_settings
-from gas_parameters import gas_parameters
-from bulk_parameters import bulk_parameters
-from slab_parameters import slab_parameters
-from adsorption_parameters import adsorption_parameters
