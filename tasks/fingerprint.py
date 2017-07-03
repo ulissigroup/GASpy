@@ -7,7 +7,7 @@ import cPickle as pickle
 from ase import Atoms
 import luigi
 # GASpy modules
-from generate import AdSlabs
+import generate
 from vasp.mongo import mongo_doc_atoms
 import calculate
 from submit_to_fw import SubmitToFW
@@ -90,8 +90,8 @@ class UnrelaxedAdslabs(luigi.Task):
         param_slab = copy.deepcopy(self.parameters)
         param_slab['adsorption']['adsorbates'] = \
                 [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
-        return [AdSlabs(self.parameters),
-                AdSlabs(parameters=param_slab)]
+        return [generate.AdSlabs(self.parameters),
+                generate.AdSlabs(parameters=param_slab)]
 
     def run(self):
         # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the
