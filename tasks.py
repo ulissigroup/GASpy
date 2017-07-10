@@ -3,6 +3,7 @@ This module houses various tasks that Luigi uses to set up calculations that can
 submitted to Fireworks. This is intended to be used in conjunction with a bash submission
 file.
 '''
+import os
 import sys
 import copy
 import math
@@ -58,7 +59,9 @@ class UpdateAllDB(luigi.WrapperTask):
 
         # Dump from the Primary DB to the Aux DB
         DumpBulkGasToAuxDB().run()
-        yield DumpSurfacesToAuxDB()
+        if DumpSurfacesToAuxDB().complete():
+            os.remove(LOCAL_DB_PATH+'/DumpToAuxDB.token')
+        DumpSurfacesToAuxDB().run()
 
         # Get every row in the Aux database
         rows = utils.get_aux_db().find({'type':'slab+adsorbate'})
@@ -1197,8 +1200,6 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
-
-
 
 
 class CalculateEnergy(luigi.Task):
