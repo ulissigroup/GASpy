@@ -59,9 +59,7 @@ class UpdateAllDB(luigi.WrapperTask):
 
         # Dump from the Primary DB to the Aux DB
         DumpBulkGasToAuxDB().run()
-        if DumpSurfacesToAuxDB().complete():
-            os.remove(LOCAL_DB_PATH+'/DumpToAuxDB.token')
-        DumpSurfacesToAuxDB().run()
+        yield DumpSurfacesToAuxDB()
 
         # Get every row in the Aux database
         rows = utils.get_aux_db().find({'type':'slab+adsorbate'})
