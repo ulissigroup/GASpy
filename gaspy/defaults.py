@@ -107,13 +107,18 @@ def adsorption_parameters(adsorbate,
     '''
     if isinstance(settings, str):
         settings = calc_settings(settings)
-    adsorbateStructures = {'CO':{'atoms':Atoms('CO', positions=[[0.,0.,0.],[0.,0.,1.2]]),  'name':'CO'},
-                           'H':{'atoms':Atoms('H',   positions=[[0.,0.,-0.5]]),            'name':'H'},
-                           'O':{'atoms':Atoms('O',   positions=[[0.,0.,0.]]),              'name':'O'},
-                           'C':{'atoms':Atoms('C',   positions=[[0.,0.,0.]]),              'name':'C'},
-                           '':{'atoms':Atoms(),                                            'name':''},
-                           'U':{'atoms':Atoms('U',   positions=[[0.,0.,0.]]),              'name':'U'},
-                           'OH':{'atoms':Atoms('OH', positions=[[0.,0.,0.],[0.,0.,0.96]]), 'name':'OH'}}
+    adsorbateStructures = {'CO': {'name':'CO', 'atoms': Atoms('CO', positions=[[0., 0., 0.],
+                                                                               [0., 0., 1.2]])},
+                           'H': {'name': 'H', 'atoms': Atoms('H', positions=[[0., 0., -0.5]])},
+                           'O': {'name': 'O', 'atoms': Atoms('O', positions=[[0., 0., 0.]])},
+                           'C': {'name': 'C', 'atoms': Atoms('C', positions=[[0., 0., 0.]])},
+                           '': {'name': '', 'atoms': Atoms()},
+                           'U': {'name': 'U', 'atoms': Atoms('U', positions=[[0., 0., 0.]])},
+                           'OH': {'name': 'OH', 'atoms': Atoms('OH', positions=[[0., 0., 0.],
+                                                                                [0., 0., 0.96]])},
+                           'OOH': {'name': 'OOH', 'atoms': Atoms('OOH', positions=[[0., 0., 0.],
+                                                                                   [0., 0., 1.55], 
+                                                                                       [0, 0.94, 1.80]])}}
 
     # This controls how many configurations get submitted if multiple configurations
     # match the criteria
