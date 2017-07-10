@@ -48,4 +48,4 @@ Thumbs.db
 
 # Submission scripts
 ###################
-submission_scripts/
+queue*.sh
