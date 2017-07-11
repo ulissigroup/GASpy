@@ -520,19 +520,6 @@ class SubmitToFW(luigi.Task):
     parameters = luigi.DictParameter()
 
     def requires(self):
-#         def logical_fun(row, search):
-#             '''
-#             This function compares a search dictionary with another dictionary row,
-#             and returns true if all entries in search match the corresponding entry in row
-#             '''
-#             rowdict = row.__dict__
-#             for key in search:
-#                 if key not in rowdict:
-#                     return False
-#                 elif rowdict[key] != search[key]:
-#                     return False
-#             return True
-
         # Define a dictionary that will be used to search the Auxiliary database and find
         # the correct entry
         if self.calctype == 'gas':
