@@ -42,5 +42,11 @@ ehthumbs.db
 Thumbs.db
 
 # Editor-backups #
+##################
 *.swp
 *~
+
+# Submission scripts
+###################
+update*.sh
+queue*.sh
