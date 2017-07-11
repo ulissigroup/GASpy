@@ -803,8 +803,7 @@ class SubmitToFW(luigi.Task):
                 launchpad.add_wf(wflow)
                 print('Just submitted the following Fireworks:')
                 for i, submit in enumerate(tosubmit):
-                    print('    Submission number %s' % i)
-                    utils.print_dict(submit, indent=2)
+                    utils.print_dict(submit, indent=1)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
