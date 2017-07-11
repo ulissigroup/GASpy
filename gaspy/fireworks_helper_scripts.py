@@ -39,7 +39,7 @@ def running_fireworks(name_dict, launchpad):
     # Return the matching fireworks
     if len(fw_list) == 0:
         print('        No matching FW for:')
-        print_dict(name, indent=3)
+        print_dict(name, indent=2)
     return fw_list
 
 
