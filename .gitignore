@@ -48,4 +48,5 @@ Thumbs.db
 
 # Submission scripts
 ###################
+update*.sh
 queue*.sh
