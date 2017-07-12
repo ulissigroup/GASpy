@@ -41,10 +41,6 @@ class UpdateAllDB(luigi.WrapperTask):
     Then, dump from the Auxiliary database to the Local adsorption energy database.
     Finally, re-request the adsorption energies to re-initialize relaxations & FW submissions.
     '''
-    # write_db is a boolean. If false, we only execute FingerprintRelaxedAdslabs, which
-    # submits calculations to Fireworks (if needed). If writeDB is true, then we still
-    # exectute FingerprintRelaxedAdslabs, but we also dump to the Local DB.
-    writeDB = luigi.BoolParameter(False)
     # max_processes is the maximum number of calculation sets to Dump If it's set to zero,
     # then there is no limit. This is used to limit the scope of a DB update for
     # debugging purposes.
@@ -111,13 +107,8 @@ class UpdateAllDB(luigi.WrapperTask):
                 # Flag for hitting max_dump
                 if i+1 == self.max_processes:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
-                # Dump to the local DB if we told Luigi to do so. We may do so by adding the
-                # `--writeDB` flag when calling Luigi. If we do not dump to the local DB, then
-                # we fingerprint the slab+adsorbate system
-                if self.writeDB:
-                    yield DumpToLocalDB(parameters)
-                else:
-                    yield FingerprintRelaxedAdslab(parameters)
+
+                yield DumpToLocalDB(parameters)
 
 
 class UpdateEnumerations(luigi.Task):
@@ -391,6 +382,16 @@ class DumpSurfacesToAuxDB(luigi.Task):
 class DumpToLocalDB(luigi.Task):
     ''' This class dumps the adsorption energies from our pickles to our Local energies DB '''
     parameters = luigi.DictParameter()
+    local_db = luigi.Parameter(LOCAL_DB_PATH+'adsorption_energy_database.db')
+
+    @property
+    def resources(self):
+        '''
+        Assign the `local_db` property to this task so that no more than one of these
+        tasks may execute at once. This prevents *.db corruption, especially when
+        running many of these tasks at once.
+        '''
+        return {self.local_db: 1}
 
     def requires(self):
         '''
