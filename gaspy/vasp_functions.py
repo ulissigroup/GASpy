@@ -110,38 +110,6 @@ def runVasp(fname_in,fname_out,vaspflags,npar=4):
 
     return str(atoms),open('all.traj','r').read().encode('hex'),finalimage.get_potential_energy()
 
-def runVaspASEOptimizer(fname_in,fname_out,vaspflags):
-    fname_in=str(fname_in)
-    fname_out=str(fname_out)
-
-    #read the input atoms object
-    atoms=read(str(fname_in))
-
-    #set ibrion=-1 and nsw=0
-    vaspflags['ibrion']=-1
-    vaspflags['nsw']=0
-
-    #update vasprc file to set mode to "run" to ensure that this runs immediately
-    Vasp.vasprc(mode='run')
-    #set ppn>1 so that it knows to do an mpi job, the actual ppn will guessed by Vasp module
-    Vasp.VASPRC['queue.ppn']=2
-    vaspflags['NPAR']=4
-    #set up the calculation and run
-    calc=Vasp('./',atoms=atoms,**vaspflags)
-    #calc.update()
-    #calc.read_results()
-
-    qn=QuasiNewton(atoms,logfile='relax.log',trajectory='relax.traj')
-    qn.run(fmax=vaspflags['ediffg'] if 'ediffg' in vaspflags else 0.05)
-
-    atoms.write(fname_out)
-
-    #Write a text file with the energy
-    with open('energy.out','w') as fhandle:
-        fhandle.write(str(atoms.get_potential_energy()))
-
-    return str(atoms),open('relax.traj','r').read().encode('hex'),atoms.get_potential_energy()
-
 
 def atoms_to_hex(atoms):
     '''
