@@ -215,15 +215,6 @@ def adsorption_parameters(adsorbate,
     except KeyError:
         pass
 
-    # If there are any constraints on the adsorbate, then set the number of
-    # ionic steps to 0, thereby allowing ASE to perform the relaxation instead of
-    # vasp (which can't handle constraints). Otherwise, 200 ionic steps sounds good
-    # enough.
-    if adsorbate.constraints:
-        nsw = 0
-    else:
-        nsw = 200
-
     return OrderedDict(numtosubmit=1,
                        min_xy=4.5,
                        relaxed=True,
