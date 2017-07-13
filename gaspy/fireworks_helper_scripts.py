@@ -1,10 +1,12 @@
 from collections import OrderedDict
 import getpass
 import numpy as np
-from fireworks import Firework, PyTask, LaunchPad
+from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 import ase.io
 from vasp import Vasp
 from utils import vasp_settings_to_str, print_dict
+import vasp_functions
+from vasp_functions import atoms_to_hex, hex_to_file
 
 
 def running_fireworks(name_dict, launchpad):
@@ -68,11 +70,20 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
 
     # Generate a string representation that we can pass to the job as input
     atom_hex = atoms_to_hex(atoms)
-    # Two steps - write the input structure to an input file, then relax that traj file
-    write_surface = PyTask(func='fireworks_helper_scripts.atoms_hex_to_file',
+    # Two steps - write the input file and python script to local directory,
+    # then relax that traj file
+
+    with open(vasp_functions.__file__) as fhandle:
+        vasp_functions_contents=fhandle.read()
+
+    write_python_file = FileWriteTask(files_to_write=[{'filename':'vasp_functions.py',
+							'contents': vasp_functions_contents}])
+
+    write_atoms_file =  PyTask(func='vasp_functions.hex_to_file',
                            args=['slab_in.traj',
                                  atom_hex])
-    opt_bulk = PyTask(func='vasp_scripts.runVasp',
+
+    opt_bulk = PyTask(func='vasp_functions.runVasp',
                       args=['slab_in.traj',
                             'slab_relaxed.traj',
                             vasp_setngs],
@@ -81,7 +92,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     # Package the tasks into a firework, the fireworks into a workflow,
     # and submit the workflow to the launchpad
     fw_name['user'] = getpass.getuser()
-    firework = Firework([write_surface, opt_bulk], name=fw_name)
+    firework = Firework([write_python_file, write_atoms_file, opt_bulk], name=fw_name)
     return firework
 
 
@@ -100,7 +111,7 @@ def get_firework_info(fw):
     "vasp_settings" [str] used to perform the relaxation
     '''
     atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
-    atoms_hex_to_file('atom_temp.traj', atomshex)
+    hex_to_file('atom_temp.traj', atomshex)
     atoms = ase.io.read('atom_temp.traj')
     starting_atoms = ase.io.read('atom_temp.traj', index=0)
     vasp_settings = fw.name['vasp_settings']
@@ -117,19 +128,3 @@ def get_firework_info(fw):
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
     return atoms, starting_atoms, atomshex, vasp_settings
-
-
-def atoms_to_hex(atoms):
-    atoms.write('temp.traj')
-    return open('temp.traj').read().encode('hex')
-
-
-def atoms_hex_to_file(fname_out, atomHex):
-    '''
-    This script is a simple script to write a hex string representation of a traj
-    file to a file so that it can be passed as input to vasp
-    '''
-    # Dump the hex encoded string to a local file
-    with open(fname_out, 'w') as fhandle:
-        fhandle.write(atomHex.decode('hex'))
-    #print(read(fname_out))
