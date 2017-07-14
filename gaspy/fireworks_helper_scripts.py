@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import uuid
 import getpass
 import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
@@ -77,16 +78,13 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
         vasp_functions_contents=fhandle.read()
 
     write_python_file = FileWriteTask(files_to_write=[{'filename':'vasp_functions.py',
-							'contents': vasp_functions_contents}])
+                                                       'contents': vasp_functions_contents}])
 
     write_atoms_file =  PyTask(func='vasp_functions.hex_to_file',
-                           args=['slab_in.traj',
-                                 atom_hex])
+                               args=['slab_in.traj', atom_hex])
 
     opt_bulk = PyTask(func='vasp_functions.runVasp',
-                      args=['slab_in.traj',
-                            'slab_relaxed.traj',
-                            vasp_setngs],
+                      args=['slab_in.traj', 'slab_relaxed.traj', vasp_setngs],
                       stored_data_varname='opt_results')
 
     # Package the tasks into a firework, the fireworks into a workflow,
@@ -110,11 +108,20 @@ def get_firework_info(fw):
     Given a Fireworks ID, this function will return the "atoms" [class] and
     "vasp_settings" [str] used to perform the relaxation
     '''
-    atomshex = fw.launches[-1].action.stored_data['opt_results'][1]
-    hex_to_file('atom_temp.traj', atomshex)
-    atoms = ase.io.read('atom_temp.traj')
-    starting_atoms = ase.io.read('atom_temp.traj', index=0)
+    # Pull the atoms objects from the firework. They are encoded, though
+    atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
     vasp_settings = fw.name['vasp_settings']
+
+    # To decode the atoms objects, we need to write them into files and then load
+    # them again. To prevent multiple tasks from writing/reading to the same file,
+    # we use uuid to create unique file names to write to/read from.
+    with stri(uuid.uuid4()) + '.traj' as fname:
+        with open(fname, 'w') as fhandle:
+            fhandle.write(atoms_hex.decode('hex'))
+            atoms = ase.io.read(fname)
+            starting_atoms = ase.io.read(fname, index=0)
+            os.remove(fname)    # Clean up
+
     # Guess the pseudotential version if it's not present
     if 'pp_version' not in vasp_settings:
         if 'arjuna' in fw.launches[-1].fworker.name:
@@ -127,4 +134,5 @@ def get_firework_info(fw):
         for key in settings:
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
+
     return atoms, starting_atoms, atomshex, vasp_settings

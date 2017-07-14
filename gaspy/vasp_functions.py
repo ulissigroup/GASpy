@@ -1,7 +1,9 @@
-from ase.io import read,write
+import os
+import uuid
+from ase.io import read, write
 from ase.io.trajectory import TrajectoryWriter
 from vasp import Vasp
-from ase.optimize import QuasiNewton,BFGS
+from ase.optimize import QuasiNewton, BFGS
 from vasp.vasprc import VASPRC
 import os
 import numpy as np
@@ -35,22 +37,22 @@ def runVasp(fname_in,fname_out,vaspflags,npar=4):
             vaspflags['NSIM']=8
             vaspflags['lreal']='Auto'
             vasp_cmd='vasp_gpu'
-            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y))
+            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y)
         else:
             #We're running CPU only
             vaspflags['NCORE']=4
             vaspflags['KPAR']=4
             print('we found arjuna cpu!')
-            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y))
+            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME']=='cori':
         #We're on cori
         if os.environ['CRAY_CPU_TARGET']=='haswell':
             #We're on a haswell CPU node
             NNODES=int(os.environ['SLURM_NNODES'])
             vaspflags['KPAR']=NNODES
-            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d %s'%(x,y))
+            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d %s'%(x,y)
         elif os.environ['CRAY_CPU_TARGET']=='knl':
-            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d -c8 --cpu_bind=cores %s'%(x*32,y))
+            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d -c8 --cpu_bind=cores %s'%(x*32,y)
             vaspflags['NCORE']=1
 
     #Set the pseudopotential type by setting 'xc' in Vasp() 
@@ -118,9 +120,19 @@ def runVasp(fname_in,fname_out,vaspflags,npar=4):
 def atoms_to_hex(atoms):
     '''
     Turn an atoms object into a hex string so that we can pass it through fireworks
+
+    Input:
+        atoms   The ase.Atoms object that you want to hex encode
     '''
-    atoms.write('temp.traj')
-    return open('temp.traj').read().encode('hex')
+    # We need to write the atoms object into a file before encoding it. But we don't
+    # want multiple calls to this function to interfere with each other, so we generate
+    # a random file name via uuid to reduce this risk. Then we delete it.
+    with stri(uuid.uuid4()) + '.traj' as fname:
+        atoms.write(fname)
+        with open(fname) as fhandle:
+            _hex = fhandle.read().encode('hex')
+            os.remove(fname)
+    return _hex
 
 
 def hex_to_file(fname_out, atomHex):
@@ -128,4 +140,3 @@ def hex_to_file(fname_out, atomHex):
     # Dump the hex encoded string to a local file
     with open(fname_out, 'w') as fhandle:
         fhandle.write(atomHex.decode('hex'))
-    #print(read(fname_out))
