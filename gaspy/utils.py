@@ -99,14 +99,17 @@ def ads_dict(adsorbate):
     return atoms
 
 
-def constrain_slab(atoms, n_atoms, z_cutoff=3.):
+def constrain_slab(atoms, n_ads_atoms, z_cutoff=3.):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
+    This function assumes that the indices of the adsorbate atoms come before the slab
+    atoms.
 
     Inputs:
-        atoms       ASE-atoms class of the slab to be constrained
-        n_atoms     number of slab atoms
-        z_cutoff    The threshold to see if other atoms are in the same plane as the highest atom
+        atoms       ASE-atoms class of the adsorbate + slab system
+        n_ads_atoms Number of adsorbate atoms
+        z_cutoff    The threshold to see if slab atoms are in the same plane as the
+                    highest atom in the slab
     '''
     # Initialize
     constraints = []        # This list will contain the various constraints we will impose
@@ -114,8 +117,8 @@ def constrain_slab(atoms, n_atoms, z_cutoff=3.):
     # Constrain atoms except for the top layer. To do this, we first pull some information out
     # of the atoms object.
     scaled_positions = atoms.get_scaled_positions() #
-    z_max = np.max([pos[2] for pos in scaled_positions[0:n_atoms]]) # Scaled height of highest atom
-    z_min = np.min([pos[2] for pos in scaled_positions[0:n_atoms]]) # Scaled height of lowest atom
+    z_max = np.max([pos[2] for pos in scaled_positions[n_ads_atoms:]]) # Scaled height of highest slab atom
+    z_min = np.min([pos[2] for pos in scaled_positions[n_ads_atoms:]]) # Scaled height of lowest slab atom
     # Add the constraint, which is a binary list (i.e., 1's & 0's) used to identify which atoms
     # to fix or not. The indices of the list correspond to the indices of the atoms in the "atoms".
     if atoms.cell[2, 2] > 0:

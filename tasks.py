@@ -1066,15 +1066,17 @@ class GenerateAdSlabs(luigi.Task):
             # Find the position of the marker/adsorbate and the number of slab atoms, which
             # we will use later
             ads_pos = slab[-1].position
-            num_slab_atoms = len(slab)
-            # Delete the marker on the slab, and then put the adsorbate onto it
+            num_ads_atoms = len(ads)
+            # Delete the marker on the slab, and then put the slab under the adsorbate.
+            # Note that we add the slab to the adsorbate in order to maintain any
+            # constraints that may be associated with the adsorbate (because ase only
+            # keeps the constraints of the first atoms object).
             del slab[-1]
             ads.translate(ads_pos)
-            adslab = slab + ads
-            # Set constraints and update the list of dictionaries with the correct atoms
-            # object adsorbate name
-            adslab.set_constraint()
-            adsorbate_config['atoms'] = utils.constrain_slab(adslab, num_slab_atoms)
+            adslab = ads + slab
+            # Set constraints for the slab and update the list of dictionaries with
+            # the correct atoms object adsorbate name
+            adsorbate_config['atoms'] = utils.constrain_slab(adslab, num_ads_atoms)
             adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
 
         # Save the generated list of adsorbate configurations to a pkl file
