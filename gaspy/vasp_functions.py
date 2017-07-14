@@ -35,18 +35,22 @@ def runVasp(fname_in,fname_out,vaspflags,npar=4):
             vaspflags['NSIM']=8
             vaspflags['lreal']='Auto'
             vasp_cmd='vasp_gpu'
+            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y))
         else:
             #We're running CPU only
             vaspflags['NCORE']=4
             vaspflags['KPAR']=4
             print('we found arjuna cpu!')
+            VASPRC['system.mpicall']=lambda x,y: 'mpirun -np %i %s'%(x,y))
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME']=='cori':
         #We're on cori
         if os.environ['CRAY_CPU_TARGET']=='haswell':
             #We're on a haswell CPU node
             NNODES=int(os.environ['SLURM_NNODES'])
             vaspflags['KPAR']=NNODES
+            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d %s'%(x,y))
         elif os.environ['CRAY_CPU_TARGET']=='knl':
+            VASPRC['system.mpicall']=lambda x,y: 'srun -n %d -c8 --cpu_bind=cores %s'%(x*32,y))
             vaspflags['NCORE']=1
 
     #Set the pseudopotential type by setting 'xc' in Vasp() 
