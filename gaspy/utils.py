@@ -220,7 +220,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
 
     # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
     # be used to find adsorption sites
-    vcf_surface = VoronoiCoordFinder(slab_struct)
+    vcf_surface = VoronoiCoordFinder(slab_struct,allow_pathological=True)
     vcf_bulk = VoronoiCoordFinder(bulk_struct)
 
     # Get the chemical formula
@@ -301,7 +301,7 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     asf = AdsorbateSiteFinder(slab_struct)
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
-    sites = asf.find_adsorption_sites()
+    sites = asf.find_adsorption_sites(z_oriented=True)
 
     return sites
 
