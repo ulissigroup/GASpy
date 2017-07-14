@@ -887,10 +887,10 @@ class GenerateSlabs(luigi.Task):
         for slab in slabs:
             # If this slab is the only one in the set with this miller index, then the shift
             # doesn't matter... so we set the shift as zero.
-            if len([a for a in slabs if a.miller_index == slab.miller_index]) == 1:
-                shift = 0
-            else:
-                shift = slab.shift
+            #if len([a for a in slabs if a.miller_index == slab.miller_index]) == 1:
+            #    shift = 0
+            #else:
+            shift = slab.shift
 
             # Create an atoms class for this particular slab, "atoms_slab"
             atoms_slab = AseAtomsAdaptor.get_atoms(slab)
@@ -1092,6 +1092,8 @@ class GenerateAdSlabs(luigi.Task):
             del slab[-1]
             ads.translate(ads_pos)
             adslab = ads + slab
+            adslab.cell=slab.cell
+            adslab.pbc=[True,True,True]
             # Set constraints for the slab and update the list of dictionaries with
             # the correct atoms object adsorbate name
             adsorbate_config['atoms'] = utils.constrain_slab(adslab, num_ads_atoms)
