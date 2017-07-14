@@ -24,6 +24,8 @@ from pymatgen.analysis.structure_analyzer import average_coordination_number
 from pymatgen.matproj.rest import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
+from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
+
 from fireworks import Workflow
 import luigi
 from vasp.mongo import mongo_doc, mongo_doc_atoms
@@ -529,6 +531,12 @@ class SubmitToFW(luigi.Task):
             for key in self.parameters['gas']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s'%key] = \
                         self.parameters['gas']['vasp_settings'][key]
+        elif self.calctype == 'bulk':
+            search_strings = {'type':'bulk',
+                              'fwname.mpid':self.parameters['bulk']['mpid']}
+            for key in self.parameters['bulk']['vasp_settings']:
+                search_strings['fwname.vasp_settings.%s'%key] = \
+                        self.parameters['bulk']['vasp_settings'][key]
         elif self.calctype == 'slab':
             search_strings = {'type': 'slab',
                               'fwname.miller': list(self.parameters['slab']['miller']),
@@ -539,12 +547,6 @@ class SubmitToFW(luigi.Task):
                 if key not in ['isym']:
                     search_strings['fwname.vasp_settings.%s'%key] = \
                             self.parameters['slab']['vasp_settings'][key]
-        elif self.calctype == 'bulk':
-            search_strings = {'type':'bulk',
-                              'fwname.mpid':self.parameters['bulk']['mpid']}
-            for key in self.parameters['bulk']['vasp_settings']:
-                search_strings['fwname.vasp_settings.%s'%key] = \
-                        self.parameters['bulk']['vasp_settings'][key]
         elif self.calctype == 'slab+adsorbate':
             search_strings = {'type':'slab+adsorbate',
                               'fwname.miller':list(self.parameters['slab']['miller']),
@@ -607,6 +609,16 @@ class SubmitToFW(luigi.Task):
             launchpad = fwhs.get_launchpad()
             tosubmit = []
 
+            # A way to append `tosubmit`, but specialized for gas relaxations
+            if self.calctype == 'gas':
+                name = {'vasp_settings':self.parameters['gas']['vasp_settings'],
+                        'gasname':self.parameters['gas']['gasname'],
+                        'calculation_type':'gas phase optimization'}
+                if len(fwhs.running_fireworks(name, launchpad)) == 0:
+                    atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
+                    tosubmit.append(fwhs.make_firework(atoms, name,
+                                                       self.parameters['gas']['vasp_settings']))
+
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
                 name = {'vasp_settings':self.parameters['bulk']['vasp_settings'],
@@ -617,16 +629,6 @@ class SubmitToFW(luigi.Task):
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        self.parameters['bulk']['vasp_settings'],
                                                        max_atoms=self.parameters['bulk']['max_atoms']))
-
-            # A way to append `tosubmit`, but specialized for gas relaxations
-            if self.calctype == 'gas':
-                name = {'vasp_settings':self.parameters['gas']['vasp_settings'],
-                        'gasname':self.parameters['gas']['gasname'],
-                        'calculation_type':'gas phase optimization'}
-                if len(fwhs.running_fireworks(name, launchpad)) == 0:
-                    atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
-                    tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['gas']['vasp_settings']))
 
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
@@ -684,6 +686,7 @@ class SubmitToFW(luigi.Task):
                 elif len(atomlist) == 1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
+                        'foo': bar,
                         'mpid':self.parameters['bulk']['mpid'],
                         'miller':self.parameters['slab']['miller'],
                         'top':self.parameters['slab']['top'],
@@ -866,8 +869,10 @@ class GenerateSlabs(luigi.Task):
 
     def run(self):
         # Preparation work with ASE and PyMatGen before we start creating the slabs
-        atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
-        structure = AseAtomsAdaptor.get_structure(atoms)
+        bulk_doc = pickle.load(self.input().open())[0]
+        bulk_fwid = bulk_doc['fwid']
+        bulk = mongo_doc_atoms(bulk_doc)
+        structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
         gen = SlabGenerator(structure,
@@ -900,6 +905,7 @@ class GenerateSlabs(luigi.Task):
                     'shift':shift,
                     'num_slab_atoms':len(atoms_slab),
                     'relaxed':False,
+                    'bulk_fwid': bulk_fwid,
                     'slab_generate_settings':self.parameters['slab']['slab_generate_settings'],
                     'get_slab_settings':self.parameters['slab']['get_slab_settings']}
             slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
@@ -975,29 +981,31 @@ class GenerateSiteMarkers(luigi.Task):
     def run(self):
         # Defire our marker, a uraniom Atoms object. Then pull out the slabs and bulk
         adsorbate = {'name':'U', 'atoms':Atoms('U')}
-        slabs = pickle.load(self.input()[0].open())
-        bulk = mongo_doc_atoms(pickle.load(self.input()[1].open())[0])
+        slab_docs = pickle.load(self.input()[0].open())
+        bulk_doc = pickle.load(self.input()[1].open())[0]
+        bulk = mongo_doc_atoms(bulk_doc)
 
         # Initialize `adslabs_to_save`, which will be a list containing marked slabs (i.e.,
         # adslabs) for us to save
         adslabs_to_save = []
-        for slab in slabs:
-            # "slab_atoms" [atoms class] is the first slab structure in Aux DB that corresponds
+        for slab_doc in slab_docs:
+            # "slab" [atoms class] is the first slab structure in Aux DB that corresponds
             # to the slab that we are looking at. Note that thise any possible repeats of the
             # slab in the database.
-            slab_atoms = mongo_doc_atoms(slab)
+            slab = mongo_doc_atoms(slab_doc)
+            slab_fwid = slab_doc['fwid']
 
             # Repeat the atoms in the slab to get a cell that is at least as large as the
             # "mix_xy" parameter we set above.
-            nx = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab_atoms.cell[0])))
-            ny = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab_atoms.cell[1])))
+            nx = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab.cell[0])))
+            ny = int(ceil(self.parameters['adsorption']['min_xy']/norm(slab.cell[1])))
             slabrepeat = (nx, ny, 1)
-            slab_atoms.info['adsorbate_info'] = ''
-            slab_atoms_repeat = slab_atoms.repeat(slabrepeat)
+            slab.info['adsorbate_info'] = ''
+            slab_repeat = slab.repeat(slabrepeat)
 
             # Find the adsorption sites. Then for each site we find, we create a dictionary
             # of tags to describe the site. Then we save the tags to our pickles.
-            sites = utils.find_adsorption_sites(slab_atoms, bulk)
+            sites = utils.find_adsorption_sites(slab, bulk)
             for site in sites:
                 # Populate the `tags` dictionary with various information
                 if 'unrelaxed' in self.parameters:
@@ -1015,6 +1023,7 @@ class GenerateSiteMarkers(luigi.Task):
                         'top':top,
                         'miller':miller,
                         'shift':shift,
+                        'slab_fwid':slab_fwid,
                         'relaxed':False}
                 # Then add the adsorbate marker on top of the slab. Note that we use a local,
                 # deep copy of the marker because the marker was created outside of this loop.
@@ -1022,7 +1031,7 @@ class GenerateSiteMarkers(luigi.Task):
                 # Move the adsorbate onto the adsorption site...
                 _adsorbate.translate(site)
                 # Put the adsorbate onto the slab and add the adslab system to the tags
-                adslab = slab_atoms_repeat.copy() + _adsorbate
+                adslab = slab_repeat.copy() + _adsorbate
                 tags['atoms'] = adslab
 
                 # Finally, add the information to list of things to save
@@ -1288,3 +1297,79 @@ class CalculateEnergy(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+
+
+class EnumerateAlloys(luigi.WrapperTask):
+    '''
+    This class is meant to be called by Luigi to begin relaxations of a database of alloys
+    '''
+    max_index = luigi.IntParameter(1)
+    xc = luigi.Parameter('rpbe')
+    def requires(self):
+        """
+        Luigi automatically runs the `requires` method whenever we tell it to execute a
+        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
+        `run`, and `output` methods), we put all of the "action" into the `requires`
+        method.
+        """
+        # Define some elements that we don't want alloys with (note no oxides for the moment)
+        all_elements = ['H', 'He', 'Li', 'Be', 'B', 'C',
+                        'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S',
+                        'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn',
+                        'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se',
+                        'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc',
+                        'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te',
+                        'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm',
+                        'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+                        'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au',
+                        'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra',
+                        'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk',
+                        'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
+                        'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
+
+        whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
+                     'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
+        whitelist = ['Pt']
+        whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
+                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
+                     'Fe', 'V', 'Si', 'Sn', 'Sb']
+        # whitelist=['Pd','Cu','Au','Ag']
+
+        restricted_elements = [el for el in all_elements if el not in whitelist]
+
+        # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
+        # restricted elements
+        with MPRester("MGOdX3P4nI18eKvE") as m:
+            results = m.query({"elements":{"$nin": restricted_elements},
+                               "e_above_hull":{"$lt":0.1},
+                               "formation_energy_per_atom":{"$lte":0.0}},
+                              ['pretty_formula',
+                               'formula',
+                               'spacegroup',
+                               'material id',
+                               'taskid',
+                               'task_id',
+                               'structure'],
+                              mp_decode=True)
+
+        # Define how to enumerate all of the facets for a given material
+        def processStruc(result):
+            struct = result['structure']
+            sga = SpacegroupAnalyzer(struct, symprec=0.1)
+            structure = sga.get_conventional_standard_structure()
+            miller_list = get_symmetrically_distinct_miller_indices(structure, self.max_index)
+            # pickle.dump(structure,open('./bulks/%s.pkl'%result['task_id'],'w'))
+            return map(lambda x: [result['task_id'], x], miller_list)
+
+        # Generate all facets for each material in parallel
+        all_miller = map(processStruc, results)
+
+        for facets in all_miller:
+            for facet in facets:
+                yield UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
+                                                                    bulk=defaults.bulk_parameters(facet[0]),
+                                                                    slab=defaults.slab_parameters(facet[1], True, 0),
+                                                                    gas=defaults.gas_parameters('CO'),
+                                                                    adsorption=defaults.adsorption_parameters('U',
+                                                                                                            "[  3.36   1.16  24.52]",
+                                                                                                            "(1, 1)", 24)))
