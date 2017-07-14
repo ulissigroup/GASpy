@@ -133,7 +133,7 @@ def constrain_slab(atoms, n_ads_atoms=0, z_cutoff=3.):
     return atoms
 
 
-def fingerprint_atoms(atoms, siteind):
+def fingerprint_atoms(atoms, num_slab_atoms):
     '''
     This function is used to fingerprint an atoms object, where the "fingerprint" is a dictionary
     of properties that we believe may be adsorption motifs.
@@ -145,16 +145,16 @@ def fingerprint_atoms(atoms, siteind):
     '''
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so
     # we can keep track of it in the coordination calculation
-    atoms = atoms[0:siteind+1]
-    atoms[-1].symbol = 'U'
+    del atoms[1:-num_slab_atoms]
+    atoms[0].symbol = 'U'
 
     # Turn the atoms into a pymatgen structure file
     struct = AseAtomsAdaptor.get_structure(atoms)
     # PyMatGen [vcf class] of our system
-    vcf = VoronoiCoordFinder(struct)
+    vcf = VoronoiCoordFinder(struct,allow_pathological=True)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms = vcf.get_coordinated_sites(siteind, 0.8)
+    coordinated_atoms = vcf.get_coordinated_sites(0, 0.8)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
     # Take out atoms that we assume are not part of the slab
@@ -183,7 +183,7 @@ def fingerprint_atoms(atoms, siteind):
 
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms_nextnearest = vcf.get_coordinated_sites(siteind, 0.2)
+    coordinated_atoms_nextnearest = vcf.get_coordinated_sites(0, 0.2)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string,
                                           coordinated_atoms_nextnearest)
@@ -301,8 +301,10 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     asf = AdsorbateSiteFinder(slab_struct)
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
-    sites = asf.find_adsorption_sites(z_oriented=True)
-
+    sitedict = asf.find_adsorption_sites(z_oriented=True)
+    sites=[]
+    for key in sitedict:
+        sites+=sitedict[key]
     return sites
 
 
