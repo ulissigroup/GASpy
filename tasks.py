@@ -870,7 +870,11 @@ class GenerateSlabs(luigi.Task):
     def run(self):
         # Preparation work with ASE and PyMatGen before we start creating the slabs
         bulk_doc = pickle.load(self.input().open())[0]
-        bulk_fwid = bulk_doc['fwid']
+        # Pull out the fwid of the relaxed bulk (if there is one)
+        if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
+            bulk_fwid = bulk_doc['fwid']
+        else:
+            bulk_fwid = None
         bulk = mongo_doc_atoms(bulk_doc)
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
@@ -993,7 +997,11 @@ class GenerateSiteMarkers(luigi.Task):
             # to the slab that we are looking at. Note that thise any possible repeats of the
             # slab in the database.
             slab = mongo_doc_atoms(slab_doc)
-            slab_fwid = slab_doc['fwid']
+            # Pull out the fwid of the relaxed slab (if there is one)
+            if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
+                slab_fwid = slab_doc['fwid']
+            else:
+                slab_fwid = None
 
             # Repeat the atoms in the slab to get a cell that is at least as large as the
             # "mix_xy" parameter we set above.
@@ -1330,9 +1338,9 @@ class EnumerateAlloys(luigi.WrapperTask):
         whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
                      'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
         whitelist = ['Pt']
-        whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
-                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
-                     'Fe', 'V', 'Si', 'Sn', 'Sb']
+        #whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
+        #             'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
+        #             'Fe', 'V', 'Si', 'Sn', 'Sb']
         # whitelist=['Pd','Cu','Au','Ag']
 
         restricted_elements = [el for el in all_elements if el not in whitelist]
