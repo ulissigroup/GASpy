@@ -208,19 +208,21 @@ def adsorption_parameters(adsorbate,
         settings = calc_settings(settings)
 
     # Use EAFP to figure out if the adsorbate that the user passed is in the
-    # dictionary of default adsorbates.
+    # dictionary of default adsorbates, or if the user supplied an atoms object
     try:
-        adsorbate = adsorbates_dict()[adsorbate]
-    except KeyError:
-        pass
+        atoms = adsorbates_dict()[adsorbate]
+        name = adsorbate
+    except TypeError:
+        atoms = adsorbate
+        name = adsorbate.get_chemical_formula()
 
     return OrderedDict(numtosubmit=1,
                        min_xy=4.5,
                        relaxed=True,
                        num_slab_atoms=num_slab_atoms,
                        slabrepeat=slabrepeat,
-                       adsorbates=[OrderedDict(name=adsorbate,
-                                               atoms=pickle.dumps(adsorbate.encode('hex')),
+                       adsorbates=[OrderedDict(name=name,
+                                               atoms=pickle.dumps(atoms.encode('hex')),
                                                adsorption_site=adsorption_site)],
                        vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=200,
