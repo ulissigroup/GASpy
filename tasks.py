@@ -1017,9 +1017,9 @@ class GenerateSiteMarkers(luigi.Task):
             for site in sites:
                 # Populate the `tags` dictionary with various information
                 if 'unrelaxed' in self.parameters:
-                    shift = slab['tags']['shift']
-                    top = slab['tags']['top']
-                    miller = slab['tags']['miller']
+                    shift = slab_doc['tags']['shift']
+                    top = slab_doc['tags']['top']
+                    miller = slab_doc['tags']['miller']
                 else:
                     shift = self.parameters['slab']['shift']
                     top = self.parameters['slab']['top']
