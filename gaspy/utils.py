@@ -111,8 +111,8 @@ def constrain_slab(atoms, n_ads_atoms, z_cutoff=3.):
         z_cutoff    The threshold to see if slab atoms are in the same plane as the
                     highest atom in the slab
     '''
-    # Initialize
-    constraints = []        # This list will contain the various constraints we will impose
+    # Pull out the constraints that may already be on our atoms object.
+    constraints = atoms.constraints 
 
     # Constrain atoms except for the top layer. To do this, we first pull some information out
     # of the atoms object.
@@ -128,7 +128,7 @@ def constrain_slab(atoms, n_ads_atoms, z_cutoff=3.):
         constraints.append(FixAtoms(mask=[pos[2] > z_min+(z_cutoff/np.linalg.norm(atoms.cell[2]))
                                           for pos in scaled_positions]))
 
-    # Enact the constraints on the local atoms class
+    # Enact the constraints on the local atoms instance
     atoms.set_constraint(constraints)
     return atoms
 
