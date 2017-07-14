@@ -99,7 +99,7 @@ def ads_dict(adsorbate):
     return atoms
 
 
-def constrain_slab(atoms, n_ads_atoms, z_cutoff=3.):
+def constrain_slab(atoms, n_ads_atoms=0, z_cutoff=3.):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
     This function assumes that the indices of the adsorbate atoms come before the slab

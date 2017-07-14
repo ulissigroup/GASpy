@@ -652,6 +652,7 @@ class SubmitToFW(luigi.Task):
                                           if float(np.round(slab['tags']['shift'], 2)) == \
                                              float(np.round(self.parameters['slab']['shift'], 2))
                                           and slab['tags']['top'] == self.parameters['slab']['top']]
+
                     #if len(atomlist_unrelaxed)==0:
                     #    pprint(slab_list_unrelaxed)
                     #    pprint('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
@@ -901,7 +902,7 @@ class GenerateSlabs(luigi.Task):
                     'relaxed':False,
                     'slab_generate_settings':self.parameters['slab']['slab_generate_settings'],
                     'get_slab_settings':self.parameters['slab']['get_slab_settings']}
-            slabdoc = mongo_doc(utils.constrain_slab(atoms_slab, len(atoms_slab)))
+            slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
             slabdoc['tags'] = tags
             slabsave.append(slabdoc)
 
@@ -923,7 +924,7 @@ class GenerateSlabs(luigi.Task):
                 atoms_slab.rotate('x', math.pi, rotate_cell=True)
 
                 # and if it is not in the database, then save it.
-                slabdoc = mongo_doc(utils.constrain_slab(atoms_slab, len(atoms_slab)))
+                slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
                 tags = {'type':'slab',
                         'top':not(top),
                         'mpid':self.parameters['bulk']['mpid'],
