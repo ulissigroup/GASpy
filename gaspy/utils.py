@@ -9,6 +9,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from vasp.mongo import MongoDatabase
+from defaults import _adsorbates_dict
 
 
 def print_dict(d, indent=0):
@@ -54,10 +55,11 @@ def vasp_settings_to_str(vasp_settings):
     '''
     This function is used in various scripts to convert a dictionary of vasp settings
     into a format that is acceptable by ase-db.
+
     Input:
         vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein
                                 may have a different type depending on the VASP setting.
-    Output
+    Output:
         vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein
                                 is either an int, float, boolean, or string.
     '''
@@ -77,13 +79,8 @@ def ads_dict(adsorbate):
     '''
     This is a helper function to take an adsorbate as a string (e.g. 'CO') and attempt to
     return an atoms object for it, primarily as a way to count the number of constitutent
-    atoms in the adsorbate. It also contains a skeleton for the user to manually add atoms
-    objects to "atom_dict".
+    atoms in the adsorbate.
     '''
-    # First, add the manually-added adsorbates to the atom_dict lookup variable. Note that
-    # 'H' is just an example. It won't actually be used here.
-    atom_dict = {'H': Atoms('H')}
-
     # Try to create an [atoms class] from the input.
     try:
         atoms = Atoms(adsorbate)
@@ -91,11 +88,11 @@ def ads_dict(adsorbate):
         pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
                % adsorbate)
 
-        # If that doesn't work, then look for the adsorbate in the "atom_dict" object
+        # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
-            atoms = atom_dict[adsorbate]
+            atoms = _adsorbates_dict()[adsorbate]
         except KeyError:
-            print('%s is not is GASpy dictionary. You need to construct it manually and add it to the ads_dict function in gaspy_toolbox.py' \
+            print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults' \
                   % adsorbate)
 
     # Return the atoms
@@ -105,10 +102,11 @@ def ads_dict(adsorbate):
 def constrain_slab(atoms, n_atoms, z_cutoff=3.):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
-    Inputs
-    atoms       ASE-atoms class of the slab to be constrained
-    n_atoms     number of slab atoms
-    z_cutoff    The threshold to see if other atoms are in the same plane as the highest atom
+
+    Inputs:
+        atoms       ASE-atoms class of the slab to be constrained
+        n_atoms     number of slab atoms
+        z_cutoff    The threshold to see if other atoms are in the same plane as the highest atom
     '''
     # Initialize
     constraints = []        # This list will contain the various constraints we will impose
@@ -136,9 +134,11 @@ def fingerprint_atoms(atoms, siteind):
     '''
     This function is used to fingerprint an atoms object, where the "fingerprint" is a dictionary
     of properties that we believe may be adsorption motifs.
-    atoms       atoms object to fingerprint
-    siteind     the position of the binding atom in the adsorbate (assumed to be the first atom
-                of the adsorbate)
+
+    Inputs:
+        atoms       atoms object to fingerprint
+        siteind     the position of the binding atom in the adsorbate (assumed to be the first atom
+                    of the adsorbate)
     '''
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so
     # we can keep track of it in the coordination calculation
@@ -284,6 +284,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
 def find_adsorption_sites(slabAtoms, bulkAtoms):
     '''
     This script/function calculates possible adsorption sites of a slab of atoms
+    
     Inputs:
         slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
         bulkAtoms   [atoms class]   The original bulk crystal structure of the slab

@@ -134,12 +134,11 @@ def slab_parameters(miller, top, shift, settings='beef-vdw'):
                                                      symmetrize=False))
 
 
-def _adsorbates():
+def adsorbates_dict():
     '''
-    This function is meant to be called by the `adsorption_parameters` function
-    in order to create a dictionary of ase.Atoms objects for each adsorbate. It
-    does not really need to be its own function, but we put it here for
-    organizational purposes.
+    This function is intended to be used to generate (and store) a library of adsorbates
+    in dictionary form, where the key is a string for the adsorbate and the value is an
+    ase Atoms object (with constraints, where applicable).
 
     When making new entries for this dictionary, we recommend "pointing"
     the adsorbate upwards in the z-direction.
@@ -211,7 +210,7 @@ def adsorption_parameters(adsorbate,
     # Use EAFP to figure out if the adsorbate that the user passed is in the
     # dictionary of default adsorbates.
     try:
-        adsorbate = _adsorbates()[adsorbate]
+        adsorbate = adsorbates_dict()[adsorbate]
     except KeyError:
         pass
 
@@ -224,7 +223,7 @@ def adsorption_parameters(adsorbate,
                                                atoms=pickle.dumps(adsorbate.encode('hex')),
                                                adsorption_site=adsorption_site)],
                        vasp_settings=OrderedDict(ibrion=2,
-                                                 nsw=nsw,
+                                                 nsw=200,
                                                  isif=0,
                                                  isym=0,
                                                  kpts=[4, 4, 1],
