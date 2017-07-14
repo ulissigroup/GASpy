@@ -136,7 +136,10 @@ def atoms_to_hex(atoms):
 
 
 def hex_to_file(fname_out, atomHex):
-    ''' Write a hex string into a file. One application is unpack hexed atoms objects '''
+    '''
+    Write a hex string into a file. One application is to unpack hexed atoms objects in
+    local fireworks job directories
+    '''
     # Dump the hex encoded string to a local file
     with open(fname_out, 'w') as fhandle:
         fhandle.write(atomHex.decode('hex'))
