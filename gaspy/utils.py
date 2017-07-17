@@ -145,6 +145,7 @@ def fingerprint_atoms(atoms, num_slab_atoms):
     '''
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so
     # we can keep track of it in the coordination calculation
+    atoms=atoms.copy()
     del atoms[1:-num_slab_atoms]
     atoms[0].symbol = 'U'
 
@@ -301,7 +302,7 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     asf = AdsorbateSiteFinder(slab_struct)
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
-    sitedict = asf.find_adsorption_sites(z_oriented=True)
+    sitedict = asf.find_adsorption_sites(z_oriented=True,put_inside=True)
     sites=[]
     for key in sitedict:
         sites+=sitedict[key]

@@ -120,13 +120,23 @@ class UpdateEnumerations(luigi.Task):
     for adsorption sites.
     '''
     parameters = luigi.DictParameter()
+    local_enum_db = luigi.Parameter(LOCAL_DB_PATH+'enumerated_adsorption_database.db')
 
     def requires(self):
         ''' Get the generated adsorbate configurations '''
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
+    @property
+    def resources(self):
+        '''
+        Assign the `local_db` property to this task so that no more than one of these
+        tasks may execute at once. This prevents *.db corruption, especially when
+        running many of these tasks at once.
+        '''
+        return {self.local_enum_db: 1}
+
     def run(self):
-        with connect(LOCAL_DB_PATH+'/enumerated_adsorption_sites.db') as con:
+        with connect(self.local_enum_db) as con:
             # Load the configurations
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
@@ -931,7 +941,11 @@ class GenerateSlabs(luigi.Task):
             # If the bottom is different, then...
             if not z_invertible:
                 # flip the slab upside down...
-                atoms_slab.rotate('x', math.pi, rotate_cell=True)
+                atoms_slab.wrap()
+                atoms_slab.rotate('x', math.pi, rotate_cell=True,center='COM')
+                if atoms_slab.cell[2][2]<0.:
+                    atoms_slab.cell[2]=-atoms_slab.cell[2]
+                atoms_slab.wrap()
 
                 # and if it is not in the database, then save it.
                 slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
@@ -1337,12 +1351,12 @@ class EnumerateAlloys(luigi.WrapperTask):
                         'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
                         'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
 
-        whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
+        #whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
                      'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
-        whitelist = ['Pt']
-        #whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
-        #             'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
-        #             'Fe', 'V', 'Si', 'Sn', 'Sb']
+        #whitelist = ['Pt','Ga']
+        whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
+                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
+                     'Fe', 'V', 'Si', 'Sn', 'Sb']
         # whitelist=['Pd','Cu','Au','Ag']
 
         restricted_elements = [el for el in all_elements if el not in whitelist]
