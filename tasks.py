@@ -1352,7 +1352,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                         'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
 
         #whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
-                     'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
+        #             'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
         #whitelist = ['Pt','Ga']
         whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
                      'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
