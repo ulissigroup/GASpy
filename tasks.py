@@ -167,9 +167,9 @@ class UpdateEnumerations(luigi.Task):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
 
 
-class DumpBulkGasToAuxDB(luigi.Task):
+class DumpToAuxDB(luigi.Task):
     '''
-    This class will load the results for bulk and slab relaxations from the Primary FireWorks
+    This class will load the results for the relaxations from the Primary FireWorks
     database into the Auxiliary vasp.mongo database.
     '''
 
@@ -182,12 +182,19 @@ class DumpBulkGasToAuxDB(luigi.Task):
             # A list of integers containing the Fireworks job ID numbers that have been
             # added to the database already
             fws = [a['fwid'] for a in aux_db.find({'fwid':{'$exists':True}})]
-
-            # Get all of the completed fireworks for unit cells and gases
+            # Get all of the completed fireworks. Note that we check to see if the shifts
+            # exists. This is because an old version of GASpy did not log the shifts; we
+            # don't want to use these.
             fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
                                           'name.calculation_type':'unit cell optimization'}) + \
                          lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'gas phase optimization'})
+                                          'name.calculation_type':'gas phase optimization'}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'slab optimization',
+                                          'name.shift': {'$exists': True}}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'slab+adsorbate optimization',
+                                          'name.shift': {'$exists': True}})
 
             # For each fireworks object, turn the results into a mongo doc
             for fwid in fws_cmpltd:
@@ -195,18 +202,20 @@ class DumpBulkGasToAuxDB(luigi.Task):
                     # Get the information from the class we just pulled from the launchpad
                     fw = lpad.get_fw_by_id(fwid)
                     atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
-
                     # Initialize the mongo document, doc, and the populate it with the fw info
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
                     doc['fwname'] = fw.name
                     doc['fwid'] = fwid
                     doc['directory'] = fw.launches[-1].launch_dir
-                    # fw.name['vasp_settings'] = vasp_settings
                     if fw.name['calculation_type'] == 'unit cell optimization':
                         doc['type'] = 'bulk'
                     elif fw.name['calculation_type'] == 'gas phase optimization':
                         doc['type'] = 'gas'
+                    elif fw.name['calculation_type'] == 'slab optimization':
+                        doc['type'] = 'slab'
+                    elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
+                        doc['type'] = 'slab+adsorbate'
                     # Convert the miller indices from strings to integers
                     if 'miller' in fw.name:
                         if isinstance(fw.name['miller'], str) \
@@ -218,174 +227,6 @@ class DumpBulkGasToAuxDB(luigi.Task):
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
                           % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
-
-
-class DumpSurfacesToAuxDB(luigi.Task):
-    '''
-    This class will load the results for surface relaxations from the Primary FireWorks
-    database into the Auxiliary vasp.mongo database.
-    '''
-
-    def requires(self):
-        lpad = fwhs.get_launchpad()
-
-        # A list of integers containing the Fireworks job ID numbers that have been
-        # added to the database already
-        with utils.get_aux_db() as aux_db:
-            fws = [a['fwid'] for a in aux_db.find({'fwid':{'$exists':True}})]
-
-        # Get all of the completed fireworks for slabs and slab+ads
-        fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
-                                      'name.calculation_type':'slab optimization'}) + \
-                     lpad.get_fw_ids({'state':'COMPLETED',
-                                      'name.calculation_type':'slab+adsorbate optimization'})
-
-        # Trouble-shooting code
-        #random.seed(42)
-        #random.shuffle(fws_cmpltd)
-        #fws_cmpltd=fws_cmpltd[-60:]
-        fws_cmpltd.reverse()
-
-        # `surfaces` will be a list of the different surfaces that we need to
-        # generate before we are able to dump them to the Auxiliary DB.
-        surfaces = []
-        # `to_dump` will be a list of lists. Each sublist contains information we need to dump
-        # a surface from the Primary DB to the Auxiliary DB
-        self.to_dump = []
-        self.missing_shift_to_dump = []
-
-        # For each fireworks object, turn the results into a mongo doc
-        for fwid in fws_cmpltd:
-            if fwid not in fws:
-                # Get the information from the class we just pulled from the launchpad
-                fw = lpad.get_fw_by_id(fwid)
-                atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
-                # Prepare to add VASP settings to the doc
-                keys = ['gga', 'encut', 'zab_vdw', 'lbeefens', 'luse_vdw', 'pp', 'pp_version']
-                settings = OrderedDict()
-                for key in keys:
-                    if key in vasp_settings:
-                        settings[key] = vasp_settings[key]
-                # Convert the miller indices from strings to integers
-                if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
-                    miller = eval(fw.name['miller'])
-                else:
-                    miller = fw.name['miller']
-                #print(fw.name['mpid'])
-
-                '''
-                This next paragraph of code (i.e., the lines until the next blank line)
-                addresses our old results that were saved without shift values. Here, we
-                re-create a surface so that we can guess what its shift is later on.
-                '''
-                # Create the surfaces
-                if 'shift' not in fw.name:
-                    surfaces.append(GenerateSlabs({'bulk': defaults.bulk_parameters(mpid=fw.name['mpid'],
-                                                                                    settings=settings),
-                                                   'slab': defaults.slab_parameters(miller=miller,
-                                                                                    top=True,
-                                                                                    shift=0.,
-                                                                                    settings=settings)}))
-                    self.missing_shift_to_dump.append([atoms, starting_atoms, trajectory,
-                                                       vasp_settings, fw, fwid])
-                else:
-
-                    # Pass the list of surfaces to dump to `self` so that it can be called by the
-                    #`run' method
-                    self.to_dump.append([atoms, starting_atoms, trajectory,
-                                         vasp_settings, fw, fwid])
-
-        # Establish that we need to create the surfaces before dumping them
-        return surfaces
-
-    def run(self):
-        selfinput = self.input()
-
-        # Create a class, "aux_db", that has methods to interact with the database.
-        with utils.get_aux_db() as aux_db:
-
-            # Start a counter for how many surfaces we will be guessing shifts for
-            n_missing_shift = 0
-
-            # Pull out the information for each surface that we put into to_dump
-            for atoms, starting_atoms, trajectory, vasp_settings, fw, fwid \
-                in self.missing_shift_to_dump + self.to_dump:
-                # Initialize the mongo document, doc, and the populate it with the fw info
-                doc = mongo_doc(atoms)
-                doc['initial_configuration'] = mongo_doc(starting_atoms)
-                doc['fwname'] = fw.name
-                doc['fwid'] = fwid
-                doc['directory'] = fw.launches[-1].launch_dir
-                if fw.name['calculation_type'] == 'slab optimization':
-                    doc['type'] = 'slab'
-                elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
-                    doc['type'] = 'slab+adsorbate'
-                # Convert the miller indices from strings to integers
-                if 'miller' in fw.name:
-                    if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
-                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
-
-                '''
-                This next paragraph of code (i.e., the lines until the next blank line)
-                addresses our old results that were saved without shift values. Here, we
-                guess what the shift is (based on information from the surface we created before
-                in the "requires" function) and declare it before saving it to the database.
-                '''
-                if 'shift' not in doc['fwname']:
-                    slab_list_unrelaxed = pickle.load(selfinput[n_missing_shift].open())
-                    n_missing_shift += 1
-                    atomlist_unrelaxed = [mongo_doc_atoms(slab)
-                                          for slab in slab_list_unrelaxed
-                                          if slab['tags']['top'] == fw.name['top']]
-                    if len(atomlist_unrelaxed) > 1:
-                        #pprint(atomlist_unrelaxed)
-                        #pprint(fw)
-                        # We use the average coordination as a descriptor of the structure,
-                        # there should be a pretty large change with different shifts
-                        def getCoord(x):
-                            return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
-                        # Get the coordination for the unrelaxed surface w/ correct shift
-                        if doc['type'] == 'slab':
-                            reference_coord = getCoord(starting_atoms)
-                        elif doc['type'] == 'slab+adsorbate':
-                            try:
-                                num_adsorbate_atoms = {'':0, 'OH':2, 'CO':2, 'C':1, 'H':1, 'O':1}[fw.name['adsorbate']]
-                            except KeyError:
-                                print("%s is not recognizable by GASpy's adsorbates dictionary. \
-                                      Please add it to `num_adsorbate_atoms` \
-                                      in `dump.SurfacesToAuxDB`" % fw.name['adsorbate'])
-                            if num_adsorbate_atoms > 0:
-                                starting_blank = starting_atoms[0:-num_adsorbate_atoms]
-                            else:
-                                starting_blank = starting_atoms
-                            reference_coord = getCoord(starting_blank)
-                        # Get the coordination for each unrelaxed surface
-                        unrelaxed_coord = map(getCoord, atomlist_unrelaxed)
-                        # We want to minimize the distance in these dictionaries
-                        def getDist(x, y):
-                            vals = []
-                            for key in x:
-                                vals.append(x[key]-y[key])
-                            return np.linalg.norm(vals)
-                        # Get the distances to the reference coordinations
-                        dist = map(lambda x: getDist(x, reference_coord), unrelaxed_coord)
-                        # Grab the atoms object that minimized this distance
-                        shift = slab_list_unrelaxed[np.argmin(dist)]['tags']['shift']
-                        doc['fwname']['shift'] = float(np.round(shift, 4))
-                        doc['fwname']['shift_guessed'] = True
-                    else:
-                        doc['fwname']['shift'] = 0
-                        doc['fwname']['shift_guessed'] = True
-
-                aux_db.write(doc)
-                print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
-                      % (doc['type'], fwid))
-                utils.print_dict(fw.name, indent=1)
-
-        # Touch the token to indicate that we've written to the database
-        with self.output().temporary_path() as self.temp_output_path:
-            with open(self.temp_output_path, 'w') as fhandle:
-                fhandle.write(' ')
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/DumpToAuxDB.token')
@@ -643,60 +484,9 @@ class SubmitToFW(luigi.Task):
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
                 slab_list = pickle.load(self.input()[0].open())
-                '''
-                An earlier version of GASpy did not correctly log the slab shift, and so many
-                of our calculations/results do no have shifts. If there is either zero or more
-                one shift value, then this next paragraph (i.e., all of the following code
-                before the next blank line) deals with it in a "hacky" way.
-                '''
-                atomlist = [mongo_doc_atoms(slab) for slab in slab_list
-                            if float(np.round(slab['tags']['shift'], 2)) == float(np.round(self.parameters['slab']['shift'], 2))
-                            and slab['tags']['top'] == self.parameters['slab']['top']]
-                if len(atomlist) > 1:
-                    print('We have more than one slab system with identical shifts:\n%s' \
-                          % self.input()[0].fn)
-                elif len(atomlist) == 0:
-                    # We couldn't find the desired shift value in the surfaces
-                    # generated for the relaxed bulk, so we need to try to find
-                    # it by comparison with the reference (unrelaxed) surfaces
-                    slab_list_unrelaxed = pickle.load(self.input()[1].open())
-                    atomlist_unrelaxed = [mongo_doc_atoms(slab) for slab in slab_list_unrelaxed
-                                          if float(np.round(slab['tags']['shift'], 2)) == \
-                                             float(np.round(self.parameters['slab']['shift'], 2))
-                                          and slab['tags']['top'] == self.parameters['slab']['top']]
-
-                    #if len(atomlist_unrelaxed)==0:
-                    #    pprint(slab_list_unrelaxed)
-                    #    pprint('desired shift: %1.4f'%float(np.round(self.parameters['slab']['shift'],2)))
-                    # we need all of the relaxed slabs in atoms form:
-                    all_relaxed_surfaces = [mongo_doc_atoms(slab) for slab in slab_list
-                                            if slab['tags']['top'] == self.parameters['slab']['top']]
-                    # We use the average coordination as a descriptor of the structure,
-                    # there should be a pretty large change with different shifts
-                    def getCoord(x):
-                        return average_coordination_number([AseAtomsAdaptor.get_structure(x)])
-                    # Get the coordination for the unrelaxed surface w/ correct shift
-                    reference_coord = getCoord(atomlist_unrelaxed[0])
-                    # get the coordination for each relaxed surface
-                    relaxed_coord = map(getCoord, all_relaxed_surfaces)
-                    # We want to minimize the distance in these dictionaries
-                    def getDist(x, y):
-                        vals = []
-                        for key in x:
-                            vals.append(x[key]-y[key])
-                        return np.linalg.norm(vals)
-                    # Get the distances to the reference coordinations
-                    dist = map(lambda x: getDist(x, reference_coord), relaxed_coord)
-                    # Grab the atoms object that minimized this distance
-                    atoms = all_relaxed_surfaces[np.argmin(dist)]
-                    print('Unable to find a slab with the correct shift, but found one with max \
-                          position difference of %1.4f!'%np.min(dist))
-
-                # If there is a shift value in the results, then continue as normal.
                 elif len(atomlist) == 1:
                     atoms = atomlist[0]
                 name = {'shift':self.parameters['slab']['shift'],
-                        'foo': bar,
                         'mpid':self.parameters['bulk']['mpid'],
                         'miller':self.parameters['slab']['miller'],
                         'top':self.parameters['slab']['top'],
