@@ -1,9 +1,6 @@
 [submodule "GASpy_regressions"]
 	path = GASpy_regressions
 	url = git@github.com:ktran9891/GASpy_regressions.git
-[submodule "GASpy_Sandbox"]
-	path = GASpy_Sandbox
-	url = git@github.com:ktran9891/GASpy_Sandbox.git
 [submodule "GASpy_predict"]
 	path = GASpy_predict
 	url = git@github.com:ktran9891/GASpy_predict.git
