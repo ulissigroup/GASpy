@@ -56,8 +56,7 @@ class UpdateAllDB(luigi.WrapperTask):
         '''
 
         # Dump from the Primary DB to the Aux DB
-        DumpBulkGasToAuxDB().run()
-        yield DumpSurfacesToAuxDB()
+        DumpToAuxDB().run()
 
         # Get every row in the Aux database
         rows = utils.get_aux_db().find({'type':'slab+adsorbate'})
@@ -429,6 +428,8 @@ class SubmitToFW(luigi.Task):
             if self.calctype == 'slab':
                 return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
+                        # We are also vaing the unrelaxed slabs just in case. We can delete if
+                        # we can find shifts successfully.
                         GenerateSlabs(OrderedDict(unrelaxed=True,
                                                   bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab']))]
@@ -483,9 +484,17 @@ class SubmitToFW(luigi.Task):
 
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
-                slab_list = pickle.load(self.input()[0].open())
-                elif len(atomlist) == 1:
-                    atoms = atomlist[0]
+                slab_docs = pickle.load(self.input()[0].open())
+                atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
+                              if float(np.round(slab['tags']['shift'], 2)) == \
+                                 float(np.round(self.parameters['slab']['shift'], 2))
+                              and slab['tags']['top'] == self.parameters['slab']['top']]
+                if len(atoms_list) > 0:
+                    raise Exception('We found more than one slab that matches the shift')
+                elif len(atoms_list) == 0:
+                    raise Exception('We did not find any slab that matches the shift')
+                elif len(atoms_list) == 1:
+                    atoms = atoms_list[0]
                 name = {'shift':self.parameters['slab']['shift'],
                         'mpid':self.parameters['bulk']['mpid'],
                         'miller':self.parameters['slab']['miller'],
