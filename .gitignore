@@ -47,8 +47,6 @@ Thumbs.db
 *.swp
 *~
 
-# Submission scripts
+# Sandboxing
 ###################
-update*.sh
-queue*.sh
 testing/
