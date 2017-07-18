@@ -30,6 +30,7 @@
 *.traj
 *.token
 *.db
+*.out
 
 # OS generated files #
 ######################
@@ -50,3 +51,4 @@ Thumbs.db
 ###################
 update*.sh
 queue*.sh
+testing/
