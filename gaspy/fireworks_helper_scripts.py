@@ -1,3 +1,4 @@
+import os
 from collections import OrderedDict
 import uuid
 import getpass
@@ -115,12 +116,12 @@ def get_firework_info(fw):
     # To decode the atoms objects, we need to write them into files and then load
     # them again. To prevent multiple tasks from writing/reading to the same file,
     # we use uuid to create unique file names to write to/read from.
-    with stri(uuid.uuid4()) + '.traj' as fname:
-        with open(fname, 'w') as fhandle:
-            fhandle.write(atoms_hex.decode('hex'))
-            atoms = ase.io.read(fname)
-            starting_atoms = ase.io.read(fname, index=0)
-            os.remove(fname)    # Clean up
+    fname = str(uuid.uuid4()) + '.traj'
+    with open(fname, 'w') as fhandle:
+        fhandle.write(atoms_hex.decode('hex'))
+    atoms = ase.io.read(fname)
+    starting_atoms = ase.io.read(fname, index=0)
+    os.remove(fname)    # Clean up
 
     # Guess the pseudotential version if it's not present
     if 'pp_version' not in vasp_settings:
@@ -135,4 +136,4 @@ def get_firework_info(fw):
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
 
-    return atoms, starting_atoms, atomshex, vasp_settings
+    return atoms, starting_atoms, atoms_hex, vasp_settings
