@@ -9,10 +9,10 @@
 #SBATCH --constraint=haswell
 
 module load python
-cd /global/project/projectdirs/m2755/GASpy/bash_scripts
+cd /global/project/projectdirs/m2755/GASpy/
 source activate /project/projectdirs/m2755/GASpy_conda/
 
-PYTHONPATH='..' luigi \
+PYTHONPATH='.' luigi \
     --module tasks EnumerateAlloys \
     --max-index 2 \
     --scheduler-host 128.55.144.133 \

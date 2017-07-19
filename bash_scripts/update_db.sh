@@ -9,13 +9,13 @@
 #SBATCH --constraint=haswell
 
 module load python
-cd /global/project/projectdirs/m2755/GASpy/bash_scripts
+cd /global/project/projectdirs/m2755/GASpy/
 source activate /project/projectdirs/m2755/GASpy_conda/
 
 rm /global/cscratch1/sd/zulissi/GASpy_DB/DumpToAuxDB.token
-PYTHONPATH='..' luigi \
+PYTHONPATH='.' luigi \
     --module tasks UpdateAllDB \
-    --max-processes 10\
+    --max-processes 1000 \
     --scheduler-host 128.55.144.133 \
     --workers=10 \
     --log-level=WARNING \
