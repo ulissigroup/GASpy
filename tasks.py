@@ -25,7 +25,6 @@ from pymatgen.matproj.rest import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
-
 from fireworks import Workflow
 import luigi
 from vasp.mongo import mongo_doc, mongo_doc_atoms
@@ -65,8 +64,9 @@ class UpdateAllDB(luigi.WrapperTask):
             fwids = [row.fwid for row in enrg_db.select()]
 
         # For each adsorbate/configuration, make a task to write the results to the output
-        # database
-        for i, row in enumerate(rows):
+        # database. We also start a counter, `i`, for how many tasks we've processed.
+        i = 0
+        for row in rows:
             # Break the loop if we reach the maxmimum number of processes
             if i+1 == self.max_processes:
                 break
@@ -105,8 +105,10 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                           adsorption_site=adsorption_site,
                                                                           settings=settings)}
 
-                # Flag for hitting max_dump
-                if i+1 == self.max_processes:
+                # Increment the number of processes we've executed
+                # and then flag for hitting max_dump
+                i += 1
+                if i >= self.max_processes:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
 
                 yield DumpToLocalDB(parameters)
