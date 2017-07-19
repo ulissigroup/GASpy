@@ -76,13 +76,13 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     # then relax that traj file
 
     with open(vasp_functions.__file__) as fhandle:
-        vasp_functions_contents=fhandle.read()
+        vasp_functions_contents = fhandle.read()
 
     write_python_file = FileWriteTask(files_to_write=[{'filename':'vasp_functions.py',
                                                        'contents': vasp_functions_contents}])
 
-    write_atoms_file =  PyTask(func='vasp_functions.hex_to_file',
-                               args=['slab_in.traj', atom_hex])
+    write_atoms_file = PyTask(func='vasp_functions.hex_to_file',
+                              args=['slab_in.traj', atom_hex])
 
     opt_bulk = PyTask(func='vasp_functions.runVasp',
                       args=['slab_in.traj', 'slab_relaxed.traj', vasp_setngs],

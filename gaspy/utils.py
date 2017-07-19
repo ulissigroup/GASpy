@@ -2,9 +2,6 @@ from pprint import pprint
 import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
-# TODO:  Update our version of PyMatGen. This version of the code uses a forked
-# PyMatGen with additional capabilities, but the master branch of PyMatGen has since been
-# updated. We should start using it.
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
@@ -112,7 +109,7 @@ def constrain_slab(atoms, n_ads_atoms=0, z_cutoff=3.):
                     highest atom in the slab
     '''
     # Pull out the constraints that may already be on our atoms object.
-    constraints = atoms.constraints 
+    constraints = atoms.constraints
 
     # Constrain atoms except for the top layer. To do this, we first pull some information out
     # of the atoms object.
@@ -145,14 +142,14 @@ def fingerprint_atoms(atoms, num_slab_atoms):
     '''
     # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so
     # we can keep track of it in the coordination calculation
-    atoms=atoms.copy()
+    atoms = atoms.copy()
     del atoms[1:-num_slab_atoms]
     atoms[0].symbol = 'U'
 
     # Turn the atoms into a pymatgen structure file
     struct = AseAtomsAdaptor.get_structure(atoms)
     # PyMatGen [vcf class] of our system
-    vcf = VoronoiCoordFinder(struct,allow_pathological=True)
+    vcf = VoronoiCoordFinder(struct, allow_pathological=True)
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
     coordinated_atoms = vcf.get_coordinated_sites(0, 0.8)
@@ -221,7 +218,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
 
     # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
     # be used to find adsorption sites
-    vcf_surface = VoronoiCoordFinder(slab_struct,allow_pathological=True)
+    vcf_surface = VoronoiCoordFinder(slab_struct, allow_pathological=True)
     vcf_bulk = VoronoiCoordFinder(bulk_struct)
 
     # Get the chemical formula
@@ -288,7 +285,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
 def find_adsorption_sites(slabAtoms, bulkAtoms):
     '''
     This script/function calculates possible adsorption sites of a slab of atoms
-    
+
     Inputs:
         slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
         bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
@@ -302,10 +299,10 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     asf = AdsorbateSiteFinder(slab_struct)
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
-    sitedict = asf.find_adsorption_sites(z_oriented=True,put_inside=True)
-    sites=[]
+    sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
+    sites = []
     for key in sitedict:
-        sites+=sitedict[key]
+        sites += sitedict[key]
     return sites
 
 

@@ -743,9 +743,9 @@ class GenerateSlabs(luigi.Task):
             if not z_invertible:
                 # flip the slab upside down...
                 atoms_slab.wrap()
-                atoms_slab.rotate('x', math.pi, rotate_cell=True,center='COM')
-                if atoms_slab.cell[2][2]<0.:
-                    atoms_slab.cell[2]=-atoms_slab.cell[2]
+                atoms_slab.rotate('x', math.pi, rotate_cell=True, center='COM')
+                if atoms_slab.cell[2][2] < 0.:
+                    atoms_slab.cell[2] = -atoms_slab.cell[2]
                 atoms_slab.wrap()
 
                 # and if it is not in the database, then save it.
@@ -907,8 +907,8 @@ class GenerateAdSlabs(luigi.Task):
             del slab[-1]
             ads.translate(ads_pos)
             adslab = ads + slab
-            adslab.cell=slab.cell
-            adslab.pbc=[True,True,True]
+            adslab.cell = slab.cell
+            adslab.pbc = [True, True, True]
             # Set constraints for the slab and update the list of dictionaries with
             # the correct atoms object adsorbate name
             adsorbate_config['atoms'] = utils.constrain_slab(adslab, num_ads_atoms)
@@ -1192,9 +1192,9 @@ class EnumerateAlloys(luigi.WrapperTask):
         for facets in all_miller:
             for facet in facets:
                 yield UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                    bulk=defaults.bulk_parameters(facet[0]),
-                                                                    slab=defaults.slab_parameters(facet[1], True, 0),
-                                                                    gas=defaults.gas_parameters('CO'),
-                                                                    adsorption=defaults.adsorption_parameters('U',
-                                                                                                            "[  3.36   1.16  24.52]",
-                                                                                                            "(1, 1)", 24)))
+                                                                bulk=defaults.bulk_parameters(facet[0]),
+                                                                slab=defaults.slab_parameters(facet[1], True, 0),
+                                                                gas=defaults.gas_parameters('CO'),
+                                                                adsorption=defaults.adsorption_parameters('U',
+                                                                                                          '[3.36 1.16 24.52]',
+                                                                                                          '(1, 1)', 24)))

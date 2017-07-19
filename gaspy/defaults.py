@@ -108,7 +108,7 @@ def slab_parameters(miller, top, shift, settings='beef-vdw'):
     # the `settings` argument is a string.
     if isinstance(settings, str):
         settings = calc_settings(settings)
-    
+
     return OrderedDict(miller=miller,
                        top=top,
                        max_miller=2,
