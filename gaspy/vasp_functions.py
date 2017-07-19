@@ -127,11 +127,11 @@ def atoms_to_hex(atoms):
     # We need to write the atoms object into a file before encoding it. But we don't
     # want multiple calls to this function to interfere with each other, so we generate
     # a random file name via uuid to reduce this risk. Then we delete it.
-    with stri(uuid.uuid4()) + '.traj' as fname:
-        atoms.write(fname)
-        with open(fname) as fhandle:
-            _hex = fhandle.read().encode('hex')
-            os.remove(fname)
+    fname = str(uuid.uuid4()) + '.traj'
+    atoms.write(fname)
+    with open(fname) as fhandle:
+        _hex = fhandle.read().encode('hex')
+        os.remove(fname)
     return _hex
 
 
