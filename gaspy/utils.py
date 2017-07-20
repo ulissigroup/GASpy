@@ -96,28 +96,40 @@ def ads_dict(adsorbate):
     return atoms
 
 
-def constrain_slab(atoms, n_ads_atoms=0, z_cutoff=3.):
+def constrain_slab(atoms, z_cutoff=3.):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
-    This function assumes that the indices of the adsorbate atoms come before the slab
-    atoms.
 
     Inputs:
-        atoms       ASE-atoms class of the adsorbate + slab system
-        n_ads_atoms Number of adsorbate atoms
+        atoms       ASE-atoms class of the adsorbate + slab system. The tags of these
+                    atoms must be set such that any slab atom is tagged with `0`, and
+                    any adsorbate atom is tagged with a positive integer.
         z_cutoff    The threshold to see if slab atoms are in the same plane as the
                     highest atom in the slab
     '''
     # Pull out the constraints that may already be on our atoms object.
     constraints = atoms.constraints
-
-    # Constrain atoms except for the top layer. To do this, we first pull some information out
-    # of the atoms object.
+    # For reasons you'll see later, we need to find the number of slab atoms. We do that
+    # here by initializing a slab object and deleting any adsorbates, which we identify
+    # via their non-zero tags.
+    slab = atoms.copy()
+    tags = slab.get_tags()
+    slab.set_constraint()      # ASE doesn't like to delete atoms with constraints, so clear them
+    # `atoms_range` is a list of atom indices for `atoms`. We initialize it because
+    # we need to iterate through it in reverse order to maintain proper indexing.
+    atoms_range = range(1, len(slab))
+    atoms_range.reverse()
+    # Delete the adsorbates so that we can count the number of slab atoms
+    for i in atoms_range:
+        if tags[i]:
+            del slab[i]
+    n_slab_atoms = len(slab)
+    # Find the scaled height of the highest and lowest slab atoms.
     scaled_positions = atoms.get_scaled_positions() #
-    z_max = np.max([pos[2] for pos in scaled_positions[n_ads_atoms:]]) # Scaled height of highest slab atom
-    z_min = np.min([pos[2] for pos in scaled_positions[n_ads_atoms:]]) # Scaled height of lowest slab atom
-    # Add the constraint, which is a binary list (i.e., 1's & 0's) used to identify which atoms
-    # to fix or not. The indices of the list correspond to the indices of the atoms in the "atoms".
+    z_max = np.max([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
+    z_min = np.min([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
+
+    # Use the scaled heights to fix any atoms below the surfaces of the slab
     if atoms.cell[2, 2] > 0:
         constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/np.linalg.norm(atoms.cell[2]))
                                           for pos in scaled_positions]))
@@ -130,34 +142,54 @@ def constrain_slab(atoms, n_ads_atoms=0, z_cutoff=3.):
     return atoms
 
 
-def fingerprint_atoms(atoms, num_slab_atoms):
+def fingerprint_atoms(atoms):
     '''
-    This function is used to fingerprint an atoms object, where the "fingerprint" is a dictionary
-    of properties that we believe may be adsorption motifs.
+    This function is used to fingerprint an adslabs atoms object, where the "fingerprint" is a
+    dictionary of properties that we believe may be adsorption motifs.
 
     Inputs:
-        atoms       atoms object to fingerprint
-        siteind     the position of the binding atom in the adsorbate (assumed to be the first atom
-                    of the adsorbate)
+        atoms   Atoms object to fingerprint. The slab atoms must be tagged with 0 and
+                adsorbate atoms must be tagged with non-zero integers. This function also
+                assumes that the first atom in each adsorbate is the binding atom (e.g.,
+                of all atoms with tag==1, the first atom is the binding; the same goes for
+                tag==2 and tag==3 etc.).
     '''
-    # Delete the adsorbate except for the binding atom, then turn it into a uranium atom so
-    # we can keep track of it in the coordination calculation
-    atoms = atoms.copy()
-    del atoms[1:-num_slab_atoms]
-    atoms[0].symbol = 'U'
+    # We'll be deleting and adding atoms to `atoms`. But ASE doesn't like deleting atoms
+    # with constraints on them, so we get rid of the constraints.
+    atoms.set_constraint()
+    # We define atom tags as the adsorbate number. If the tag is 0, then the atom is part
+    # of the slab. Specifically:  `tags` is a list of the tags for each atom in `atoms`.
+    tags = atoms.get_tags()
+    # Initialize `binding_positions`, which is a dict of the cartesian binding position of
+    # each adsorbate. The keys to this dictionary are the tag integers for each adsorbate.
+    binding_positions = dict.fromkeys(tags)
+    del binding_positions[0]
+    # `atoms_range` is a list of atom indices for `atoms`. We initialize it because
+    # we need to iterate through it in reverse order to maintain proper indexing.
+    atoms_range = range(0, len(atoms))
+    atoms_range.reverse()
 
-    # Turn the atoms into a pymatgen structure file
+    # Delete the adsorbates while simultaneously storing the position of the binding atom.
+    for i in atoms_range:
+        if tags[i]:
+            # Note that we are continuously overwrite the binding positions. The last
+            # entry/write # corresponds to the position of the "first" atom for each adsorbate,
+            # thus the requirement described in this function's docstring.
+            binding_positions[tags[i]] = atoms.get_positions()[i]
+            del atoms[i]
+    # Add Uranium atoms at each of the binding sites so that we can use them for fingerprinting.
+    for tag in binding_positions:
+        atoms += Atoms('U', positions=[binding_positions[tag]])
+
+    # Turn the atoms into a pymatgen structure object so that we can use the VCF to find
+    # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
-    # PyMatGen [vcf class] of our system
     vcf = VoronoiCoordFinder(struct, allow_pathological=True)
-    # [list] of PyMatGen [periodic site class]es for each of the atoms that are
-    # coordinated with the adsorbate
     coordinated_atoms = vcf.get_coordinated_sites(0, 0.8)
-    # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
+    # Create a list of symbols of the coordinations, remove uranium from the list, and
+    # then turn the list into a single, human-readable string.
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
-    # Take out atoms that we assume are not part of the slab
     coordinated_symbols = [a for a in coordinated_symbols if a not in ['U']]
-    # Turn the [list] of [unicode] values into a single [unicode]
     coordination = '-'.join(sorted(coordinated_symbols))
 
     # Make a [list] of human-readable coordination sites [unicode] for all of the slab atoms

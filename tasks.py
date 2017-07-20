@@ -909,9 +909,13 @@ class GenerateAdSlabs(luigi.Task):
             adslab = ads + slab
             adslab.cell = slab.cell
             adslab.pbc = [True, True, True]
+            # We set the tags of slab atoms to 0, and set the tags of the adsorbate to 1.
+            # In future version of GASpy, we intend to set the tags of co-adsorbates
+            # to 2, 3, 4... etc (per co-adsorbate)
+            adslab.set_tags(([1]*len(ads)).extend([0]*len(slab)))
             # Set constraints for the slab and update the list of dictionaries with
-            # the correct atoms object adsorbate name
-            adsorbate_config['atoms'] = utils.constrain_slab(adslab, num_ads_atoms)
+            # the correct atoms object adsorbate name.
+            adsorbate_config['atoms'] = utils.constrain_slab(adslab)
             adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
 
         # Save the generated list of adsorbate configurations to a pkl file
@@ -939,8 +943,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         # Here, we take the adsorbate off the slab+ads system
         param = copy.deepcopy(self.parameters)
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
-                                                         atoms=pickle.dumps(Atoms('')).
-                                                         encode('hex'))]
+                                                         atoms=pickle.dumps(Atoms('')).encode('hex'))]
         return [CalculateEnergy(self.parameters),
                 SubmitToFW(parameters=param,
                            calctype='slab+adsorbate')]
@@ -949,24 +952,23 @@ class FingerprintRelaxedAdslab(luigi.Task):
         ''' We fingerprint the slab+adsorbate system both before and after relaxation. '''
         # Load the atoms objects for the lowest-energy slab+adsorbate (adslab) system and the
         # blank slab (slab)
-        adslab = pickle.load(self.input()[0].open())
+        calc_e_dict = pickle.load(self.input()[0].open())
         slab = pickle.load(self.input()[1].open())
 
         # The atoms object for the adslab prior to relaxation
-        adslab0 = mongo_doc_atoms(adslab['slab+ads']['initial_configuration'])
+        adslab0 = mongo_doc_atoms(calc_e_dict['slab+ads']['initial_configuration'])
         # The number of atoms in the slab also happens to be the index for the first atom
         # of the adsorbate (in the adslab system)
         slab_natoms = slab[0]['atoms']['natoms']
-        ads_ind = slab_natoms
 
         # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
-        if slab_natoms == len(adslab['atoms']):
+        if slab_natoms == len(calc_e_dict['atoms']):
             fp_final = {}
             fp_init = {}
         else:
             # Calculate fingerprints for the initial and final state
-            fp_final = utils.fingerprint_atoms(adslab['atoms'], ads_ind)
-            fp_init = utils.fingerprint_atoms(adslab0, ads_ind)
+            fp_final = utils.fingerprint_atoms(calc_e_dict['atoms'])
+            fp_init = utils.fingerprint_atoms(adslab0)
 
         # Save the the fingerprints of the final and initial state as a list in a pickle file
         with self.output().temporary_path() as self.temp_output_path:
@@ -1011,7 +1013,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             if adslab['adsorbate'] == '':
                 fp = {}
             else:
-                fp = utils.fingerprint_atoms(adslab['atoms'], expected_slab_atoms)
+                fp = utils.fingerprint_atoms(adslab['atoms'])
             # Add the fingerprints to the dictionary
             for key in fp:
                 adslab[key] = fp[key]
