@@ -7,6 +7,7 @@ import os
 import sys
 import copy
 import math
+from datetime import datetime
 from math import ceil
 from collections import OrderedDict
 import cPickle as pickle
@@ -203,6 +204,22 @@ class DumpToAuxDB(luigi.Task):
                     # Get the information from the class we just pulled from the launchpad
                     fw = lpad.get_fw_by_id(fwid)
                     atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
+
+                    # In an older version of GASpy, we did not use tags to identify
+                    # whether an atom was part of the slab or an adsorbate. Here, we
+                    # add the tags back in.
+                    if (fw.created_on < datetime(2017, 7, 20)
+                            and fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+                        # In this old version, the adsorbates were added onto the slab.
+                        # Thus, the slab atoms came before the adsorbate atoms in
+                        # the indexing. We use this information to create the tags list.
+                        n_ads_atoms = len(fw.name['adsorbate'])
+                        n_slab_atoms = len(atoms) - n_ads_atoms
+                        tags = ([0]*n_slab_atoms).extend([1]*n_ads_atoms)
+                        # Now set the tags for the atoms
+                        atoms.set_tags(tags)
+                        starting_atoms.set_tags(tags)
+
                     # Initialize the mongo document, doc, and the populate it with the fw info
                     doc = mongo_doc(atoms)
                     doc['initial_configuration'] = mongo_doc(starting_atoms)
@@ -217,12 +234,12 @@ class DumpToAuxDB(luigi.Task):
                         doc['type'] = 'slab'
                     elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                         doc['type'] = 'slab+adsorbate'
+
                     # Convert the miller indices from strings to integers
                     if 'miller' in fw.name:
                         if isinstance(fw.name['miller'], str) \
                         or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
-
                     # Write the doc onto the Auxiliary database
                     aux_db.write(doc)
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
@@ -601,9 +618,9 @@ class SubmitToFW(luigi.Task):
                     # Add the firework if it's not already running
                     if len(fwhs.running_fireworks(name, launchpad)) == 0:
                         tosubmit.append(fwhs.make_firework(atoms, name,
-                                                      self.parameters['adsorption']['vasp_settings'],
-                                                      max_atoms=self.parameters['bulk']['max_atoms'],
-                                                      max_miller=self.parameters['slab']['max_miller']))
+                                                           self.parameters['adsorption']['vasp_settings'],
+                                                           max_atoms=self.parameters['bulk']['max_atoms'],
+                                                           max_miller=self.parameters['slab']['max_miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
                     # number of submissions to our maximum.
                     tosubmit = [a for a in tosubmit if a is not None]
@@ -896,10 +913,8 @@ class GenerateAdSlabs(luigi.Task):
             # Load the atoms object for the slab and adsorbate
             slab = adsorbate_config['atoms']
             ads = pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex'))
-            # Find the position of the marker/adsorbate and the number of slab atoms, which
-            # we will use later
+            # Find the position of the marker/adsorbate and the number of slab atoms
             ads_pos = slab[-1].position
-            num_ads_atoms = len(ads)
             # Delete the marker on the slab, and then put the slab under the adsorbate.
             # Note that we add the slab to the adsorbate in order to maintain any
             # constraints that may be associated with the adsorbate (because ase only
