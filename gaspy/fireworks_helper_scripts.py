@@ -6,9 +6,9 @@ import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 import ase.io
 from vasp import Vasp
-from utils import vasp_settings_to_str, print_dict
-import vasp_functions
-from vasp_functions import atoms_to_hex, hex_to_file
+from .utils import vasp_settings_to_str, print_dict
+from . import vasp_functions
+from .vasp_functions import atoms_to_hex, hex_to_file
 
 
 def running_fireworks(name_dict, launchpad):
@@ -74,9 +74,9 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     atom_hex = atoms_to_hex(atoms)
     # Two steps - write the input file and python script to local directory,
     # then relax that traj file
-    vasp_filename=vasp_functions.__file__
-    if vasp_filename.split('.')[-1]=='pyc':
-        vasp_filename=vasp_filename[:-3]+'py'
+    vasp_filename = vasp_functions.__file__
+    if vasp_filename.split('.')[-1] == 'pyc':
+        vasp_filename = vasp_filename[:-3] + 'py'
 
     with open(vasp_filename) as fhandle:
         vasp_functions_contents = fhandle.read()

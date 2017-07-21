@@ -6,7 +6,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from vasp.mongo import MongoDatabase
-from defaults import adsorbates_dict
+from .defaults import adsorbates_dict
 
 
 def print_dict(d, indent=0):
