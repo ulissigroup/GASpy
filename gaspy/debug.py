@@ -17,9 +17,9 @@ class AuxPull(object):
     the Aux DB and then return it to the user in different forms (depending on the method
     used).
 
-    Note that a recurring theme in these methods is to return a list of objects if the
-    filter returns many matches, or return a single object in the filter returns only
-    one match.
+    Note that a recurring theme in these methods is to have pairs of methods to return singular
+    objects and multiple objects (e.g., mdocs and mdoc). The plural ones return lists, while
+    the singular ones return single objects.
     '''
     def __init__(self, **kwargs):
         '''
@@ -38,23 +38,23 @@ class AuxPull(object):
         if not self.n:
             print('DBPull fail:  no matching rows in Aux DB')
 
+    def mdoc(self):
+        ''' Return the mongo document for the first matchin entry '''
+        return self.docs[0]
     def mdocs(self):
-        ''' Return the mongo document(s) for the matching entries '''
-        if self.n == 1:
-            return self.docs[0]
-        elif self.n > 1:
-            return self.docs
+        ''' Return the mongo documents for all matching entries '''
+        return self.docs
 
     def atoms(self):
-        ''' Return the ase.Atoms object(s) for the matching entries '''
-        if self.n == 1:
-            return mongo_doc_atoms(self.docs[0])
-        elif self.n > 1:
-            return [mongo_doc_atoms(doc) for doc in self.docs]
+        ''' Return the atoms object for the first matchin entry '''
+        return mongo_doc_atoms(self.docs[0])
+    def atomss(self):
+        ''' Return the atoms objects for all matching entries '''
+        return [mongo_doc_atoms(doc) for doc in self.docs]
 
     def fw(self):
-        ''' Return the fw object(s) for the matching entries '''
-        if self.n == 1:
-            return self.lpad.get_fw_by_id(self.docs[0]['fwid'])
-        elif self.n > 1:
-            return [self.lpad.get_fw_by_id(doc['fwid']) for doc in self.docs]
+        ''' Return the fw object for the first matchin entry '''
+        return self.lpad.get_fw_by_id(self.docs[0]['fwid'])
+    def fws(self):
+        ''' Return the fw objects for all matching entries '''
+        return [self.lpad.get_fw_by_id(doc['fwid']) for doc in self.docs]
