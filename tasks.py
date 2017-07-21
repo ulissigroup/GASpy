@@ -209,13 +209,14 @@ class DumpToAuxDB(luigi.Task):
                     # whether an atom was part of the slab or an adsorbate. Here, we
                     # add the tags back in.
                     if (fw.created_on < datetime(2017, 7, 20)
-                            and fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+                        and fw.name['calculation_type'] == 'slab+adsorbate optimization'):
                         # In this old version, the adsorbates were added onto the slab.
                         # Thus, the slab atoms came before the adsorbate atoms in
                         # the indexing. We use this information to create the tags list.
                         n_ads_atoms = len(fw.name['adsorbate'])
                         n_slab_atoms = len(atoms) - n_ads_atoms
-                        tags = ([0]*n_slab_atoms).extend([1]*n_ads_atoms)
+                        tags = [0]*n_slab_atoms
+                        tags.extend([1]*n_ads_atoms)
                         # Now set the tags for the atoms
                         atoms.set_tags(tags)
                         starting_atoms.set_tags(tags)
@@ -927,7 +928,9 @@ class GenerateAdSlabs(luigi.Task):
             # We set the tags of slab atoms to 0, and set the tags of the adsorbate to 1.
             # In future version of GASpy, we intend to set the tags of co-adsorbates
             # to 2, 3, 4... etc (per co-adsorbate)
-            adslab.set_tags(([1]*len(ads)).extend([0]*len(slab)))
+            tags = [1]*len(ads)
+            tags.extend([0]*len(slab))
+            adslab.set_tags(tags)
             # Set constraints for the slab and update the list of dictionaries with
             # the correct atoms object adsorbate name.
             adsorbate_config['atoms'] = utils.constrain_slab(adslab)

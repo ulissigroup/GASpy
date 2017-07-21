@@ -154,6 +154,9 @@ def fingerprint_atoms(atoms):
                 of all atoms with tag==1, the first atom is the binding; the same goes for
                 tag==2 and tag==3 etc.).
     '''
+    # We need to make a local copy of the atoms so that when we start manipulating it here,
+    # the changes do not propagate.
+    atoms = atoms.copy()
     # We'll be deleting and adding atoms to `atoms`. But ASE doesn't like deleting atoms
     # with constraints on them, so we get rid of the constraints.
     atoms.set_constraint()
@@ -185,7 +188,7 @@ def fingerprint_atoms(atoms):
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
     vcf = VoronoiCoordFinder(struct, allow_pathological=True)
-    coordinated_atoms = vcf.get_coordinated_sites(0, 0.8)
+    coordinated_atoms = vcf.get_coordinated_sites(len(atoms)-1, 0.8)
     # Create a list of symbols of the coordinations, remove uranium from the list, and
     # then turn the list into a single, human-readable string.
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
