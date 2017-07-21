@@ -32,7 +32,7 @@ class AuxPull(object):
         '''
         self.lpad = fwhs.get_launchpad()
         self.docs = utils.get_aux_db().find(kwargs)
-        self.n = docs.count()
+        self.n = self.docs.count()
 
         # If there are no matches, tell the user.
         if not self.n:
