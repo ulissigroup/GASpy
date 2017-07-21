@@ -336,19 +336,19 @@ class DumpToLocalDB(luigi.Task):
             ads_end = num_adsorbate_atoms
 
         # Get just the slab atoms of the initial and final state
-        slab_atoms_final = best_sys[slab_start:slab_end]
-        slab_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
+        slab_final = best_sys[slab_start:slab_end]
+        slab_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
         # Calculate the distances for each atom
-        distances = slab_atoms_final.positions - slab_atoms_initial.positions
+        distances = slab_final.positions - slab_initial.positions
         # Reduce the distances in case atoms wrapped around (the minimum image convention)
-        dist, Dlen = find_mic(distances, slab_atoms_final.cell, slab_atoms_final.pbc)
+        dist, Dlen = find_mic(distances, slab_final.cell, slab_final.pbc)
         # Calculate the max movement of the surface atoms
         max_surface_movement = np.max(Dlen)
         # Repeat the procedure, but for adsorbates
-        adsorbate_atoms_final = best_sys[ads_start:ads_end]
-        adsorbate_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
-        distances = adsorbate_atoms_final.positions - adsorbate_atoms_initial.positions
-        dist, Dlen = find_mic(distances, slab_atoms_final.cell, slab_atoms_final.pbc)
+        adsorbate_final = best_sys[ads_start:ads_end]
+        adsorbate_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
+        distances = adsorbate_final.positions - adsorbate_initial.positions
+        dist, Dlen = find_mic(distances, slab_final.cell, slab_final.pbc)
         max_adsorbate_movement = np.max(Dlen)
 
         # Make a dictionary of tags to add to the database
