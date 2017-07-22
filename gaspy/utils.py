@@ -96,6 +96,46 @@ def ads_dict(adsorbate):
     return atoms
 
 
+def remove_adsorbate(adslab):
+    '''
+    This sub-function removes adsorbates from an adslab.
+
+    Input:
+        adslab  The ase.Atoms object of the adslab. The adsorbate atom(s) must be tagged
+                with non-zero integers, while the slab atoms must be tagged with zeroes.
+    Outputs:
+        slab                The ase.Atoms object of the bare slab. It will not have any
+                            constraints of the input `atoms`.
+        binding_positions   A dictionary whose keys are the tags of the adsorbates and whose
+                            values are the cartesian coordinates of the binding site.
+    '''
+    # We need to make a local copy of the atoms so that when we start manipulating it here,
+    # the changes do not propagate.
+    slab = adslab.copy()
+    # ASE doesn't like deleting atoms with constraints on them, so we get rid of them.
+    slab.set_constraint()
+    # Pull out the tags so we know what to delete
+    tags = slab.get_tags()
+    # Initialize `binding_positions`. We delete the "zero" tag because that's for slabs.
+    binding_positions = dict.fromkeys(tags)
+    del binding_positions[0]
+    # `atoms_range` is a list of atom indices for `slab`. We initialize it because
+    # we need to reverse it before iterating through (to maintain proper indexing).
+    atoms_range = range(0, len(slab))
+    atoms_range.reverse()
+
+    # Delete the adsorbates while simultaneously storing the position of the binding atom.
+    for i in atoms_range:
+        if tags[i]:
+            # Note that we are continuously overwrite the binding positions. The last
+            # entry/write # corresponds to the position of the "first" atom for each adsorbate,
+            # thus the requirement described in this function's docstring.
+            binding_positions[tags[i]] = slab.get_positions()[i]
+            del slab[i]
+
+    return slab, binding_positions
+
+
 def constrain_slab(atoms, z_cutoff=3.):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
@@ -107,38 +147,32 @@ def constrain_slab(atoms, z_cutoff=3.):
         z_cutoff    The threshold to see if slab atoms are in the same plane as the
                     highest atom in the slab
     '''
-    # Pull out the constraints that may already be on our atoms object.
-    constraints = atoms.constraints
-    # For reasons you'll see later, we need to find the number of slab atoms. We do that
-    # here by initializing a slab object and deleting any adsorbates, which we identify
-    # via their non-zero tags.
-    slab = atoms.copy()
-    tags = slab.get_tags()
-    slab.set_constraint()      # ASE doesn't like to delete atoms with constraints, so clear them
-    # `atoms_range` is a list of atom indices for `atoms`. We initialize it because
-    # we need to iterate through it in reverse order to maintain proper indexing.
-    atoms_range = range(1, len(slab))
-    atoms_range.reverse()
-    # Delete the adsorbates so that we can count the number of slab atoms
-    for i in atoms_range:
-        if tags[i]:
-            del slab[i]
+    # Remove the adsorbate so that we can find the number of slab atoms
+    slab, binding_positions = remove_adsorbate(atoms)
     n_slab_atoms = len(slab)
+
     # Find the scaled height of the highest and lowest slab atoms.
-    scaled_positions = atoms.get_scaled_positions() #
-    z_max = np.max([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
-    z_min = np.min([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
+    scaled_positions = atoms.get_scaled_positions()
+    # In an old version of GASpy, we added the adsorbate to the slab instead of adding
+    # the slab to the adsorbate. These conditionals determine if the adslab is old or
+    # not and processes it accordingly.
+    if atoms[0].tag:
+        z_max = np.max([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
+        z_min = np.min([pos[2] for pos in scaled_positions[-n_slab_atoms:]])
+    else:
+        z_max = np.max([pos[2] for pos in scaled_positions[:n_slab_atoms]])
+        z_min = np.min([pos[2] for pos in scaled_positions[:n_slab_atoms]])
 
     # Use the scaled heights to fix any atoms below the surfaces of the slab
+    constraints = atoms.constraints
     if atoms.cell[2, 2] > 0:
         constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/np.linalg.norm(atoms.cell[2]))
                                           for pos in scaled_positions]))
     else:
         constraints.append(FixAtoms(mask=[pos[2] > z_min+(z_cutoff/np.linalg.norm(atoms.cell[2]))
                                           for pos in scaled_positions]))
-
-    # Enact the constraints on the local atoms instance
     atoms.set_constraint(constraints)
+
     return atoms
 
 
@@ -154,32 +188,8 @@ def fingerprint_atoms(atoms):
                 of all atoms with tag==1, the first atom is the binding; the same goes for
                 tag==2 and tag==3 etc.).
     '''
-    # We need to make a local copy of the atoms so that when we start manipulating it here,
-    # the changes do not propagate.
-    atoms = atoms.copy()
-    # We'll be deleting and adding atoms to `atoms`. But ASE doesn't like deleting atoms
-    # with constraints on them, so we get rid of the constraints.
-    atoms.set_constraint()
-    # We define atom tags as the adsorbate number. If the tag is 0, then the atom is part
-    # of the slab. Specifically:  `tags` is a list of the tags for each atom in `atoms`.
-    tags = atoms.get_tags()
-    # Initialize `binding_positions`, which is a dict of the cartesian binding position of
-    # each adsorbate. The keys to this dictionary are the tag integers for each adsorbate.
-    binding_positions = dict.fromkeys(tags)
-    del binding_positions[0]
-    # `atoms_range` is a list of atom indices for `atoms`. We initialize it because
-    # we need to iterate through it in reverse order to maintain proper indexing.
-    atoms_range = range(0, len(atoms))
-    atoms_range.reverse()
-
-    # Delete the adsorbates while simultaneously storing the position of the binding atom.
-    for i in atoms_range:
-        if tags[i]:
-            # Note that we are continuously overwrite the binding positions. The last
-            # entry/write # corresponds to the position of the "first" atom for each adsorbate,
-            # thus the requirement described in this function's docstring.
-            binding_positions[tags[i]] = atoms.get_positions()[i]
-            del atoms[i]
+    # Remove the adsorbate(s) while finding the binding position(s)
+    slab, binding_positions = remove_adsorbate(atoms)
     # Add Uranium atoms at each of the binding sites so that we can use them for fingerprinting.
     for tag in binding_positions:
         atoms += Atoms('U', positions=[binding_positions[tag]])
