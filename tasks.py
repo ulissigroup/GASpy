@@ -317,9 +317,27 @@ class DumpToLocalDB(luigi.Task):
         '''
         # First, calculate the number of adsorbate atoms
         num_adsorbate_atoms = len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
+        
+        # An earlier version of GASpy added the adsorbate to the slab instead of the slab to the
+        # adsorbate. Thus, the indexing for the slabs change. Here, we deal with that.
+        lpad = fwhs.get_launchpad()
+        fw = lpad.get_fw_by_id(best_sys_pkl['slab+ads']['fwid'])
+        # *_start and *_end are the list indices to use when trying to pull out the * from
+        # the adslab atoms.
+        if fw.created_on < datetime(2017, 7, 20):
+            slab_start = None
+            slab_end = -num_adsorbate_atoms
+            ads_start = -num_adsorbate_atoms
+            ads_end = None
+        else:
+            slab_start = num_adsorbate_atoms
+            slab_end = None
+            ads_start = None
+            ads_end = num_adsorbate_atoms
+
         # Get just the slab atoms of the initial and final state
-        slab_atoms_final = best_sys[0:-num_adsorbate_atoms]
-        slab_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[0:-num_adsorbate_atoms]
+        slab_atoms_final = best_sys[slab_start:slab_end]
+        slab_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
         # Calculate the distances for each atom
         distances = slab_atoms_final.positions - slab_atoms_initial.positions
         # Reduce the distances in case atoms wrapped around (the minimum image convention)
@@ -327,9 +345,8 @@ class DumpToLocalDB(luigi.Task):
         # Calculate the max movement of the surface atoms
         max_surface_movement = np.max(Dlen)
         # Repeat the procedure, but for adsorbates
-        # get just the slab atoms of the initial and final state
-        adsorbate_atoms_final = best_sys[-num_adsorbate_atoms:]
-        adsorbate_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[-num_adsorbate_atoms:]
+        adsorbate_atoms_final = best_sys[ads_start:ads_end]
+        adsorbate_atoms_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
         distances = adsorbate_atoms_final.positions - adsorbate_atoms_initial.positions
         dist, Dlen = find_mic(distances, slab_atoms_final.cell, slab_atoms_final.pbc)
         max_adsorbate_movement = np.max(Dlen)
@@ -1098,6 +1115,7 @@ class CalculateEnergy(luigi.Task):
         slab_blank = pickle.load(inputs[1].open())
         lowest_energy_blank = np.argmin(map(lambda x: mongo_doc_atoms(x).get_potential_energy(), slab_blank))
         slab_blank_energy = np.min(map(lambda x: mongo_doc_atoms(x).get_potential_energy(), slab_blank))
+        # TODO: Add a filter for surface rearrangement of bare slab
 
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H':gasEnergies['H2']/2.,
