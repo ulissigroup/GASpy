@@ -349,12 +349,3 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     for key in sitedict:
         sites += sitedict[key]
     return sites
-
-
-# TODO:  This is not currently used. If it stays that way long enough, we should get rid of it.
-def calculate_top(atoms, num_adsorbate_atoms=0):
-    ''' We use this function to determine which side is the "top" side '''
-    if num_adsorbate_atoms > 0:
-        atoms = atoms[0:-num_adsorbate_atoms]
-    zpos = atoms.positions[:, 2]
-    return np.sum((zpos-zpos.mean())*atoms.get_masses()) > 0
