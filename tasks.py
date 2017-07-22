@@ -1107,14 +1107,14 @@ class CalculateEnergy(luigi.Task):
         gasEnergies['H2O'] = mongo_doc_atoms(pickle.load(inputs[4].open())[0]).get_potential_energy()
 
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
-        slab_ads = pickle.load(inputs[0].open())
-        lowest_energy_slab = np.argmin(map(lambda x: mongo_doc_atoms(x).get_potential_energy(), slab_ads))
-        slab_ads_energy = mongo_doc_atoms(slab_ads[lowest_energy_slab]).get_potential_energy()
+        adslab_docs = pickle.load(inputs[0].open())
+        lowest_energy_adslab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), adslab_docs))
+        adslab_energy = mongo_doc_atoms(adslab_docs[lowest_energy_adslab]).get_potential_energy()
 
         # Load the slab relaxed structures, and take the lowest energy one
-        slab_blank = pickle.load(inputs[1].open())
-        lowest_energy_blank = np.argmin(map(lambda x: mongo_doc_atoms(x).get_potential_energy(), slab_blank))
-        slab_blank_energy = np.min(map(lambda x: mongo_doc_atoms(x).get_potential_energy(), slab_blank))
+        slab_docs = pickle.load(inputs[1].open())
+        lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
+        slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
         # TODO: Add a filter for surface rearrangement of bare slab
 
         # Get the per-atom energies as a linear combination of the basis set
@@ -1129,10 +1129,10 @@ class CalculateEnergy(luigi.Task):
                                      utils.ads_dict(ads['name']).get_chemical_symbols()))
 
         # Calculate the adsorption energy
-        dE = slab_ads_energy - slab_blank_energy - gas_energy
+        dE = adslab_energy - slab_energy - gas_energy
 
         # Make an atoms object with a single-point calculator that contains the potential energy
-        adjusted_atoms = mongo_doc_atoms(slab_ads[lowest_energy_slab])
+        adjusted_atoms = mongo_doc_atoms(adslab_docs[lowest_energy_adslab])
         adjusted_atoms.set_calculator(SinglePointCalculator(adjusted_atoms,
                                                             forces=adjusted_atoms.get_forces(),
                                                             energy=dE))
@@ -1140,8 +1140,8 @@ class CalculateEnergy(luigi.Task):
         # Write a dictionary with the results and the entries that were used for the calculations
         # so that fwid/etc for each can be recorded
         towrite = {'atoms':adjusted_atoms,
-                   'slab+ads':slab_ads[lowest_energy_slab],
-                   'slab':slab_blank[lowest_energy_blank],
+                   'slab+ads':adslab_docs[lowest_energy_adslab],
+                   'slab':slab_docs[lowest_energy_slab],
                    'gas':{'CO':pickle.load(inputs[2].open())[0],
                           'H2':pickle.load(inputs[3].open())[0],
                           'H2O':pickle.load(inputs[4].open())[0]}}
