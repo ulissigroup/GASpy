@@ -72,14 +72,14 @@ def check_atoms(fwids):
         for fwid in fwids:
             atom_puller = AuxPull(fwid=fwid)
             atoms = atom_puller.atoms()
-            print('Looking at %s' % atoms.get_chemical_formula)
+            print('Looking at %s' % atoms.get_chemical_formula())
             print('Energy:  %s eV' % atoms.get_potential_energy())
             print('Forces:\n%s' % atoms.get_forces())
             view(atoms)
     except TypeError:
         atom_puller = AuxPull(fwid=fwids)
         atoms = atom_puller.atoms()
-        print('Looking at %s' % atoms.get_chemical_formula)
+        print('Looking at %s' % atoms.get_chemical_formula())
         print('Energy:  %s eV' % atoms.get_potential_energy())
         print('Forces:\n%s' % atoms.get_forces())
         view(atoms)
