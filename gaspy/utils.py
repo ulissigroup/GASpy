@@ -2,6 +2,7 @@ from pprint import pprint
 import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
+from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
@@ -189,7 +190,7 @@ def fingerprint_atoms(atoms):
                 tag==2 and tag==3 etc.).
     '''
     # Remove the adsorbate(s) while finding the binding position(s)
-    slab, binding_positions = remove_adsorbate(atoms)
+    atoms, binding_positions = remove_adsorbate(atoms)
     # Add Uranium atoms at each of the binding sites so that we can use them for fingerprinting.
     for tag in binding_positions:
         atoms += Atoms('U', positions=[binding_positions[tag]])
@@ -349,3 +350,21 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     for key in sitedict:
         sites += sitedict[key]
     return sites
+
+
+def find_max_movement(atoms_initial, atoms_final):
+    '''
+    Given ase.Atoms objects, find the furthest distance that any single atom in a set of
+    atoms traveled (in Angstroms)
+
+    Inputs:
+        initial_atoms   ase.Atoms objects in their initial state
+        final_atoms     ase.Atoms objects in their final state
+    '''
+    # Calculate the distances for each atom
+    distances = atoms_final.positions - atoms_initial.positions
+
+    # Reduce the distances in case atoms wrapped around (the minimum image convention)
+    dist, Dlen = find_mic(distances, atoms_final.cell, atoms_final.pbc)
+
+    return np.max(Dlen)

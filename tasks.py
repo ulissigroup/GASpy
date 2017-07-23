@@ -17,7 +17,6 @@ from ase.db import connect
 sys.path.append('..')
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
-from ase.geometry import find_mic
 from ase.build import rotate
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -317,7 +316,7 @@ class DumpToLocalDB(luigi.Task):
         '''
         # First, calculate the number of adsorbate atoms
         num_adsorbate_atoms = len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
-        
+
         # An earlier version of GASpy added the adsorbate to the slab instead of the slab to the
         # adsorbate. Thus, the indexing for the slabs change. Here, we deal with that.
         lpad = fwhs.get_launchpad()
@@ -334,22 +333,14 @@ class DumpToLocalDB(luigi.Task):
             slab_end = None
             ads_start = None
             ads_end = num_adsorbate_atoms
-
         # Get just the slab atoms of the initial and final state
-        slab_final = best_sys[slab_start:slab_end]
         slab_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
-        # Calculate the distances for each atom
-        distances = slab_final.positions - slab_initial.positions
-        # Reduce the distances in case atoms wrapped around (the minimum image convention)
-        dist, Dlen = find_mic(distances, slab_final.cell, slab_final.pbc)
-        # Calculate the max movement of the surface atoms
-        max_surface_movement = np.max(Dlen)
+        slab_final = best_sys[slab_start:slab_end]
+        max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
         # Repeat the procedure, but for adsorbates
-        adsorbate_final = best_sys[ads_start:ads_end]
         adsorbate_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
-        distances = adsorbate_final.positions - adsorbate_initial.positions
-        dist, Dlen = find_mic(distances, slab_final.cell, slab_final.pbc)
-        max_adsorbate_movement = np.max(Dlen)
+        adsorbate_final = best_sys[ads_start:ads_end]
+        max_adsorbate_movement = utils.find_max_movement(adsorbate_initial, adsorbate_final)
 
         # Make a dictionary of tags to add to the database
         criteria = {'type':'slab+adsorbate',
@@ -1105,17 +1096,25 @@ class CalculateEnergy(luigi.Task):
         gasEnergies['CO'] = mongo_doc_atoms(pickle.load(inputs[2].open())[0]).get_potential_energy()
         gasEnergies['H2'] = mongo_doc_atoms(pickle.load(inputs[3].open())[0]).get_potential_energy()
         gasEnergies['H2O'] = mongo_doc_atoms(pickle.load(inputs[4].open())[0]).get_potential_energy()
-
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
         adslab_docs = pickle.load(inputs[0].open())
         lowest_energy_adslab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), adslab_docs))
         adslab_energy = mongo_doc_atoms(adslab_docs[lowest_energy_adslab]).get_potential_energy()
-
         # Load the slab relaxed structures, and take the lowest energy one
         slab_docs = pickle.load(inputs[1].open())
         lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
         slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
-        # TODO: Add a filter for surface rearrangement of bare slab
+
+        # Calculate the max movement of the slab
+        slab_initial = mongo_doc_atoms(slab_docs[lowest_energy_slab]['initial_configuration'])
+        slab_final = mongo_doc_atoms(slab_docs[lowest_energy_slab])
+        max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
+        # Raise an exception if it moved too much
+        move_limit = 1.5
+        if max_surface_movement > move_limit:
+            fwid = slab_docs[lowest_energy_slab]['fwid']
+            raise Exception('A bare slab broke the %.2f angstrom movement limit (fwid %s)' \
+                            % (move_limit, fwid))
 
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H':gasEnergies['H2']/2.,
