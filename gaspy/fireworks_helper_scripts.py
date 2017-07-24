@@ -41,9 +41,6 @@ def running_fireworks(name_dict, launchpad):
         if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
             fw_list.append(fwid)
     # Return the matching fireworks
-    if len(fw_list) == 0:
-        print('        No matching FW for:')
-        print_dict(name, indent=3)
     return fw_list
 
 

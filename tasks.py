@@ -644,8 +644,8 @@ class SubmitToFW(luigi.Task):
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
                 print('Just submitted the following Fireworks:')
-                for i, submit in enumerate(tosubmit):
-                    utils.print_dict(submit, indent=1)
+                for fw in tosubmit:
+                    utils.print_dict(fw.name, indent=1)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
