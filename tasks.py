@@ -108,7 +108,7 @@ class UpdateAllDB(luigi.WrapperTask):
                 # Increment the number of processes we've executed
                 # and then flag for hitting max_dump
                 i += 1
-                if i >= self.max_processes:
+                if (i >= self.max_processes and self.max_processes != 0):
                     print('Reached the maximum number of processes, %s' % self.max_processes)
 
                 yield DumpToLocalDB(parameters)
