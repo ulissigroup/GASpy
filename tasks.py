@@ -575,7 +575,7 @@ class SubmitToFW(luigi.Task):
             if self.calctype == 'slab':
                 slab_docs = pickle.load(self.input()[0].open())
                 atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
-                              if float(np.round(slab['tags']['shift'], 2)) == \
+                              if float(np.round(slab_doc['tags']['shift'], 2)) == \
                                  float(np.round(self.parameters['slab']['shift'], 2))
                               and slab['tags']['top'] == self.parameters['slab']['top']]
                 if len(atoms_list) > 0:
