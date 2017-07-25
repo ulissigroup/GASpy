@@ -197,7 +197,8 @@ class DumpToAuxDB(luigi.Task):
                                           'name.calculation_type':'slab+adsorbate optimization',
                                           'name.shift': {'$exists': True}})
 
-            # For each fireworks object, turn the results into a mongo doc
+            # For each fireworks object, turn the results into a mongo doc so that we can
+            # dump the mongo doc into the Aux DB.
             for fwid in fws_cmpltd:
                 if fwid not in fws:
                     # Get the information from the class we just pulled from the launchpad
@@ -245,9 +246,64 @@ class DumpToAuxDB(luigi.Task):
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
                           % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
+                    # And while we're at it, dump the traj files, too
+                    yield DumpFWToTraj(fwid=fwid)
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/DumpToAuxDB.token')
+
+
+# TODO: Delete this task before rebuilding the Local DB
+class DumpToTraj(luigi.WrapperTask):
+    '''
+    This class will load the results for the relaxations from the Primary FireWorks
+    database into the Auxiliary vasp.mongo database.
+    '''
+
+    def requires(self):
+        lpad = fwhs.get_launchpad()
+
+        # Create a class, "con", that has methods to interact with the database.
+        with utils.get_aux_db() as aux_db:
+
+            # Get all of the completed fireworks. Note that we check to see if the shifts
+            # exists. This is because an old version of GASpy did not log the shifts; we
+            # don't want to use these.
+            fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'unit cell optimization'}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'gas phase optimization'}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'slab optimization',
+                                          'name.shift': {'$exists': True}}) + \
+                         lpad.get_fw_ids({'state':'COMPLETED',
+                                          'name.calculation_type':'slab+adsorbate optimization',
+                                          'name.shift': {'$exists': True}})
+
+            # For each fireworks object, turn the results into a mongo doc
+            for fwid in fws_cmpltd:
+                yield DumpFWToTraj(fwid=fwid)
+
+
+class DumpFWToTraj(luigi.Task):
+    '''
+    Given a FWID, this task will dump a traj file into GASdb/FW_structures for viewing/debugging
+    purposes
+    '''
+    fwid = luigi.IntParameter()
+
+    def run(self):
+        lpad = fwhs.get_launchpad()
+        fw = lpad.get_fw_by_id(self.fwid)
+        atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+
+        # Write a blank token file to indicate this was done so that the entry is not written again
+        with self.output().temporary_path() as self.temp_output_path:
+            with open(self.temp_output_path, 'w') as fhandle:
+                fhandle.write(atoms_hex.decode('hex'))
+
+    def output(self):
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/FW_structures/%s.traj'%(self.fwid))
 
 
 class DumpToLocalDB(luigi.Task):
@@ -333,7 +389,7 @@ class DumpToLocalDB(luigi.Task):
             slab_end = None
             ads_start = None
             ads_end = num_adsorbate_atoms
-        # Get just the slab atoms of the initial and final state
+        # Get just the adslab's slab atoms in their initial and final state
         slab_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
         slab_final = best_sys[slab_start:slab_end]
         max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
@@ -341,32 +397,37 @@ class DumpToLocalDB(luigi.Task):
         adsorbate_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
         adsorbate_final = best_sys[ads_start:ads_end]
         max_adsorbate_movement = utils.find_max_movement(adsorbate_initial, adsorbate_final)
+        # Repeat the procedure, but for the relaxed bare slab
+        bare_slab_initial = mongo_doc_atoms(best_sys_pkl['slab']['initial_configuration'])
+        bare_slab_final = mongo_doc_atoms(best_sys_pkl['slab'])
+        max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
 
         # Make a dictionary of tags to add to the database
-        criteria = {'type':'slab+adsorbate',
-                    'mpid':self.parameters['bulk']['mpid'],
-                    'miller':'(%d.%d.%d)'%(self.parameters['slab']['miller'][0],
+        criteria = {'type': 'slab+adsorbate',
+                    'mpid': self.parameters['bulk']['mpid'],
+                    'miller': '(%d.%d.%d)'%(self.parameters['slab']['miller'][0],
                                            self.parameters['slab']['miller'][1],
                                            self.parameters['slab']['miller'][2]),
-                    'num_slab_atoms':self.parameters['adsorption']['num_slab_atoms'],
-                    'top':self.parameters['slab']['top'],
-                    'slabrepeat':self.parameters['adsorption']['slabrepeat'],
-                    'relaxed':True,
-                    'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
-                    'adsorption_site':self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
-                    'coordination':fp_final['coordination'],
-                    'nextnearestcoordination':fp_final['nextnearestcoordination'],
-                    'neighborcoord':str(fp_final['neighborcoord']),
-                    'initial_coordination':fp_init['coordination'],
-                    'initial_nextnearestcoordination':fp_init['nextnearestcoordination'],
-                    'initial_neighborcoord':str(fp_init['neighborcoord']),
-                    'shift':best_sys_pkl['slab+ads']['fwname']['shift'],
-                    'fwid':best_sys_pkl['slab+ads']['fwid'],
-                    'slabfwid':best_sys_pkl['slab']['fwid'],
-                    'bulkfwid':bulk[bulkmin]['fwid'],
-                    'adsorbate_angle':angle,
-                    'max_surface_movement':max_surface_movement,
-                    'max_adsorbate_movement':max_adsorbate_movement}
+                    'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
+                    'top': self.parameters['slab']['top'],
+                    'slabrepeat': self.parameters['adsorption']['slabrepeat'],
+                    'relaxed': True,
+                    'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
+                    'adsorption_site': self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
+                    'coordination': fp_final['coordination'],
+                    'nextnearestcoordination': fp_final['nextnearestcoordination'],
+                    'neighborcoord': str(fp_final['neighborcoord']),
+                    'initial_coordination': fp_init['coordination'],
+                    'initial_nextnearestcoordination': fp_init['nextnearestcoordination'],
+                    'initial_neighborcoord': str(fp_init['neighborcoord']),
+                    'shift': best_sys_pkl['slab+ads']['fwname']['shift'],
+                    'fwid': best_sys_pkl['slab+ads']['fwid'],
+                    'slabfwid': best_sys_pkl['slab']['fwid'],
+                    'bulkfwid': bulk[bulkmin]['fwid'],
+                    'adsorbate_angle': angle,
+                    'max_surface_movement': max_surface_movement,
+                    'max_adsorbate_movement': max_adsorbate_movement,
+                    'max_bare_slab_movement': max_bare_slab_movement}
         # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
         VSP_STNGS = utils.vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
         for key in VSP_STNGS:
@@ -1105,17 +1166,6 @@ class CalculateEnergy(luigi.Task):
         lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
         slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
 
-        # Calculate the max movement of the slab
-        slab_initial = mongo_doc_atoms(slab_docs[lowest_energy_slab]['initial_configuration'])
-        slab_final = mongo_doc_atoms(slab_docs[lowest_energy_slab])
-        max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
-        # Raise an exception if it moved too much
-        move_limit = 1.5
-        if max_surface_movement > move_limit:
-            fwid = slab_docs[lowest_energy_slab]['fwid']
-            raise Exception('A bare slab broke the %.2f angstrom movement limit (fwid %s)' \
-                            % (move_limit, fwid))
-
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H':gasEnergies['H2']/2.,
                               'O':gasEnergies['H2O']-gasEnergies['H2'],
@@ -1138,12 +1188,12 @@ class CalculateEnergy(luigi.Task):
 
         # Write a dictionary with the results and the entries that were used for the calculations
         # so that fwid/etc for each can be recorded
-        towrite = {'atoms':adjusted_atoms,
-                   'slab+ads':adslab_docs[lowest_energy_adslab],
-                   'slab':slab_docs[lowest_energy_slab],
-                   'gas':{'CO':pickle.load(inputs[2].open())[0],
-                          'H2':pickle.load(inputs[3].open())[0],
-                          'H2O':pickle.load(inputs[4].open())[0]}}
+        towrite = {'atoms': adjusted_atoms,
+                   'slab+ads': adslab_docs[lowest_energy_adslab],
+                   'slab': slab_docs[lowest_energy_slab],
+                   'gas':{'CO': pickle.load(inputs[2].open())[0],
+                          'H2': pickle.load(inputs[3].open())[0],
+                          'H2O' :pickle.load(inputs[4].open())[0]}}
 
         # Write the dictionary as a pickle
         with self.output().temporary_path() as self.temp_output_path:
