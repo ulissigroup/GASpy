@@ -39,6 +39,8 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     if 'PBS_SERVER' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
         # We're on gilgamesh
         vaspflags['NPAR'] = 4
+        vasp_cmd='/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
+        VASPRC['system.mpicall'] = lambda x, y: 'mpirun -np %i %s' %(x, y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'arjuna':
         # We're on arjuna
         if os.environ['CUDA_VISIBLE_DEVICES'] != 'NoDevFiles':
