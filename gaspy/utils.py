@@ -48,6 +48,15 @@ def get_aux_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
+def get_adsorption_db():
+    ''' This is the information for the Adsorption Energy vasp.mongo database '''
+    return MongoDatabase(host='mongodb01.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
+                         collection='adsorption')
+
 
 def vasp_settings_to_str(vasp_settings):
     '''

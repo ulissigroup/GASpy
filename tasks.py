@@ -60,8 +60,8 @@ class UpdateAllDB(luigi.WrapperTask):
         # Get every row in the Aux database
         rows = utils.get_aux_db().find({'type':'slab+adsorbate'})
         # Get all of the current fwid entries in the local DB
-        with connect(LOCAL_DB_PATH+'/adsorption_energy_database.db') as enrg_db:
-            fwids = [row.fwid for row in enrg_db.select()]
+        with utils.get_adsorption_db() as adsorption_db:
+            fwids = [row['processed_data']['FW_info']['slab+adsorbate'] for row in adsorption_db.find()]
 
         # For each adsorbate/configuration, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
@@ -111,7 +111,7 @@ class UpdateAllDB(luigi.WrapperTask):
                 if (i >= self.max_processes and self.max_processes != 0):
                     print('Reached the maximum number of processes, %s' % self.max_processes)
 
-                yield DumpToLocalDB(parameters)
+                yield DumpToAdsorptionDB(parameters)
 
 
 class UpdateEnumerations(luigi.Task):
@@ -306,19 +306,9 @@ class DumpFWToTraj(luigi.Task):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/FW_structures/%s.traj'%(self.fwid))
 
 
-class DumpToLocalDB(luigi.Task):
+class DumpToAdsorptionDB(luigi.Task):
     ''' This class dumps the adsorption energies from our pickles to our Local energies DB '''
     parameters = luigi.DictParameter()
-    local_db = luigi.Parameter(LOCAL_DB_PATH+'adsorption_energy_database.db')
-
-    @property
-    def resources(self):
-        '''
-        Assign the `local_db` property to this task so that no more than one of these
-        tasks may execute at once. This prevents *.db corruption, especially when
-        running many of these tasks at once.
-        '''
-        return {self.local_db: 1}
 
     def requires(self):
         '''
@@ -342,10 +332,6 @@ class DumpToLocalDB(luigi.Task):
         fingerprints = pickle.load(self.input()[1].open())
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
-        for fp in [fp_init, fp_final]:
-            for key in ['neighborcoord', 'nextnearestcoordination', 'coordination']:
-                if key not in fp:
-                    fp[key] = ''
 
         # Create and use tools to calculate the angle between the bond length of the diatomic
         # adsorbate and the z-direction of the bulk. We are not currently calculating triatomics
@@ -403,42 +389,33 @@ class DumpToLocalDB(luigi.Task):
         max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
 
         # Make a dictionary of tags to add to the database
-        criteria = {'type': 'slab+adsorbate',
+        processed_data={'fp_final': fp_final,
+                        'fp_init': fp_init,
+                         'vasp_settings': self.parameters['adsorption']['vasp_settings'],
+                         'calculation_info':{
+                        'type':'slab+adsorbate',
+                    'formula':best_sys.get_chemical_formula('hill'),
                     'mpid': self.parameters['bulk']['mpid'],
-                    'miller': '(%d.%d.%d)'%(self.parameters['slab']['miller'][0],
-                                           self.parameters['slab']['miller'][1],
-                                           self.parameters['slab']['miller'][2]),
+                    'miller': self.parameters['slab']['miller'],
                     'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
                     'top': self.parameters['slab']['top'],
                     'slabrepeat': self.parameters['adsorption']['slabrepeat'],
                     'relaxed': True,
-                    'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
-                    'adsorption_site': self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
-                    'coordination': fp_final['coordination'],
-                    'nextnearestcoordination': fp_final['nextnearestcoordination'],
-                    'neighborcoord': str(fp_final['neighborcoord']),
-                    'initial_coordination': fp_init['coordination'],
-                    'initial_nextnearestcoordination': fp_init['nextnearestcoordination'],
-                    'initial_neighborcoord': str(fp_init['neighborcoord']),
-                    'shift': best_sys_pkl['slab+ads']['fwname']['shift'],
-                    'fwid': best_sys_pkl['slab+ads']['fwid'],
-                    'slabfwid': best_sys_pkl['slab']['fwid'],
-                    'bulkfwid': bulk[bulkmin]['fwid'],
-                    'adsorbate_angle': angle,
+                    'adsorbates': self.parameters['adsorption']['adsorbates'],
+                    'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
+                    'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
+                          'FW_info': {'slab+adsorbate':best_sys_pkl['slab+ads']['fwid'],
+                    'slab': best_sys_pkl['slab']['fwid'],
+                    'bulk': bulk[bulkmin]['fwid']},
+                    'movement_data': {
                     'max_surface_movement': max_surface_movement,
                     'max_adsorbate_movement': max_adsorbate_movement,
-                    'max_bare_slab_movement': max_bare_slab_movement}
-        # Turn the appropriate VASP tags into [str] so that ase-db may accept them.
-        VSP_STNGS = utils.vasp_settings_to_str(self.parameters['adsorption']['vasp_settings'])
-        for key in VSP_STNGS:
-            if key == 'pp_version':
-                criteria[key] = VSP_STNGS[key] + '.'
-            else:
-                criteria[key] = VSP_STNGS[key]
-
+                    'max_bare_slab_movement': max_bare_slab_movement}}
+        best_sys_pkl_slab_ads=best_sys_pkl['slab+ads']
+        best_sys_pkl_slab_ads['processed_data']=processed_data
         # Write the entry into the database
-        with connect(LOCAL_DB_PATH+'/adsorption_energy_database.db') as conAds:
-            conAds.write(best_sys, **criteria)
+        with utils.get_adsorption_db() as adsorption_db:
+            adsorption_db.write(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
