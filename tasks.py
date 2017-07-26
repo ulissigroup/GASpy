@@ -577,7 +577,7 @@ class SubmitToFW(luigi.Task):
                 atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
                               if float(np.round(slab_doc['tags']['shift'], 2)) == \
                                  float(np.round(self.parameters['slab']['shift'], 2))
-                              and slab['tags']['top'] == self.parameters['slab']['top']]
+                              and slab_doc['tags']['top'] == self.parameters['slab']['top']]
                 if len(atoms_list) > 0:
                     raise Exception('We found more than one slab that matches the shift')
                 elif len(atoms_list) == 0:
