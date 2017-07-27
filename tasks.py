@@ -253,38 +253,6 @@ class DumpToAuxDB(luigi.Task):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/DumpToAuxDB.token')
 
 
-# TODO: Delete this task before rebuilding the Local DB
-class DumpToTraj(luigi.WrapperTask):
-    '''
-    This class will load the results for the relaxations from the Primary FireWorks
-    database into the Auxiliary vasp.mongo database.
-    '''
-
-    def requires(self):
-        lpad = fwhs.get_launchpad()
-
-        # Create a class, "con", that has methods to interact with the database.
-        with utils.get_aux_db() as aux_db:
-
-            # Get all of the completed fireworks. Note that we check to see if the shifts
-            # exists. This is because an old version of GASpy did not log the shifts; we
-            # don't want to use these.
-            fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'unit cell optimization'}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'gas phase optimization'}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'slab optimization',
-                                          'name.shift': {'$exists': True}}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'slab+adsorbate optimization',
-                                          'name.shift': {'$exists': True}})
-
-            # For each fireworks object, turn the results into a mongo doc
-            for fwid in fws_cmpltd:
-                yield DumpFWToTraj(fwid=fwid)
-
-
 class DumpFWToTraj(luigi.Task):
     '''
     Given a FWID, this task will dump a traj file into GASdb/FW_structures for viewing/debugging
