@@ -751,11 +751,6 @@ class GenerateSlabs(luigi.Task):
         slabs = gen.get_slabs(**self.parameters['slab']['get_slab_settings'])
         slabsave = []
         for slab in slabs:
-            # If this slab is the only one in the set with this miller index, then the shift
-            # doesn't matter... so we set the shift as zero.
-            #if len([a for a in slabs if a.miller_index == slab.miller_index]) == 1:
-            #    shift = 0
-            #else:
             shift = slab.shift
 
             # Create an atoms class for this particular slab, "atoms_slab"
