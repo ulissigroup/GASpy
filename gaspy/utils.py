@@ -57,6 +57,15 @@ def get_adsorption_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='adsorption')
 
+def get_catalog_db():
+    ''' This is the information for the Adsorption Site Catalog vasp.mongo database '''
+    return MongoDatabase(host='mongodb01.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
+                         collection='catalog')
+
 
 def vasp_settings_to_str(vasp_settings):
     '''

@@ -121,23 +121,13 @@ class UpdateEnumerations(luigi.Task):
     for adsorption sites.
     '''
     parameters = luigi.DictParameter()
-    local_enum_db = luigi.Parameter(LOCAL_DB_PATH+'enumerated_adsorption_database.db')
 
     def requires(self):
         ''' Get the generated adsorbate configurations '''
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
-    @property
-    def resources(self):
-        '''
-        Assign the `local_db` property to this task so that no more than one of these
-        tasks may execute at once. This prevents *.db corruption, especially when
-        running many of these tasks at once.
-        '''
-        return {self.local_enum_db: 1}
-
     def run(self):
-        with connect(self.local_enum_db) as con:
+        with utils.get_catalog_db() as catalog_db:
             # Load the configurations
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
@@ -146,19 +136,28 @@ class UpdateEnumerations(luigi.Task):
                                                                  x['neighborcoord']]),
                                                   configs),
                                               return_index=True)
+            
             # For each configuration, write a row to the database
             for i in unq_inds:
                 config = configs[i]
-                con.write(config['atoms'],
-                          shift=config['shift'],
-                          miller=str(self.parameters['slab']['miller']),
-                          mpid=self.parameters['bulk']['mpid'],
-                          adsorbate=self.parameters['adsorption']['adsorbates'][0]['name'],
-                          top=config['top'],
-                          adsorption_site=config['adsorption_site'],
-                          coordination=config['coordination'],
-                          neighborcoord=str(config['neighborcoord']),
-                          nextnearestcoordination=str(config['nextnearestcoordination']))
+                atoms=config['atoms']
+                slabadsdoc=mongo_doc(config['atoms'])
+                processed_data={'fp_init': config['fp'],
+                         'calculation_info':{
+                        'type':'slab+adsorbate',
+                    'formula':atoms.get_chemical_formula('hill'),
+                    'mpid': config['mpid'],
+                    'miller': config['miller'],
+                    'num_slab_atoms': config['num_slab_atoms'],
+                    'top': confing['top'],
+                    'slabrepeat': config['slabrepeat'],
+                    'relaxed': False,
+                    'adsorbates': config['adsorbates'],
+                    'adsorbate_names': map(lambda x: str(x['name']), config['adsorbates']),
+                    'shift': config['shift']}}
+                slabadsdoc['processed_data']=processed_data
+                catalog_db.write(slabadsdoc)
+
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
@@ -1079,8 +1078,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             else:
                 fp = utils.fingerprint_atoms(adslab['atoms'])
             # Add the fingerprints to the dictionary
-            for key in fp:
-                adslab[key] = fp[key]
+            adslab['fp']=fp
 
         # Write
         with self.output().temporary_path() as self.temp_output_path:
