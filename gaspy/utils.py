@@ -254,7 +254,7 @@ def fingerprint_atoms(atoms):
             'nextnearestcoordination':coordination_nextnearest}
 
 
-def _label_structure_with_surface(slabAtoms, bulkAtoms):
+def _label_structure_with_surface(slabAtoms, bulkAtoms,height_threshold=3.):
     '''
     This script/function calculates possible adsorption sites of a slab of atoms. It is
     used primarily as a helper function for the `find_adsorption_sites` function, thus
@@ -292,7 +292,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
         el = str(bulk_struct[i].specie)
         # Use PyMatGen to identify the "coordinated_neighbors" [list of classes]
         # Note that we use a tolerance of 0.1 to be consistent with PyMatGen
-        coordinated_neighbors = vcf_bulk.get_coordinated_sites(i, tol=0.1)
+        coordinated_neighbors = vcf_bulk.get_coordinated_sites(i, tol=0.4)
         # Calculate the number of coordinated neighbors [int]
         num_neighbors = len(coordinated_neighbors)
         # Store this number in "cn_el" [dict]. Note that cn_el[el] will return a list of
@@ -301,29 +301,34 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
     # Calculate "mean_cn_el" [dict], which will hold the mean coordination number [float] of
     # each element in the bulk
     mean_cn_el = {}
+    min_cn_el = {}
     for element in formula:
         #mean_cn_el[element] = float(sum(cn_el[element]))/len(cn_el[element])
         mean_cn_el[element] = sum(cn_el[element])/len(cn_el[element])
+        min_cn_el[element] = np.min(cn_el[element])
 
     # Calculate "average_z" [float], the mean z-level of all the atoms in the slab
     average_z = np.average(slab_struct.cart_coords[:, -1])
+    max_z=np.max(slab_struct.cart_coords[:, -1])
 
     # Initialize a couple of [list] objects that we will pass to PyMatGen later
     cn_surf = []
     plate_surf = []
     # For each atom in the slab, we calculate the coordination number and then determine whether
     # or not the atom is on the surface.
+
     for i, atom in enumerate(slab_struct):
         # "cn_surf" [list of floats] holds the coordination numbers of the atoms in the slab.
         # Note that we use a tolerance of 0.2 instead of 0.1. This may improve the scripts
         # ability to identify adsorption sites.
-        cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.2)))
+        cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.4)))
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
-        cn_Bulk = mean_cn_el[str(slab_struct[i].specie)]
+        element=str(slab_struct[i].specie)
+        cn_Bulk = mean_cn_el[element]
         # If the coordination number of the atom changes between the slab and bulk structures
         # AND if the atom is above the centerline of the slab...
-        if cn_surf[-1] != cn_Bulk and atom.coords[-1] > average_z:
+        if (cn_surf[-1]<min_cn_el[element] and atom.coords[-1] > average_z and atom.coords[-1]>max_z-height_threshold) or atom.coords[-1]>max_z-1.:
             # then the atom is labeled as a "surface" atom...
             plate_surf.append('surface')
         else:
