@@ -132,11 +132,10 @@ class UpdateEnumerations(luigi.Task):
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
             unq_configs, unq_inds = np.unique(map(lambda x: str([x['shift'],
-                                                                 x['coordination'],
-                                                                 x['neighborcoord']]),
+                                                                 x['fp']['coordination'],
+                                                                 x['fp']['neighborcoord']]),
                                                   configs),
                                               return_index=True)
-            
             # For each configuration, write a row to the database
             for i in unq_inds:
                 config = configs[i]
@@ -146,14 +145,13 @@ class UpdateEnumerations(luigi.Task):
                          'calculation_info':{
                         'type':'slab+adsorbate',
                     'formula':atoms.get_chemical_formula('hill'),
-                    'mpid': config['mpid'],
+                    'mpid': self.parameters['bulk']['mpid'],
                     'miller': config['miller'],
-                    'num_slab_atoms': config['num_slab_atoms'],
-                    'top': confing['top'],
+                    'num_slab_atoms': len(atoms)-len(config['adsorbate']),
+                    'top': config['top'],
                     'slabrepeat': config['slabrepeat'],
                     'relaxed': False,
-                    'adsorbates': config['adsorbates'],
-                    'adsorbate_names': map(lambda x: str(x['name']), config['adsorbates']),
+                    'adsorbate': config['adsorbate'],
                     'shift': config['shift']}}
                 slabadsdoc['processed_data']=processed_data
                 catalog_db.write(slabadsdoc)
@@ -1079,7 +1077,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
                 fp = utils.fingerprint_atoms(adslab['atoms'])
             # Add the fingerprints to the dictionary
             adslab['fp']=fp
-
+        print(adslab)
         # Write
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(adslabs, open(self.temp_output_path, 'w'))
@@ -1220,7 +1218,7 @@ class EnumerateAlloys(luigi.WrapperTask):
         whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
                      'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
                      'Fe', 'V', 'Si', 'Sn', 'Sb']
-        # whitelist=['Pd','Cu','Au','Ag']
+        #whitelist=['Pd','Cu','Ag']
 
         restricted_elements = [el for el in all_elements if el not in whitelist]
 
