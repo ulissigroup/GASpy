@@ -139,21 +139,20 @@ class UpdateEnumerations(luigi.Task):
             # For each configuration, write a row to the database
             for i in unq_inds:
                 config = configs[i]
-                atoms=config['atoms']
-                slabadsdoc=mongo_doc(config['atoms'])
-                processed_data={'fp_init': config['fp'],
-                         'calculation_info':{
-                        'type':'slab+adsorbate',
-                    'formula':atoms.get_chemical_formula('hill'),
-                    'mpid': self.parameters['bulk']['mpid'],
-                    'miller': config['miller'],
-                    'num_slab_atoms': len(atoms)-len(config['adsorbate']),
-                    'top': config['top'],
-                    'slabrepeat': config['slabrepeat'],
-                    'relaxed': False,
-                    'adsorbate': config['adsorbate'],
-                    'shift': config['shift']}}
-                slabadsdoc['processed_data']=processed_data
+                atoms = config['atoms']
+                slabadsdoc = mongo_doc(config['atoms'])
+                processed_data = {'fp_init': config['fp'],
+                                  'calculation_info':{'type':'slab+adsorbate',
+                                                      'formula':atoms.get_chemical_formula('hill'),
+                                                      'mpid': self.parameters['bulk']['mpid'],
+                                                      'miller': config['miller'],
+                                                      'num_slab_atoms': len(atoms)-len(config['adsorbate']),
+                                                      'top': config['top'],
+                                                      'slabrepeat': config['slabrepeat'],
+                                                      'relaxed': False,
+                                                      'adsorbate': config['adsorbate'],
+                                                      'shift': config['shift']}}
+                slabadsdoc['processed_data'] = processed_data
                 catalog_db.write(slabadsdoc)
 
         # Write a token file to indicate this task has been completed and added to the DB
@@ -411,6 +410,8 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads=best_sys_pkl['slab+ads']
         best_sys_pkl_slab_ads['processed_data']=processed_data
         # Write the entry into the database
+
+        del best_sys_pkl_slab_ads['fwname']
         with utils.get_adsorption_db() as adsorption_db:
             adsorption_db.write(best_sys_pkl_slab_ads)
 
@@ -1076,7 +1077,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             else:
                 fp = utils.fingerprint_atoms(adslab['atoms'])
             # Add the fingerprints to the dictionary
-            adslab['fp']=fp
+            adslab['fp'] = fp
         print(adslab)
         # Write
         with self.output().temporary_path() as self.temp_output_path:
@@ -1211,8 +1212,6 @@ class EnumerateAlloys(luigi.WrapperTask):
                         'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk',
                         'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
                         'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
-
-        #whitelist = ['Pt', 'Ag', 'Cu', 'Pd', 'Ni', 'Au', 'Ga', 'Rh', 'Re',
         #             'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
         #whitelist = ['Pt','Ga']
         whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
