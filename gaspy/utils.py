@@ -48,6 +48,7 @@ def get_aux_db():
                          database='vasp_zu_vaspsurfaces',
                          collection='atoms')
 
+
 def get_adsorption_db():
     ''' This is the information for the Adsorption Energy vasp.mongo database '''
     return MongoDatabase(host='mongodb01.nersc.gov',
@@ -56,6 +57,7 @@ def get_adsorption_db():
                          password='$TPAHPmj',
                          database='vasp_zu_vaspsurfaces',
                          collection='adsorption')
+
 
 def get_catalog_db():
     ''' This is the information for the Adsorption Site Catalog vasp.mongo database '''
@@ -263,7 +265,7 @@ def fingerprint_atoms(atoms):
             'nextnearestcoordination':coordination_nextnearest}
 
 
-def _label_structure_with_surface(slabAtoms, bulkAtoms,height_threshold=3.):
+def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     '''
     This script/function calculates possible adsorption sites of a slab of atoms. It is
     used primarily as a helper function for the `find_adsorption_sites` function, thus
@@ -318,7 +320,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms,height_threshold=3.):
 
     # Calculate "average_z" [float], the mean z-level of all the atoms in the slab
     average_z = np.average(slab_struct.cart_coords[:, -1])
-    max_z=np.max(slab_struct.cart_coords[:, -1])
+    max_z = np.max(slab_struct.cart_coords[:, -1])
 
     # Initialize a couple of [list] objects that we will pass to PyMatGen later
     cn_surf = []
@@ -333,7 +335,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms,height_threshold=3.):
         cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.4)))
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
-        element=str(slab_struct[i].specie)
+        element = str(slab_struct[i].specie)
         cn_Bulk = mean_cn_el[element]
         # If the coordination number of the atom changes between the slab and bulk structures
         # AND if the atom is above the centerline of the slab...
