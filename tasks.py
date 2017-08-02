@@ -14,7 +14,6 @@ from collections import OrderedDict
 import cPickle as pickle
 import numpy as np
 from numpy.linalg import norm
-from ase.db import connect
 sys.path.append('..')
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -58,41 +57,41 @@ class UpdateAllDB(luigi.WrapperTask):
         # Dump from the Primary DB to the Aux DB
         DumpToAuxDB().run()
 
-        # Get every row in the Aux database
-        rows = utils.get_aux_db().find({'type':'slab+adsorbate'})
+        # Get every doc in the Aux database
+        docs = utils.get_aux_db().find({'type':'slab+adsorbate'})
         # Get all of the current fwid entries in the local DB
         with utils.get_adsorption_db() as adsorption_db:
-            fwids = [row['processed_data']['FW_info']['slab+adsorbate'] for row in adsorption_db.find()]
+            fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_db.find()]
 
         # For each adsorbate/configuration, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
         i = 0
-        for row in rows:
+        for doc in docs:
             # Break the loop if we reach the maxmimum number of processes
             if i+1 == self.max_processes:
                 break
 
             # Only make the task if 1) the fireworks task is not already in the database,
-            # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of rows
+            # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of docs
             # to dump.
-            if (row['fwid'] not in fwids
-                    and row['fwname']['adsorbate'] != ''
+            if (doc['fwid'] not in fwids
+                    and doc['fwname']['adsorbate'] != ''
                     and ((self.max_processes == 0) or \
                          (self.max_processes > 0 and i < self.max_processes))):
                 # Pull information from the Aux DB
-                mpid = row['fwname']['mpid']
-                miller = row['fwname']['miller']
-                adsorption_site = row['fwname']['adsorption_site']
-                adsorbate = row['fwname']['adsorbate']
-                top = row['fwname']['top']
-                num_slab_atoms = row['fwname']['num_slab_atoms']
-                slabrepeat = row['fwname']['slabrepeat']
-                shift = row['fwname']['shift']
+                mpid = doc['fwname']['mpid']
+                miller = doc['fwname']['miller']
+                adsorption_site = doc['fwname']['adsorption_site']
+                adsorbate = doc['fwname']['adsorbate']
+                top = doc['fwname']['top']
+                num_slab_atoms = doc['fwname']['num_slab_atoms']
+                slabrepeat = doc['fwname']['slabrepeat']
+                shift = doc['fwname']['shift']
                 keys = ['gga', 'encut', 'zab_vdw', 'lbeefens', 'luse_vdw', 'pp', 'pp_version']
                 settings = OrderedDict()
                 for key in keys:
-                    if key in row['fwname']['vasp_settings']:
-                        settings[key] = row['fwname']['vasp_settings'][key]
+                    if key in doc['fwname']['vasp_settings']:
+                        settings[key] = doc['fwname']['vasp_settings'][key]
                 # Create the nested dictionary of information that we will store in the Aux DB
                 parameters = {'bulk':defaults.bulk_parameters(mpid, settings=settings),
                               'gas':defaults.gas_parameters(gasname='CO', settings=settings),
@@ -137,7 +136,7 @@ class UpdateEnumerations(luigi.Task):
                                                                  x['fp']['neighborcoord']]),
                                                   configs),
                                               return_index=True)
-            # For each configuration, write a row to the database
+            # For each configuration, write a doc to the database
             for i in unq_inds:
                 config = configs[i]
                 atoms = config['atoms']
@@ -486,12 +485,12 @@ class SubmitToFW(luigi.Task):
 
         # Grab all of the matching entries in the Auxiliary database
         with utils.get_aux_db() as aux_db:
-            self.matching_row = list(aux_db.find(search_strings))
+            self.matching_doc = list(aux_db.find(search_strings))
         #print('Search string:  %s', % search_strings)
 
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
-        if len(self.matching_row) == 0:
+        if len(self.matching_doc) == 0:
             if self.calctype == 'slab':
                 return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
@@ -508,7 +507,7 @@ class SubmitToFW(luigi.Task):
                                   'fwname.mpid':self.parameters['bulk']['mpid'],
                                   'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
                 with utils.get_aux_db() as aux_db:
-                    self.matching_rows_all_calcs = list(aux_db.find(search_strings))
+                    self.matching_docs_all_calcs = list(aux_db.find(search_strings))
                 return FingerprintUnrelaxedAdslabs(self.parameters)
             if self.calctype == 'bulk':
                 return GenerateBulk({'bulk':self.parameters['bulk']})
@@ -518,9 +517,9 @@ class SubmitToFW(luigi.Task):
     def run(self):
         # If there are matching entries, this is easy, just dump the matching entries
         # into a pickle file
-        if len(self.matching_row) > 0:
+        if len(self.matching_doc) > 0:
             with self.output().temporary_path() as self.temp_output_path:
-                pickle.dump(self.matching_row, open(self.temp_output_path, 'w'))
+                pickle.dump(self.matching_doc, open(self.temp_output_path, 'w'))
 
         # Otherwise, we're missing a structure, so we need to submit whatever the
         # requirement returned
@@ -596,17 +595,17 @@ class SubmitToFW(luigi.Task):
                 # search for a site with the correct fingerprint, otherwise we search for an
                 # adsorbate at the correct location
                 if 'fp' in self.parameters['adsorption']['adsorbates'][0]:
-                    matching_rows = [row for row in fpd_structs
-                                     if matchFP(row['fp'], self.parameters['adsorption']['adsorbates'][0]['fp'])]
+                    matching_docs = [doc for doc in fpd_structs
+                                     if matchFP(doc['fp'], self.parameters['adsorption']['adsorbates'][0]['fp'])]
                 else:
                     if self.parameters['adsorption']['adsorbates'][0]['name'] != '':
-                        matching_rows = [row for row in fpd_structs
-                                         if row['adsorption_site'] == \
+                        matching_docs = [doc for doc in fpd_structs
+                                         if doc['adsorption_site'] == \
                                             self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
-                        matching_rows = [row for row in fpd_structs]
-                #if len(matching_rows) == 0:
-                    #print('No rows matching the desired FP/Site!')
+                        matching_docs = [doc for doc in fpd_structs]
+                #if len(matching_docs) == 0:
+                    #print('No docs matching the desired FP/Site!')
                     #print('Desired sites:')
                     #pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
                     #print('Available Sites:')
@@ -614,23 +613,23 @@ class SubmitToFW(luigi.Task):
                     #pprint(self.input().fn)
                     #pprint(self.parameters)
 
-                # If there is no adsorbate, then trim the matching_rows to the first row we found.
-                # Otherwise, trim the matching_rows to `numtosubmit`, a user-specified value that
+                # If there is no adsorbate, then trim the matching_docs to the first doc we found.
+                # Otherwise, trim the matching_docs to `numtosubmit`, a user-specified value that
                 # decides the maximum number of fireworks that we want to submit.
                 if self.parameters['adsorption']['adsorbates'][0]['name'] == '':
-                    matching_rows = matching_rows[0:1]
+                    matching_docs = matching_docs[0:1]
                 elif 'numtosubmit' in self.parameters['adsorption']:
-                    matching_rows = matching_rows[0:self.parameters['adsorption']['numtosubmit']]
+                    matching_docs = matching_docs[0:self.parameters['adsorption']['numtosubmit']]
 
-                # Add each of the matchig rows to `tosubmit`
-                for row in matching_rows:
+                # Add each of the matchig docs to `tosubmit`
+                for doc in matching_docs:
                     # The name of our firework is actually a dictionary, as defined here
                     name = {'mpid':self.parameters['bulk']['mpid'],
                             'miller':self.parameters['slab']['miller'],
                             'top':self.parameters['slab']['top'],
-                            'shift':row['shift'],
+                            'shift':doc['shift'],
                             'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
-                            'adsorption_site':row['adsorption_site'],
+                            'adsorption_site':doc['adsorption_site'],
                             'vasp_settings':self.parameters['adsorption']['vasp_settings'],
                             'num_slab_atoms':self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat':self.parameters['adsorption']['slabrepeat'],
@@ -643,23 +642,23 @@ class SubmitToFW(luigi.Task):
                     This next paragraph (i.e., code until the next blank line) is a prototyping
                     skeleton for GASpy Issue #14
                     '''
-                    # First, let's see if we can find a reasonable guess for the row:
-                    # guess_rows=[row2 for row2 in self.matching_rows_all_calcs if matchFP(fingerprint(row2['atoms'], ), row)]
-                    guess_rows = []
+                    # First, let's see if we can find a reasonable guess for the doc:
+                    # guess_docs=[doc2 for doc2 in self.matching_docs_all_calcs if matchFP(fingerprint(doc2['atoms'], ), doc)]
+                    guess_docs = []
                     # We've found another calculation with exactly the same fingerprint
-                    if len(guess_rows) > 0:
-                        guess = guess_rows[0]
-                        # Get the initial adsorption site of the identified row
+                    if len(guess_docs) > 0:
+                        guess = guess_docs[0]
+                        # Get the initial adsorption site of the identified doc
                         ads_site = np.array(map(eval, guess['fwname']['adsorption_site'].strip().split()[1:4]))
-                        atoms = row['atoms']
+                        atoms = doc['atoms']
                         atomsguess = guess['atoms']
                         # For each adsorbate atom, move it the same relative amount as in the guessed configuration
                         lenAdsorbates = len(Atoms(self.parameters['adsorption']['adsorbates'][0]['name']))
                         for ind in range(-lenAdsorbates, len(atoms)):
                             atoms[ind].position += atomsguess[ind].position-ads_site
                     else:
-                        atoms = row['atoms']
-                    if len(guess_rows) > 0:
+                        atoms = doc['atoms']
+                    if len(guess_docs) > 0:
                         name['guessed_from'] = {'xc':guess['fwname']['vasp_settings']['xc'],
                                                 'encut':guess['fwname']['vasp_settings']['encut']}
 
