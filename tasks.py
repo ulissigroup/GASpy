@@ -3,6 +3,7 @@ This module houses various tasks that Luigi uses to set up calculations that can
 submitted to Fireworks. This is intended to be used in conjunction with a bash submission
 file.
 '''
+import pdb
 import os
 import sys
 import copy
@@ -411,7 +412,9 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads['processed_data']=processed_data
         # Write the entry into the database
 
+        # TODO:  Get rid of these deletion lines after the next time we delete a pickles
         del best_sys_pkl_slab_ads['fwname']
+        del best_sys_pkl_slab_ads['type']
         with utils.get_adsorption_db() as adsorption_db:
             adsorption_db.write(best_sys_pkl_slab_ads)
 
@@ -552,7 +555,7 @@ class SubmitToFW(luigi.Task):
                 atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
                               if float(np.round(slab_doc['tags']['shift'], 2)) == \
                                  float(np.round(self.parameters['slab']['shift'], 2))
-                              and slab['tags']['top'] == self.parameters['slab']['top']]
+                              and slab_doc['tags']['top'] == self.parameters['slab']['top']]
                 if len(atoms_list) > 0:
                     raise Exception('We found more than one slab that matches the shift')
                 elif len(atoms_list) == 0:
@@ -594,7 +597,7 @@ class SubmitToFW(luigi.Task):
                 # adsorbate at the correct location
                 if 'fp' in self.parameters['adsorption']['adsorbates'][0]:
                     matching_rows = [row for row in fpd_structs
-                                     if matchFP(row, self.parameters['adsorption']['adsorbates'][0]['fp'])]
+                                     if matchFP(row['fp'], self.parameters['adsorption']['adsorbates'][0]['fp'])]
                 else:
                     if self.parameters['adsorption']['adsorbates'][0]['name'] != '':
                         matching_rows = [row for row in fpd_structs
@@ -1078,7 +1081,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
                 fp = utils.fingerprint_atoms(adslab['atoms'])
             # Add the fingerprints to the dictionary
             adslab['fp'] = fp
-        print(adslab)
+
         # Write
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(adslabs, open(self.temp_output_path, 'w'))
