@@ -173,7 +173,7 @@ def adsorbates_dict():
     ooh = Atoms('OOH', positions=[[0., 0., 0.],
                                   [0., 0., 1.55],
                                   [0, 0.94, 1.80]])
-    ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.95, k=5),  # Bind OO
+    ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=5),  # Bind OO
                         ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5)]) # Bind OH
     adsorbates['OOH'] = ooh
 
