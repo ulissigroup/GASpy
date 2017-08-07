@@ -99,7 +99,14 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
         #calc.read_results()
         #print(atoms.get_forces())
         #print(atoms.get_potential_energy())
-        qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj')
+        qn = BFGS(atoms, logfile='relax.log')
+        traj=TrajectoryWriter('all.traj')
+        class load_and_write():
+            def write(self):
+                atoms=calc.traj
+                traj.write(atoms[0])
+
+        qn.attach(load_and_write())            
         #qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj',force_consistent=False)
         qn.run(fmax=vaspflags['ediffg'] if 'ediffg' in vaspflags else 0.05)
         finalimage = atoms

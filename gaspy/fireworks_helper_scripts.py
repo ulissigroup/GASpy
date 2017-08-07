@@ -111,6 +111,7 @@ def get_firework_info(fw):
     '''
     # Pull the atoms objects from the firework. They are encoded, though
     atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+    atoms_energy = fw.launches[-1].action.stored_data['opt_results'][2]
     vasp_settings = fw.name['vasp_settings']
 
     # To decode the atoms objects, we need to write them into files and then load
