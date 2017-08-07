@@ -71,10 +71,10 @@ def get_catalog_db():
                          collection='catalog')
 
 
-def get_cursor(client, collection_name, fingerprints,
-               adsorbates=None, calc_settings=None, vasp_settings=None,
-               energy_min=None, energy_max=None, fmax_max=None,
-               ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+def get_docs(client, collection_name, fingerprints,
+                    adsorbates=None, calc_settings=None, vasp_settings=None,
+                    energy_min=None, energy_max=None, f_max=None,
+                    ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
     '''
     This method pulls out a set of fingerprints from a mongo client and returns
     a mongo cursor (generator) object that returns the fingerprints
@@ -98,20 +98,23 @@ def get_cursor(client, collection_name, fingerprints,
         bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
                             without an adsorbate (angstrom)
         slab_move_max       The maximum distance that a slab atom may move (angstrom)
-        fmax_max            The upper limit on the maximum force on an atom in the system
-
+        f_max               The upper limit on the maximum force on an atom in the system
     Output:
-        cursor  A mongo cursor object that can be iterated to return a dictionary
-                of fingerprint properties
+        docs    Mongo docs; a list of dictionaries for each database entry
+        p_docs  "parsed docs"; a dictionary whose keys are the keys of `fingerprints` and
+                whose values are lists of the results returned by each query within
+                `fingerprints`.
     '''
+    # Initialize
+    p_docs = dict.fromkeys(fingerprints)
     # Put the "fingerprinting" into a `group` dictionary, which we will
     # use to pull out data from the mongo database. Also, initialize
     # a `match` dictionary, which we will use to filter results.
     group = {'$group': {'_id': fingerprints}}
     match = {'$match': {}}
 
-    # If the user provided calc_settings, then match only results that use
-    # this calc_setting.
+    # Create `match` filters to search by. Use if/then statements to create the filters
+    # only if the user specifies them.
     if not calc_settings:
         pass
     elif calc_settings == 'rpbe':
@@ -120,35 +123,36 @@ def get_cursor(client, collection_name, fingerprints,
         match['$match']['processed_data.vasp_settings.gga'] = 'BF'
     else:
         raise Exception('Unknown calc_settings')
-    # Do the same, but for vasp settings
     if vasp_settings:
         for key, value in vasp_settings:
             match['$match']['processed_data.vasp_settings.%s' % key] = value
-    # Alert the user that they tried to specify something twice.
-    if ('gga' in vasp_settings and calc_settings):
-        warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
-
-    # Append more arguments to our filter
-    if energy_max:
-        match['$match']['processed_data.results.energy'] = {'$max': energy_max}
-    if energy_min:
-        match['$match']['processed_data.results.energy'] = {'$min': energy_min}
-    if fmax_max:
-        match['$match']['processed_data.results.forces'] = {'$max': fmax_max}
-    if ads_move_max:
-        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
-                {'$max': ads_move_max}
-    if bare_slab_move_max:
-        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
-                {'$max': bare_slab_move_max}
-    if slab_move_max:
-        match['$match']['processed_data.movement_data.max_surface_movement'] = \
-                {'$max': slab_move_max}
-
-    # If the user specificed an adsorbate, then match only results from
-    # that adsorbate
+        # Alert the user that they tried to specify the gga twice.
+        if ('gga' in vasp_settings and calc_settings):
+            warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
     if adsorbates:
         match['$match']['processed_data.calculation_info.adsorbate_names'] = adsorbates
+    # Multi-conditional for the energy for the different ways a user can define
+    # energy constraints
+    if (energy_max and energy_min):
+        match['$match']['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
+    elif (energy_max and not energy_min):
+        match['$match']['results.energy'] = {'$lt': energy_max}
+    elif (not energy_max and energy_min):
+        match['$match']['results.energy'] = {'$gt': energy_min}
+    # We do a doubly-nested element match because `results.forces` is a doubly-nested
+    # list of forces (1st layer is atoms, 2nd layer is cartesian directions, final
+    # layer is the forces on that atom in that direction).
+    if f_max:
+        match['$match']['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    if ads_move_max:
+        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
+                {'$lt': ads_move_max}
+    if bare_slab_move_max:
+        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
+                {'$lt': bare_slab_move_max}
+    if slab_move_max:
+        match['$match']['processed_data.movement_data.max_surface_movement'] = \
+                {'$lt': slab_move_max}
 
     # Compile the pipeline; add matches only if any matches are specified
     if match['$match']:
@@ -158,13 +162,17 @@ def get_cursor(client, collection_name, fingerprints,
 
     # Get the particular collection from the mongo client's database
     collection = getattr(client.db, collection_name)
-
     # Create the cursor. We set allowDiskUse=True to allow mongo to write to
     # temporary files, which it needs to do for large databases. We also
     # set useCursor=True so that `aggregate` returns a cursor object
     # (otherwise we run into memory issues).
     cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
-    return cursor
+    # Use the cursor to pull all of the information we want out of the database, and
+    # then parse it.
+    docs = [doc['_id'] for doc in cursor]
+    for key in p_docs.keys():
+        p_docs[key] = [doc[key] for doc in docs]
+    return docs, p_docs
 
 
 def vasp_settings_to_str(vasp_settings):
