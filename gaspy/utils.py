@@ -121,8 +121,9 @@ def get_cursor(client, collection_name, fingerprints,
     else:
         raise Exception('Unknown calc_settings')
     # Do the same, but for vasp settings
-    for key, value in vasp_settings:
-        match['$match']['processed_data.vasp_settings.%s' % key] = value
+    if vasp_settings:
+        for key, value in vasp_settings:
+            match['$match']['processed_data.vasp_settings.%s' % key] = value
     # Alert the user that they tried to specify something twice.
     if ('gga' in vasp_settings and calc_settings):
         warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
