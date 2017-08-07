@@ -1,3 +1,5 @@
+import pdb
+import warnings
 from pprint import pprint
 import numpy as np
 from ase import Atoms
@@ -69,6 +71,101 @@ def get_catalog_db():
                          collection='catalog')
 
 
+def get_cursor(client, collection_name, fingerprints,
+               adsorbates=None, calc_settings=None, vasp_settings=None,
+               energy_min=None, energy_max=None, fmax_max=None,
+               ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+    '''
+    This method pulls out a set of fingerprints from a mongo client and returns
+    a mongo cursor (generator) object that returns the fingerprints
+
+    Inputs:
+        client              Mongo client object
+        collection_name     The collection name within the client that you want to look at
+        fingerprints        A dictionary of fingerprints and their locations in our
+                            mongo documents. For example:
+                                fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
+                                                'coordination': '$processed_data.fp_init.coordination'}
+        adsorbates          A list of adsorbates that you want to find matches for
+        calc_settings       An optional argument that will only pull out data with these
+                            calc settings (e.g., 'beef-vdw' or 'rpbe').
+        vasp_settings       An optional argument that will only pull out data with these
+                            vasp settings. Any assignments to `gga` here will overwrite
+                            `calc_settings`.
+        energy_min          The minimum adsorption energy to pull from the Local DB (eV)
+        energy_max          The maximum adsorption energy to pull from the Local DB (eV)
+        ads_move_max        The maximum distance that an adsorbate atom may move (angstrom)
+        bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
+                            without an adsorbate (angstrom)
+        slab_move_max       The maximum distance that a slab atom may move (angstrom)
+        fmax_max            The upper limit on the maximum force on an atom in the system
+
+    Output:
+        cursor  A mongo cursor object that can be iterated to return a dictionary
+                of fingerprint properties
+    '''
+    # Put the "fingerprinting" into a `group` dictionary, which we will
+    # use to pull out data from the mongo database. Also, initialize
+    # a `match` dictionary, which we will use to filter results.
+    group = {'$group': {'_id': fingerprints}}
+    match = {'$match': {}}
+
+    # If the user provided calc_settings, then match only results that use
+    # this calc_setting.
+    if not calc_settings:
+        pass
+    elif calc_settings == 'rpbe':
+        match['$match']['processed_data.vasp_settings.gga'] = 'RP'
+    elif calc_settings == 'beef-vdw':
+        match['$match']['processed_data.vasp_settings.gga'] = 'BF'
+    else:
+        raise Exception('Unknown calc_settings')
+    # Do the same, but for vasp settings
+    for key, value in vasp_settings:
+        match['$match']['processed_data.vasp_settings.%s' % key] = value
+    # Alert the user that they tried to specify something twice.
+    if ('gga' in vasp_settings and calc_settings):
+        warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
+
+    # Append more arguments to our filter
+    if energy_max:
+        match['$match']['processed_data.results.energy'] = {'$max': energy_max}
+    if energy_min:
+        match['$match']['processed_data.results.energy'] = {'$min': energy_min}
+    if fmax_max:
+        match['$match']['processed_data.results.forces'] = {'$max': fmax_max}
+    if ads_move_max:
+        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
+                {'$max': ads_move_max}
+    if bare_slab_move_max:
+        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
+                {'$max': bare_slab_move_max}
+    if slab_move_max:
+        match['$match']['processed_data.movement_data.max_surface_movement'] = \
+                {'$max': slab_move_max}
+
+    # If the user specificed an adsorbate, then match only results from
+    # that adsorbate
+    if adsorbates:
+        match['$match']['processed_data.calculation_info.adsorbate_names'] = adsorbates
+
+    # Compile the pipeline; add matches only if any matches are specified
+    if match['$match']:
+        pipeline = [match, group]
+    else:
+        pipeline = [group]
+
+    # Get the particular collection from the mongo client's database
+    collection = getattr(client.db, collection_name)
+
+    # Create the cursor. We set allowDiskUse=True to allow mongo to write to
+    # temporary files, which it needs to do for large databases. We also
+    # set useCursor=True so that `aggregate` returns a cursor object
+    # (otherwise we run into memory issues).
+    cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
+    return cursor
+
+
 def vasp_settings_to_str(vasp_settings):
     '''
     This function is used in various scripts to convert a dictionary of vasp settings
@@ -108,7 +205,7 @@ def ads_dict(adsorbate):
 
         # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
-            atoms = _adsorbates_dict()[adsorbate]
+            atoms = adsorbates_dict()[adsorbate]
         except KeyError:
             print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults' \
                   % adsorbate)
