@@ -72,12 +72,15 @@ def get_catalog_db():
 
 
 def get_docs(client, collection_name, fingerprints,
-                    adsorbates=None, calc_settings=None, vasp_settings=None,
-                    energy_min=None, energy_max=None, f_max=None,
-                    ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+             adsorbates=None, calc_settings=None, vasp_settings=None,
+             energy_min=None, energy_max=None, f_max=None,
+             ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
     '''
-    This method pulls out a set of fingerprints from a mongo client and returns
-    a mongo cursor (generator) object that returns the fingerprints
+    This function uses a mongo aggregator to find unique mongo docs and then returns them
+    in two different forms:  a "raw" form (list of dicts) and a "parsed" form (dict of lists).
+    Note that since we use a mongo aggregator, this function will return only unique mongo
+    docs (as per the fingerprints supplied by the user); do not expect a mongo doc per
+    matching database entry.
 
     Inputs:
         client              Mongo client object
