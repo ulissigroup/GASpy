@@ -55,7 +55,7 @@ class UpdateAllDB(luigi.WrapperTask):
         '''
 
         # Dump from the Primary DB to the Aux DB
-        DumpToAuxDB().run()
+        list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
         docs = utils.get_aux_db().find({'type':'slab+adsorbate'})
@@ -303,7 +303,7 @@ class DumpFWToTraj(luigi.Task):
 
 
 class DumpToAdsorptionDB(luigi.Task):
-    ''' This class dumps the adsorption energies from our pickles to our Local energies DB '''
+    ''' This class dumps the adsorption energies from our pickles to our tertiary databases '''
     parameters = luigi.DictParameter()
 
     def requires(self):
@@ -385,30 +385,28 @@ class DumpToAdsorptionDB(luigi.Task):
         max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
 
         # Make a dictionary of tags to add to the database
-        processed_data={'fp_final': fp_final,
-                        'fp_init': fp_init,
-                         'vasp_settings': self.parameters['adsorption']['vasp_settings'],
-                         'calculation_info':{
-                        'type':'slab+adsorbate',
-                    'formula':best_sys.get_chemical_formula('hill'),
-                    'mpid': self.parameters['bulk']['mpid'],
-                    'miller': self.parameters['slab']['miller'],
-                    'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
-                    'top': self.parameters['slab']['top'],
-                    'slabrepeat': self.parameters['adsorption']['slabrepeat'],
-                    'relaxed': True,
-                    'adsorbates': self.parameters['adsorption']['adsorbates'],
-                    'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
-                    'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
+        processed_data = {'fp_final': fp_final,
+                          'fp_init': fp_init,
+                          'vasp_settings': self.parameters['adsorption']['vasp_settings'],
+                          'calculation_info':{'type': 'slab+adsorbate',
+                                              'formula': best_sys.get_chemical_formula('hill'),
+                                              'mpid': self.parameters['bulk']['mpid'],
+                                              'miller': self.parameters['slab']['miller'],
+                                              'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
+                                              'top': self.parameters['slab']['top'],
+                                              'slabrepeat': self.parameters['adsorption']['slabrepeat'],
+                                              'relaxed': True,
+                                              'adsorbates': self.parameters['adsorption']['adsorbates'],
+                                              'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
+                                              'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
                           'FW_info': {'slab+adsorbate':best_sys_pkl['slab+ads']['fwid'],
-                    'slab': best_sys_pkl['slab']['fwid'],
-                    'bulk': bulk[bulkmin]['fwid']},
-                    'movement_data': {
-                    'max_surface_movement': max_surface_movement,
-                    'max_adsorbate_movement': max_adsorbate_movement,
-                    'max_bare_slab_movement': max_bare_slab_movement}}
-        best_sys_pkl_slab_ads=best_sys_pkl['slab+ads']
-        best_sys_pkl_slab_ads['processed_data']=processed_data
+                                      'slab': best_sys_pkl['slab']['fwid'],
+                                      'bulk': bulk[bulkmin]['fwid']},
+                          'movement_data': {'max_surface_movement': max_surface_movement,
+                                            'max_adsorbate_movement': max_adsorbate_movement,
+                                            'max_bare_slab_movement': max_bare_slab_movement}}
+        best_sys_pkl_slab_ads = best_sys_pkl['slab+ads']
+        best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
         # TODO:  Get rid of these deletion lines after the next time we delete a pickles
