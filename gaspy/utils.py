@@ -127,7 +127,7 @@ def get_docs(client, collection_name, fingerprints,
     else:
         raise Exception('Unknown calc_settings')
     if vasp_settings:
-        for key, value in vasp_settings:
+        for key, value in vasp_settings.iteritems():
             match['$match']['processed_data.vasp_settings.%s' % key] = value
         # Alert the user that they tried to specify the gga twice.
         if ('gga' in vasp_settings and calc_settings):
@@ -480,9 +480,7 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
     sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
-    sites = []
-    for key in sitedict:
-        sites += sitedict[key]
+    sites = sitedict['all']
     return sites
 
 
