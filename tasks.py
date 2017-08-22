@@ -76,6 +76,7 @@ class UpdateAllDB(luigi.WrapperTask):
             # to dump.
             if (doc['fwid'] not in fwids
                     and doc['fwname']['adsorbate'] != ''
+                    and doc['fwname']['adsorbate'] == 'OOH'
                     and ((self.max_processes == 0) or \
                          (self.max_processes > 0 and i < self.max_processes))):
                 # Pull information from the Aux DB
@@ -405,13 +406,14 @@ class DumpToAdsorptionDB(luigi.Task):
                           'movement_data': {'max_surface_movement': max_surface_movement,
                                             'max_adsorbate_movement': max_adsorbate_movement,
                                             'max_bare_slab_movement': max_bare_slab_movement}}
-        best_sys_pkl_slab_ads = best_sys_pkl['slab+ads']
+        best_sys_pkl_slab_ads = mongo_doc(best_sys_pkl['atoms'])
+        best_sys_pkl_slab_ads['initial_configuration'] = best_sys_pkl['slab+ads']['initial_configuration']
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
         # TODO:  Get rid of these deletion lines after the next time we delete a pickles
-        del best_sys_pkl_slab_ads['fwname']
-        del best_sys_pkl_slab_ads['type']
+        #del best_sys_pkl_slab_ads['fwname']
+        #del best_sys_pkl_slab_ads['type']
         with utils.get_adsorption_db() as adsorption_db:
             adsorption_db.write(best_sys_pkl_slab_ads)
 
@@ -1133,12 +1135,12 @@ class CalculateEnergy(luigi.Task):
         gasEnergies['H2O'] = mongo_doc_atoms(pickle.load(inputs[4].open())[0]).get_potential_energy()
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
         adslab_docs = pickle.load(inputs[0].open())
-        lowest_energy_adslab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), adslab_docs))
-        adslab_energy = mongo_doc_atoms(adslab_docs[lowest_energy_adslab]).get_potential_energy()
+        lowest_energy_adslab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), adslab_docs))
+        adslab_energy = mongo_doc_atoms(adslab_docs[lowest_energy_adslab]).get_potential_energy(apply_constraint=False)
         # Load the slab relaxed structures, and take the lowest energy one
         slab_docs = pickle.load(inputs[1].open())
-        lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
-        slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(), slab_docs))
+        lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), slab_docs))
+        slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), slab_docs))
 
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H':gasEnergies['H2']/2.,
@@ -1157,7 +1159,7 @@ class CalculateEnergy(luigi.Task):
         # Make an atoms object with a single-point calculator that contains the potential energy
         adjusted_atoms = mongo_doc_atoms(adslab_docs[lowest_energy_adslab])
         adjusted_atoms.set_calculator(SinglePointCalculator(adjusted_atoms,
-                                                            forces=adjusted_atoms.get_forces(),
+                                                            forces=adjusted_atoms.get_forces(apply_constraint=False),
                                                             energy=dE))
 
         # Write a dictionary with the results and the entries that were used for the calculations
