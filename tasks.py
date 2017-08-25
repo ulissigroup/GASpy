@@ -76,7 +76,6 @@ class UpdateAllDB(luigi.WrapperTask):
             # to dump.
             if (doc['fwid'] not in fwids
                     and doc['fwname']['adsorbate'] != ''
-                    and doc['fwname']['adsorbate'] == 'OOH'
                     and ((self.max_processes == 0) or \
                          (self.max_processes > 0 and i < self.max_processes))):
                 # Pull information from the Aux DB
