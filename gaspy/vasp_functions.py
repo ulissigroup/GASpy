@@ -35,18 +35,18 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     #Vasp.VASPRC['queue.ppn'] = 2
 
     vasp_cmd = 'vasp_std'
-    os.environ['PBS_SERVER']='gilgamesh.cheme.cmu.edu'
+    os.environ['PBS_SERVER'] = 'gilgamesh.cheme.cmu.edu'
 
     if 'PBS_NODEFILE' in os.environ:
-        NPROCS =  NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
+        NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
     elif 'SLURM_CLUSTER_NAME' in os.environ:
-        NPROCS=int(os.environ['SLURM_NPROCS'])
+        NPROCS = int(os.environ['SLURM_NPROCS'])
 
     if 'PBS_NODEFILE' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
         # We're on gilgamesh
         vaspflags['npar'] = 4
-        vasp_cmd='/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
-        NPROCS =  NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
+        vasp_cmd = '/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
+        NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
         mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'arjuna':
         # We're on arjuna
@@ -91,7 +91,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     del vaspflags['pp_version']
 
     VASPRC['vasp.executable.parallel'] = vasp_cmd
-    os.environ['VASP_COMMAND']=mpicall(NPROCS,vasp_cmd)
+    os.environ['VASP_COMMAND'] = mpicall(NPROCS, vasp_cmd)
 
     # Detect whether or not there are constraints that cannot be handled by VASP
     allowable_constraints = ['FixAtoms']
@@ -114,11 +114,11 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
         # set up the calculation and run
         calc = Vasp(**vaspflags)
         atoms.set_calculator(calc)
-        
-        #Trigger the calculation
+
+        # Trigger the calculation
         atoms.get_potential_energy()
 
-        atomslist=[]
+        atomslist = []
         for atoms in read('vasprun.xml', ':'):
             catoms = atoms.copy()
             catoms = catoms[calc.resort]
