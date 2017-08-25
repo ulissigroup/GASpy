@@ -37,12 +37,12 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     vasp_cmd = 'vasp_std'
     os.environ['PBS_SERVER']='gilgamesh.cheme.cmu.edu'
 
-    if 'PBS_SERVER' in ox.environ:
+    if 'PBS_NODEFILE' in os.environ:
         NPROCS =  NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
     elif 'SLURM_CLUSTER_NAME' in os.environ:
         NPROCS=int(os.environ['SLURM_NPROCS'])
 
-    if 'PBS_SERVER' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
+    if 'PBS_NODEFILE' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
         # We're on gilgamesh
         vaspflags['npar'] = 4
         vasp_cmd='/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
