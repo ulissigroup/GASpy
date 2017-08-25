@@ -174,7 +174,7 @@ def get_docs(client, collection_name, fingerprints,
     # then parse it.
     docs = [doc['_id'] for doc in cursor]
     for key in p_docs.keys():
-        p_docs[key] = [doc[key] for doc in docs]
+        p_docs[key] = [doc[key] if key in doc else None for doc in docs]
     return docs, p_docs
 
 
@@ -480,7 +480,14 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
     sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
-    sites = sitedict['all']
+    # Some versions of PyMatGen provide an `all` key. If it's there, then just pull out
+    # all the sites that way. If not, then pull out all the sites manually.
+    try:
+        sites = sitedict['all']
+    except KeyError:
+        sites = []
+        for key, value in sitedict.iteritems():
+            sites += value
     return sites
 
 
