@@ -6,6 +6,26 @@ import ase.constraints
 from vasp import Vasp
 
 
+def fingerprints():
+    '''
+    Returns a dictionary that is meant to be passed to mongo aggregators to create
+    new mongo docs. The keys here are the keys for the new mongo doc, and the values
+    are where you can find the information from the old mongo docs (in our databases).
+    This function pairs well with the `gaspy.utils.get_cursor` function.
+
+    Note that our code implicitly assumes an identical document structure between all
+    of the collections that it looks at.
+    '''
+    fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
+                    'miller': '$processed_data.calculation_info.miller',
+                    'shift': '$processed_data.calculation_info.shift',
+                    'top': '$processed_data.calculation_info.top',
+                    'coordination': '$processed_data.fp_init.coordination',
+                    'neighborcoord': '$processed_data.fp_init.neighborcoord',
+                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
+    return fingerprints
+
+
 def xc_settings(xc):
     '''
     This function is where we populate the default calculation settings we want for each
@@ -173,8 +193,8 @@ def adsorbates_dict():
     ooh = Atoms('OOH', positions=[[0., 0., 0.],
                                   [0., 0., 1.55],
                                   [0, 0.94, 1.80]])
-    ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.95, k=5),  # Bind OO
-                        ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5)]) # Bind OH
+    ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),  # Bind OO
+                        ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)]) # Bind OH
     adsorbates['OOH'] = ooh
 
     # All done!

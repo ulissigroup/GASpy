@@ -1,3 +1,5 @@
+import pdb
+import warnings
 from pprint import pprint
 import numpy as np
 from ase import Atoms
@@ -49,6 +51,133 @@ def get_aux_db():
                          collection='atoms')
 
 
+def get_adsorption_db():
+    ''' This is the information for the Adsorption Energy vasp.mongo database '''
+    return MongoDatabase(host='mongodb01.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
+                         collection='adsorption')
+
+
+def get_catalog_db():
+    ''' This is the information for the Adsorption Site Catalog vasp.mongo database '''
+    return MongoDatabase(host='mongodb01.nersc.gov',
+                         port=27017,
+                         user='admin_zu_vaspsurfaces',
+                         password='$TPAHPmj',
+                         database='vasp_zu_vaspsurfaces',
+                         collection='catalog')
+
+
+def get_docs(client, collection_name, fingerprints,
+             adsorbates=None, calc_settings=None, vasp_settings=None,
+             energy_min=None, energy_max=None, f_max=None,
+             ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+    '''
+    This function uses a mongo aggregator to find unique mongo docs and then returns them
+    in two different forms:  a "raw" form (list of dicts) and a "parsed" form (dict of lists).
+    Note that since we use a mongo aggregator, this function will return only unique mongo
+    docs (as per the fingerprints supplied by the user); do not expect a mongo doc per
+    matching database entry.
+
+    Inputs:
+        client              Mongo client object
+        collection_name     The collection name within the client that you want to look at
+        fingerprints        A dictionary of fingerprints and their locations in our
+                            mongo documents. For example:
+                                fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
+                                                'coordination': '$processed_data.fp_init.coordination'}
+        adsorbates          A list of adsorbates that you want to find matches for
+        calc_settings       An optional argument that will only pull out data with these
+                            calc settings (e.g., 'beef-vdw' or 'rpbe').
+        vasp_settings       An optional argument that will only pull out data with these
+                            vasp settings. Any assignments to `gga` here will overwrite
+                            `calc_settings`.
+        energy_min          The minimum adsorption energy to pull from the Local DB (eV)
+        energy_max          The maximum adsorption energy to pull from the Local DB (eV)
+        ads_move_max        The maximum distance that an adsorbate atom may move (angstrom)
+        bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
+                            without an adsorbate (angstrom)
+        slab_move_max       The maximum distance that a slab atom may move (angstrom)
+        f_max               The upper limit on the maximum force on an atom in the system
+    Output:
+        docs    Mongo docs; a list of dictionaries for each database entry
+        p_docs  "parsed docs"; a dictionary whose keys are the keys of `fingerprints` and
+                whose values are lists of the results returned by each query within
+                `fingerprints`.
+    '''
+    # Initialize
+    p_docs = dict.fromkeys(fingerprints)
+    # Put the "fingerprinting" into a `group` dictionary, which we will
+    # use to pull out data from the mongo database. Also, initialize
+    # a `match` dictionary, which we will use to filter results.
+    group = {'$group': {'_id': fingerprints}}
+    match = {'$match': {}}
+
+    # Create `match` filters to search by. Use if/then statements to create the filters
+    # only if the user specifies them.
+    if not calc_settings:
+        pass
+    elif calc_settings == 'rpbe':
+        match['$match']['processed_data.vasp_settings.gga'] = 'RP'
+    elif calc_settings == 'beef-vdw':
+        match['$match']['processed_data.vasp_settings.gga'] = 'BF'
+    else:
+        raise Exception('Unknown calc_settings')
+    if vasp_settings:
+        for key, value in vasp_settings.iteritems():
+            match['$match']['processed_data.vasp_settings.%s' % key] = value
+        # Alert the user that they tried to specify the gga twice.
+        if ('gga' in vasp_settings and calc_settings):
+            warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
+    if adsorbates:
+        match['$match']['processed_data.calculation_info.adsorbate_names'] = adsorbates
+    # Multi-conditional for the energy for the different ways a user can define
+    # energy constraints
+    if (energy_max and energy_min):
+        match['$match']['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
+    elif (energy_max and not energy_min):
+        match['$match']['results.energy'] = {'$lt': energy_max}
+    elif (not energy_max and energy_min):
+        match['$match']['results.energy'] = {'$gt': energy_min}
+    # We do a doubly-nested element match because `results.forces` is a doubly-nested
+    # list of forces (1st layer is atoms, 2nd layer is cartesian directions, final
+    # layer is the forces on that atom in that direction).
+    if f_max:
+        match['$match']['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    if ads_move_max:
+        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
+                {'$lt': ads_move_max}
+    if bare_slab_move_max:
+        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
+                {'$lt': bare_slab_move_max}
+    if slab_move_max:
+        match['$match']['processed_data.movement_data.max_surface_movement'] = \
+                {'$lt': slab_move_max}
+
+    # Compile the pipeline; add matches only if any matches are specified
+    if match['$match']:
+        pipeline = [match, group]
+    else:
+        pipeline = [group]
+
+    # Get the particular collection from the mongo client's database
+    collection = getattr(client.db, collection_name)
+    # Create the cursor. We set allowDiskUse=True to allow mongo to write to
+    # temporary files, which it needs to do for large databases. We also
+    # set useCursor=True so that `aggregate` returns a cursor object
+    # (otherwise we run into memory issues).
+    cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
+    # Use the cursor to pull all of the information we want out of the database, and
+    # then parse it.
+    docs = [doc['_id'] for doc in cursor]
+    for key in p_docs.keys():
+        p_docs[key] = [doc[key] if key in doc else None for doc in docs]
+    return docs, p_docs
+
+
 def vasp_settings_to_str(vasp_settings):
     '''
     This function is used in various scripts to convert a dictionary of vasp settings
@@ -88,7 +217,7 @@ def ads_dict(adsorbate):
 
         # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
-            atoms = _adsorbates_dict()[adsorbate]
+            atoms = adsorbates_dict()[adsorbate]
         except KeyError:
             print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults' \
                   % adsorbate)
@@ -245,7 +374,7 @@ def fingerprint_atoms(atoms):
             'nextnearestcoordination':coordination_nextnearest}
 
 
-def _label_structure_with_surface(slabAtoms, bulkAtoms):
+def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     '''
     This script/function calculates possible adsorption sites of a slab of atoms. It is
     used primarily as a helper function for the `find_adsorption_sites` function, thus
@@ -283,7 +412,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
         el = str(bulk_struct[i].specie)
         # Use PyMatGen to identify the "coordinated_neighbors" [list of classes]
         # Note that we use a tolerance of 0.1 to be consistent with PyMatGen
-        coordinated_neighbors = vcf_bulk.get_coordinated_sites(i, tol=0.1)
+        coordinated_neighbors = vcf_bulk.get_coordinated_sites(i, tol=0.4)
         # Calculate the number of coordinated neighbors [int]
         num_neighbors = len(coordinated_neighbors)
         # Store this number in "cn_el" [dict]. Note that cn_el[el] will return a list of
@@ -292,29 +421,34 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms):
     # Calculate "mean_cn_el" [dict], which will hold the mean coordination number [float] of
     # each element in the bulk
     mean_cn_el = {}
+    min_cn_el = {}
     for element in formula:
         #mean_cn_el[element] = float(sum(cn_el[element]))/len(cn_el[element])
         mean_cn_el[element] = sum(cn_el[element])/len(cn_el[element])
+        min_cn_el[element] = np.min(cn_el[element])
 
     # Calculate "average_z" [float], the mean z-level of all the atoms in the slab
     average_z = np.average(slab_struct.cart_coords[:, -1])
+    max_z = np.max(slab_struct.cart_coords[:, -1])
 
     # Initialize a couple of [list] objects that we will pass to PyMatGen later
     cn_surf = []
     plate_surf = []
     # For each atom in the slab, we calculate the coordination number and then determine whether
     # or not the atom is on the surface.
+
     for i, atom in enumerate(slab_struct):
         # "cn_surf" [list of floats] holds the coordination numbers of the atoms in the slab.
         # Note that we use a tolerance of 0.2 instead of 0.1. This may improve the scripts
         # ability to identify adsorption sites.
-        cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.2)))
+        cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.4)))
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
-        cn_Bulk = mean_cn_el[str(slab_struct[i].specie)]
+        element = str(slab_struct[i].specie)
+        cn_Bulk = mean_cn_el[element]
         # If the coordination number of the atom changes between the slab and bulk structures
         # AND if the atom is above the centerline of the slab...
-        if cn_surf[-1] != cn_Bulk and atom.coords[-1] > average_z:
+        if (cn_surf[-1]<min_cn_el[element] and atom.coords[-1] > average_z and atom.coords[-1]>max_z-height_threshold) or atom.coords[-1]>max_z-1.:
             # then the atom is labeled as a "surface" atom...
             plate_surf.append('surface')
         else:
@@ -346,9 +480,14 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
     # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
     sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
-    sites = []
-    for key in sitedict:
-        sites += sitedict[key]
+    # Some versions of PyMatGen provide an `all` key. If it's there, then just pull out
+    # all the sites that way. If not, then pull out all the sites manually.
+    try:
+        sites = sitedict['all']
+    except KeyError:
+        sites = []
+        for key, value in sitedict.iteritems():
+            sites += value
     return sites
 
 

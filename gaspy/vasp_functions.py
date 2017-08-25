@@ -4,7 +4,7 @@ import numpy as np
 from ase.io import read, write
 from ase.io.trajectory import TrajectoryWriter
 from ase.optimize import QuasiNewton, BFGS
-from vasp import Vasp
+from ase.calculators.vasp import Vasp
 from vasp.vasprc import VASPRC
 
 # Need to handle setting the pseudopotential directory, probably in the submission
@@ -29,44 +29,51 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     atoms = read(str(fname_in))
 
     # update vasprc file to set mode to "run" to ensure that this runs immediately
-    Vasp.vasprc(mode='run')
+    #Vasp.vasprc(mode='run')
 
     # set ppn>1 so that it knows to do an mpi job, the actual ppn will guessed by Vasp module
-    Vasp.VASPRC['queue.ppn'] = 2
+    #Vasp.VASPRC['queue.ppn'] = 2
 
     vasp_cmd = 'vasp_std'
+    os.environ['PBS_SERVER'] = 'gilgamesh.cheme.cmu.edu'
 
-    if 'PBS_SERVER' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
+    if 'PBS_NODEFILE' in os.environ:
+        NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
+    elif 'SLURM_CLUSTER_NAME' in os.environ:
+        NPROCS = int(os.environ['SLURM_NPROCS'])
+
+    if 'PBS_NODEFILE' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
         # We're on gilgamesh
-        vaspflags['NPAR'] = 4
-        vasp_cmd='/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
-        VASPRC['system.mpicall'] = lambda x, y: 'mpirun -np %i %s' %(x, y)
+        vaspflags['npar'] = 4
+        vasp_cmd = '/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
+        NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
+        mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'arjuna':
         # We're on arjuna
         if os.environ['CUDA_VISIBLE_DEVICES'] != 'NoDevFiles':
             # We have a GPU job on arjuna
-            vaspflags['NCORE'] = 1
-            vaspflags['KPAR'] = 16
-            vaspflags['NSIM'] = 8
+            vaspflags['ncore'] = 1
+            vaspflags['kpar'] = 16
+            vaspflags['nsim'] = 8
             vaspflags['lreal'] = 'Auto'
             vasp_cmd = 'vasp_gpu'
-            VASPRC['system.mpicall'] = lambda x, y: 'mpirun -np %i %s' %(x, y)
+            mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
         else:
             # We're running CPU only
-            vaspflags['NCORE'] = 4
-            vaspflags['KPAR'] = 4
+            vaspflags['ncore'] = 4
+            vaspflags['kpar'] = 4
             print('we found arjuna cpu!')
-            VASPRC['system.mpicall'] = lambda x, y: 'mpirun -np %i %s' %(x, y)
+            mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'cori':
         # We're on cori
         if os.environ['CRAY_CPU_TARGET'] == 'haswell':
             # We're on a haswell CPU node
             NNODES = int(os.environ['SLURM_NNODES'])
-            vaspflags['KPAR'] = NNODES
-            VASPRC['system.mpicall'] = lambda x, y: 'srun -n %d %s' %(x, y)
+            vaspflags['kpar'] = NNODES
+            mpicall = lambda x, y: 'srun -n %d %s' %(x, y)
         elif os.environ['CRAY_CPU_TARGET'] == 'knl':
-            VASPRC['system.mpicall'] = lambda x, y: 'srun -n %d -c8 --cpu_bind=cores %s' %(x*32, y)
-            vaspflags['NCORE'] = 1
+            mpicall = lambda x, y: 'srun -n %d -c8 --cpu_bind=cores %s' %(x*32, y)
+            vaspflags['ncore'] = 1
 
     # Set the pseudopotential type by setting 'xc' in Vasp()
     if vaspflags['pp'].lower() == 'lda':
@@ -81,7 +88,10 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
 
     pseudopotential = vaspflags['pp_version']
     os.environ['VASP_PP_PATH'] = os.environ['VASP_PP_BASE'] + '/' + str(pseudopotential) + '/'
+    del vaspflags['pp_version']
+
     VASPRC['vasp.executable.parallel'] = vasp_cmd
+    os.environ['VASP_COMMAND'] = mpicall(NPROCS, vasp_cmd)
 
     # Detect whether or not there are constraints that cannot be handled by VASP
     allowable_constraints = ['FixAtoms']
@@ -94,25 +104,31 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     if vasp_incompatible_constraints:
         vaspflags['ibrion'] = 2
         vaspflags['nsw'] = 0
-        calc = Vasp('./', atoms=atoms, **vaspflags)
+        calc = Vasp(**vaspflags)
         atoms.set_calculator(calc)
-        #calc.read_results()
-        #print(atoms.get_forces())
-        #print(atoms.get_potential_energy())
         qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj')
-        #qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj',force_consistent=False)
         qn.run(fmax=vaspflags['ediffg'] if 'ediffg' in vaspflags else 0.05)
         finalimage = atoms
-
     else:
 
         # set up the calculation and run
-        calc = Vasp('./', atoms=atoms, **vaspflags)
-        calc.read_results()
+        calc = Vasp(**vaspflags)
+        atoms.set_calculator(calc)
+
+        # Trigger the calculation
+        atoms.get_potential_energy()
+
+        atomslist = []
+        for atoms in read('vasprun.xml', ':'):
+            catoms = atoms.copy()
+            catoms = catoms[calc.resort]
+            catoms.set_calculator(SPC(catoms,
+                                      energy=atoms.get_potential_energy(),
+                                      forces=atoms.get_forces()[calc.resort]))
+            atomslist += [catoms]
 
         # Get the final trajectory
-        atomslist = calc.traj
-        finalimage = atomslist[-1]
+        finalimage = atoms
 
         # Write a traj file for the optimization
         tj = TrajectoryWriter('all.traj', 'a')
