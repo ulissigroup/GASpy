@@ -6,6 +6,7 @@ from ase.io.trajectory import TrajectoryWriter
 from ase.optimize import QuasiNewton, BFGS
 from ase.calculators.vasp import Vasp
 from vasp.vasprc import VASPRC
+from ase.calculators.singlepoint import SinglePointCalculator as SPC
 
 # Need to handle setting the pseudopotential directory, probably in the submission
 # config if it stays constant? (vasp_qadapter.yaml)
@@ -60,8 +61,12 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
             mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
         else:
             # We're running CPU only
-            vaspflags['ncore'] = 4
-            vaspflags['kpar'] = 4
+            if NPROCS>16:
+                vaspflags['ncore'] = 4
+                vaspflags['kpar'] = 4
+            else:
+                vaspflags['kpar'] = 1
+                vaspflags['ncore'] = 4
             print('we found arjuna cpu!')
             mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'cori':
