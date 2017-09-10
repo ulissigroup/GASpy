@@ -50,4 +50,5 @@ Thumbs.db
 # Sandboxing
 ###################
 testing/
+archives/
 purge_list.sh
