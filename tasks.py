@@ -523,7 +523,11 @@ class SubmitToFW(luigi.Task):
                                  float(np.round(self.parameters['slab']['shift'], 2))
                               and slab_doc['tags']['top'] == self.parameters['slab']['top']]
                 if len(atoms_list) > 0:
-                    raise Exception('We found more than one slab that matches the shift')
+                    #raise Exception('We found more than one slab that matches the shift')
+                    #min_eng=np.argmin([atoms.get_potential_energy() for atoms in atoms_list])
+                    #atoms=atoms_list[min_eng]
+                    print('We found more than one slab that matches the shift. Just submitting the first one.')
+                    atoms = atoms_list[0]
                 elif len(atoms_list) == 0:
                     raise Exception('We did not find any slab that matches the shift')
                 elif len(atoms_list) == 1:
@@ -535,7 +539,6 @@ class SubmitToFW(luigi.Task):
                         'vasp_settings':self.parameters['slab']['vasp_settings'],
                         'calculation_type':'slab optimization',
                         'num_slab_atoms':len(atoms)}
-                #print(name)
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        self.parameters['slab']['vasp_settings'],
