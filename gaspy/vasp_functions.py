@@ -29,6 +29,11 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     # read the input atoms object
     atoms = read(str(fname_in))
 
+    # Check that the unit vectors obey the right-hand rule, (X x Y points in Z) and if not
+    # Flip the order of X and Y to enforce this so that VASP is happy.
+    if np.dot(np.cross(atoms.cell[0], atoms.cell[1]), atoms.cell[2]) < 0:
+        atoms.set_cell(atoms.cell[[1, 0, 2], :])
+
     # update vasprc file to set mode to "run" to ensure that this runs immediately
     #Vasp.vasprc(mode='run')
 
@@ -157,6 +162,11 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
 
     try:
         os.remove('WAVECAR')
+    except OSError:
+        pass
+
+    try:
+        os.remove('CHG')
     except OSError:
         pass
 
