@@ -236,7 +236,7 @@ def adsorption_parameters(adsorbate,
         atoms = adsorbate
         name = adsorbate.get_chemical_formula()
 
-    return OrderedDict(numtosubmit=1,
+    return OrderedDict(numtosubmit=2,
                        min_xy=4.5,
                        relaxed=True,
                        num_slab_atoms=num_slab_atoms,
