@@ -378,9 +378,6 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
-        # TODO:  Get rid of these deletion lines after the next time we delete a pickles
-        #del best_sys_pkl_slab_ads['fwname']
-        #del best_sys_pkl_slab_ads['type']
         with utils.get_adsorption_db() as adsorption_db:
             adsorption_db.write(best_sys_pkl_slab_ads)
 
