@@ -13,4 +13,3 @@ completed=`lpad -l $lploc get_fws -q '{"name.vasp_settings.gga":"BF","state":"CO
 echo Running $running / Queued: $queued  / Completed: $completed
 
 squeue -u zulissi,ktran -t R
-
