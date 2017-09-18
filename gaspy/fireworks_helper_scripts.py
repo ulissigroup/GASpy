@@ -125,10 +125,12 @@ def get_firework_info(fw):
     starting_atoms = ase.io.read(fname, index=0)
     os.remove(fname)    # Clean up
 
-    hex_to_file_tasks= [a for a in fw.spec['_tasks'] if a['_fw_name']=='PyTask' and a['func']=='vasp_functions.hex_to_file']
+    hex_to_file_tasks = [a for a in fw.spec['_tasks']
+                         if a['_fw_name'] == 'PyTask'
+                         and a['func'] == 'vasp_functions.hex_to_file']
 
-    if len(hex_to_file_tasks)>0:
-        spec_atoms_hex=hex_to_file_tasks[0]['args'][1]
+    if len(hex_to_file_tasks) > 0:
+        spec_atoms_hex = hex_to_file_tasks[0]['args'][1]
         # To decode the atoms objects, we need to write them into files and then load
         # them again. To prevent multiple tasks from writing/reading to the same file,
         # we use uuid to create unique file names to write to/read from.
@@ -137,11 +139,15 @@ def get_firework_info(fw):
             fhandle.write(spec_atoms_hex.decode('hex'))
         spec_atoms = ase.io.read(fname)
         os.remove(fname)    # Clean up
-    
-        # The relaxation often mangles the tags and constraints due to limitations in 
+
+        if len(spec_atoms) != len(starting_atoms):
+            raise Exception('Spec atoms does not match starting atoms, investigate FW %d'
+                            % fw.fw_id)
+
+        # The relaxation often mangles the tags and constraints due to limitations in
         # in vasp() calculators.  We fix this by using the spec constraints/tags
         atoms.set_tags(spec_atoms.get_tags())
-        atoms.set_constraint(spec_atoms.constraints) 
+        atoms.set_constraint(spec_atoms.constraints)
         starting_atoms.set_tags(spec_atoms.get_tags())
         starting_atoms.set_constraint(spec_atoms.constraints)
 
