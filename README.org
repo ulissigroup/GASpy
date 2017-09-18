@@ -1,5 +1,5 @@
 #+TITLE:  GASpy:  Generalized Adsorption Simulator for Python
-#+date:  04 April 2017
+#+date:  18 September 2017
 
 * Purpose
 To use Density Functional Theory (DFT) to calculate adsorption energies of adsorbates onto slabs,
@@ -53,22 +53,17 @@ access, simply request access from a GASpy owner.
 
 To submit calculations, create Luigi tasks that call on the appropriate tasks in tasks.py,
 and then use Luigi to execute the classes that you made. Luigi will automatically submit your calculations
-to the FireWorks Launchpad. Follow the example in "ExampleTargets.py" and "RunExampleTarget.sh", which
-live in the ExampleSubmodule/ folder.
+to the FireWorks Launchpad. Follow the example in `update_db.sh`, which lives in the bash_scripts/ folder.
 
-We also recommend running `update_db.sh` on a cron to keep the databases up-to-date.
+And while we're on the subject:  We recommend running `update_db.sh` on a cron to keep the databases up-to-date.
 
 * Under the hood
 Since we are performing a (very) large number of DFT simulations, we need to store the data somewhere.
 Our Primary, "blessed" database is a MongoDB that is managed by our FireWorks launchpad.
 
-But our Primary, FireWorks-mananged database is not friendly with our Luigi dependency-mananger, nor is
-it friendly with our pre-launch redundancy checks (which we use to prevent re-calculations on systems we've
-already studied). So we create an Auxiliary vasp.mongo database where we dump all of our data from our Primary
+But our Primary, FireWorks-mananged database is not friendly with our Luigi dependency-mananger. It is
+also not able to hold any post-processing information that we want to create (e.g., coordination numbers).
+So we create an Auxiliary vasp.mongo database where we dump all of our data from our Primary
 database, but in a "good" format. GASpy then does its administrative work on the Auxiliary vasp.mongo
 database and then submits jobs to the Primary FireWorks database. The user specifies when to update the
-Auxiliary database from the Primary database.
-
-To make matters even more fun, we love having ASE-style databases for slab+adsorbate systems so that we can
-easily visualize our systems. To accomplish this, we dump our Auxiliary database into a Local ASE *.db file,
-which we can then port to a web-based visualizer. The user also decides when to perform this dump.
+Auxiliary database from the Primary database (via `udpate_db.sh`).
