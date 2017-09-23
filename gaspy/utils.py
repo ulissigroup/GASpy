@@ -1,3 +1,5 @@
+''' Various functions that may be used across GASpy and its submodules '''
+
 import pdb
 import warnings
 from pprint import pprint
@@ -9,7 +11,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from vasp.mongo import MongoDatabase
-from .defaults import adsorbates_dict
+from . import defaults
 
 
 def print_dict(d, indent=0):
@@ -71,10 +73,11 @@ def get_catalog_db():
                          collection='catalog')
 
 
-def get_docs(client, collection_name, fingerprints,
+def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerprints=None,
              adsorbates=None, calc_settings=None, vasp_settings=None,
              energy_min=None, energy_max=None, f_max=None,
              ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+    # pylint: disable=too-many-branches, too-many-arguments
     '''
     This function uses a mongo aggregator to find unique mongo docs and then returns them
     in two different forms:  a "raw" form (list of dicts) and a "parsed" form (dict of lists).
@@ -89,6 +92,7 @@ def get_docs(client, collection_name, fingerprints,
                             mongo documents. For example:
                                 fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
                                                 'coordination': '$processed_data.fp_init.coordination'}
+                            If `None`, then pull the default set of fingerprints.
         adsorbates          A list of adsorbates that you want to find matches for
         calc_settings       An optional argument that will only pull out data with these
                             calc settings (e.g., 'beef-vdw' or 'rpbe').
@@ -108,6 +112,9 @@ def get_docs(client, collection_name, fingerprints,
                 whose values are lists of the results returned by each query within
                 `fingerprints`.
     '''
+    if not fingerprints:
+        fingerprints = defaults.fingerprints()
+
     # Initialize
     p_docs = dict.fromkeys(fingerprints)
     # Put the "fingerprinting" into a `group` dictionary, which we will
@@ -217,7 +224,7 @@ def ads_dict(adsorbate):
 
         # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
-            atoms = adsorbates_dict()[adsorbate]
+            atoms = defaults.adsorbates_dict()[adsorbate]
         except KeyError:
             print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults' \
                   % adsorbate)

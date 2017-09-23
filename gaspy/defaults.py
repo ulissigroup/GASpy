@@ -1,3 +1,9 @@
+'''
+This modules contains default settings for various function and queries used in GASpy and its
+submodules.
+'''
+
+import pdb
 import copy
 from collections import OrderedDict
 import cPickle as pickle
@@ -8,6 +14,11 @@ from vasp import Vasp
 
 def fingerprints():
     '''
+    WARNING:  A lot of code depends on this. Do not add any queries that rely on final
+    fingerprinting information. Do not take anything out without thinking real hard
+    about it. Adding stuff is probably ok, but only if the query works on the catalog,
+    as well.
+
     Returns a dictionary that is meant to be passed to mongo aggregators to create
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
     are where you can find the information from the old mongo docs (in our databases).
@@ -16,7 +27,8 @@ def fingerprints():
     Note that our code implicitly assumes an identical document structure between all
     of the collections that it looks at.
     '''
-    fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
+    fingerprints = {'mongo_id': '$_id',
+                    'mpid': '$processed_data.calculation_info.mpid',
                     'miller': '$processed_data.calculation_info.miller',
                     'shift': '$processed_data.calculation_info.shift',
                     'top': '$processed_data.calculation_info.top',
