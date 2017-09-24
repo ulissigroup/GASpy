@@ -57,14 +57,14 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     '''
     # Notify the user if they try to create a firework with too many atoms
     if len(atoms) > max_atoms:
-        print('        Not making firework because there are too many atoms in the following FW:')
-        print_dict(fw_name, indent=3)
+        print('Not making firework because there are too many atoms in the following FW:')
+        print_dict(fw_name, indent=1)
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and (np.max(eval(str(fw_name['miller']))) > max_miller):
-        print('        Not making firework because the miller index exceeds the maximum of %s' \
+        print('Not making firework because the miller index exceeds the maximum of %s' \
               % max_miller)
-        print_dict(fw_name, indent=3)
+        print_dict(fw_name, indent=1)
         return
 
     # Generate a string representation that we can pass to the job as input
