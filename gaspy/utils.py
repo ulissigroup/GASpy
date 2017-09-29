@@ -3,6 +3,7 @@
 import pdb
 import warnings
 from pprint import pprint
+from collections import OrderedDict
 import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
@@ -183,6 +184,98 @@ def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerpri
     for key in p_docs.keys():
         p_docs[key] = [doc[key] if key in doc else None for doc in docs]
     return docs, p_docs
+
+
+def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None, fingerprints=None):
+    '''
+    The same as `get_docs`, but with already-simulated entries filtered out
+
+    Inputs:
+        adsorbates      A list of strings indicating the adsorbates that you want to make a
+                        prediction for.
+        calc_settings   The calculation settings that we want to filter by. If we are using
+                        something other than beef-vdw or rpbe, then we need to do some
+                        more hard-coding here so that we know what in the catalog
+                        can work as a flag for this new calculation method.
+        vasp_settings   The vasp settings that we want to filter by.
+        fingerprints    A dictionary of fingerprints and their locations in our
+                        mongo documents. This is how we can pull out more (or less)
+                        information from our database.
+    Output:
+        docs    A list of dictionaries for various fingerprints. Useful for
+                creating lists of GASpy `parameters` dictionaries.
+        p_docs  A dictionary of lists for various fingerprints. Useful for
+                passing to GASpyRegressor.predict
+    '''
+    # Default value for fingerprints. Since it's a mutable dictionary, we define it
+    # down here instead of in the __init__ line.
+    if not fingerprints:
+        fingerprints = defaults.fingerprints()
+
+    # Fetch mongo docs for our results and catalog databases so that we can
+    # start filtering out cataloged sites that we've already simulated.
+    with get_adsorption_db() as ads_client:
+        ads_docs, _ = get_docs(ads_client, 'adsorption',
+                               calc_settings=calc_settings,
+                               vasp_settings=vasp_settings,
+                               fingerprints=fingerprints,
+                               adsorbates=adsorbates)
+    with get_catalog_db() as cat_client:
+        cat_docs, cat_p_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints)
+    # Hash the docs so that we can filter out any items in the catalog
+    # that we have already relaxed. Note that we keep `ads_hash` in a dict so
+    # that we can search through it, but we turn `cat_hash` into a list so that
+    # we can iterate through it alongside `cat_docs`
+    ads_hashes = hash_docs(ads_docs)
+    cat_hashes = hash_docs(cat_docs).keys()
+
+    # Perform the filtering while simultaneously populating the `docs` output
+    docs = [cat_docs[i]
+            for i, cat_hash in enumerate(cat_hashes)
+            if cat_hash not in ads_hashes]
+    # Do the same for the `p_docs` output
+    p_docs = dict.fromkeys(cat_p_docs)
+    for fingerprint, data in cat_p_docs.iteritems():
+        p_docs[fingerprint] = [data[i]
+                               for i, cat_hash in enumerate(cat_hashes)
+                               if cat_hash not in ads_hashes]
+
+    return docs, p_docs
+
+
+def hash_docs(docs, ignore_ads=False):
+    '''
+    This function helps convert the important characteristics of our systems into hashes
+    so that we may sort through them more quickly. This is important to do when trying to
+    compare entries in our two databases; it helps speed things up.
+
+    Input:
+        docs        Mongo docs (list of dictionaries) that have been created using the
+                    gaspy.utils.get_docs function. Note that this is the unparsed version
+                    of mongo documents.
+        ignore_ads  A boolean that decides whether or not we hash the adsorbate.
+                    This is useful mainly for the "matching_ads" function.
+    Output:
+        systems     An ordered dictionary whose keys are hashes of the each doc in
+                    `docs` and whose values are empty. This dictionary is intended
+                    to be parsed alongside another `docs` object, which is why
+                    it's ordered.
+    '''
+    systems = OrderedDict()
+    for doc in docs:
+        # `system` will be one long string of the fingerprints
+        system = ''
+        for key, value in doc.iteritems():
+            # Ignore mongo ID, because that'll always cause things to hash differently
+            if key != 'mongo_id':
+                # Ignore adsorbates if the user wants to, as per the argument
+                if not (ignore_ads and key == 'adsorbate_names'):
+                    # Note that we turn the values into strings explicitly, because some
+                    # fingerprint features may not be strings (e.g., list of miller indices).
+                    system += str(key + '=' + str(value) + '; ')
+        systems[hash(system)] = None
+
+    return systems
 
 
 def vasp_settings_to_str(vasp_settings):

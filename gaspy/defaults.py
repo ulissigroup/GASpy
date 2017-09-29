@@ -12,7 +12,7 @@ import ase.constraints
 from vasp import Vasp
 
 
-def fingerprints():
+def fingerprints(simulated=False):
     '''
     WARNING:  A lot of code depends on this. Do not add any queries that rely on final
     fingerprinting information. Do not take anything out without thinking real hard
@@ -26,15 +26,30 @@ def fingerprints():
 
     Note that our code implicitly assumes an identical document structure between all
     of the collections that it looks at.
+
+    Input:
+        simulated   A boolean indicating whether or not you want the fingerprints
+                    of a simulated (on non-simulated) datum.
     '''
-    fingerprints = {'mongo_id': '$_id',
-                    'mpid': '$processed_data.calculation_info.mpid',
-                    'miller': '$processed_data.calculation_info.miller',
-                    'shift': '$processed_data.calculation_info.shift',
-                    'top': '$processed_data.calculation_info.top',
-                    'coordination': '$processed_data.fp_init.coordination',
-                    'neighborcoord': '$processed_data.fp_init.neighborcoord',
-                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
+    if simulated:
+        fingerprints = {'mongo_id': '$_id',
+                        'mpid': '$processed_data.calculation_info.mpid',
+                        'miller': '$processed_data.calculation_info.miller',
+                        'shift': '$processed_data.calculation_info.shift',
+                        'top': '$processed_data.calculation_info.top',
+                        'coordination': '$processed_data.fp_final.coordination',
+                        'neighborcoord': '$processed_data.fp_final.neighborcoord',
+                        'nextnearestcoordination': '$processed_data.fp_final.nextnearestcoordination',
+                        'energy': '$results.energy'}
+    else:
+        fingerprints = {'mongo_id': '$_id',
+                        'mpid': '$processed_data.calculation_info.mpid',
+                        'miller': '$processed_data.calculation_info.miller',
+                        'shift': '$processed_data.calculation_info.shift',
+                        'top': '$processed_data.calculation_info.top',
+                        'coordination': '$processed_data.fp_init.coordination',
+                        'neighborcoord': '$processed_data.fp_init.neighborcoord',
+                        'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
     return fingerprints
 
 
