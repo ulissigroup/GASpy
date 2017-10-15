@@ -76,7 +76,7 @@ def get_catalog_db():
 
 def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerprints=None,
              adsorbates=None, calc_settings=None, vasp_settings=None,
-             energy_min=None, energy_max=None, f_max=None,
+             energy_min=None, energy_max=None, f_max=None, max_atoms=None,
              ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
     # pylint: disable=too-many-branches, too-many-arguments
     '''
@@ -102,11 +102,12 @@ def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerpri
                             `calc_settings`.
         energy_min          The minimum adsorption energy to pull from the Local DB (eV)
         energy_max          The maximum adsorption energy to pull from the Local DB (eV)
+        f_max               The upper limit on the maximum force on an atom in the system
+        max_atoms           The maximum number of atoms in the system that you want to pull
         ads_move_max        The maximum distance that an adsorbate atom may move (angstrom)
         bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
                             without an adsorbate (angstrom)
         slab_move_max       The maximum distance that a slab atom may move (angstrom)
-        f_max               The upper limit on the maximum force on an atom in the system
     Output:
         docs    Mongo docs; a list of dictionaries for each database entry
         p_docs  "parsed docs"; a dictionary whose keys are the keys of `fingerprints` and
@@ -155,15 +156,17 @@ def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerpri
     # layer is the forces on that atom in that direction).
     if f_max:
         match['$match']['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    if max_atoms:
+        match['$match']['atoms.natoms'] = {'$lt': max_atoms}
     if ads_move_max:
         match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
-                {'$lt': ads_move_max}
+            {'$lt': ads_move_max}
     if bare_slab_move_max:
         match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
-                {'$lt': bare_slab_move_max}
+            {'$lt': bare_slab_move_max}
     if slab_move_max:
         match['$match']['processed_data.movement_data.max_surface_movement'] = \
-                {'$lt': slab_move_max}
+            {'$lt': slab_move_max}
 
     # Compile the pipeline; add matches only if any matches are specified
     if match['$match']:
@@ -186,7 +189,8 @@ def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerpri
     return docs, p_docs
 
 
-def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None, fingerprints=None):
+def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
+                        fingerprints=None, max_atoms=None):
     '''
     The same as `get_docs`, but with already-simulated entries filtered out
 
@@ -201,6 +205,7 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None, fing
         fingerprints    A dictionary of fingerprints and their locations in our
                         mongo documents. This is how we can pull out more (or less)
                         information from our database.
+        max_atoms       The maximum number of atoms in the system that you want to pull
     Output:
         docs    A list of dictionaries for various fingerprints. Useful for
                 creating lists of GASpy `parameters` dictionaries.
@@ -221,7 +226,8 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None, fing
                                fingerprints=fingerprints,
                                adsorbates=adsorbates)
     with get_catalog_db() as cat_client:
-        cat_docs, cat_p_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints)
+        cat_docs, cat_p_docs = get_docs(cat_client, 'catalog',
+                                        fingerprints=fingerprints, max_atoms=max_atoms)
     # Hash the docs so that we can filter out any items in the catalog
     # that we have already relaxed. Note that we keep `ads_hash` in a dict so
     # that we can search through it, but we turn `cat_hash` into a list so that
