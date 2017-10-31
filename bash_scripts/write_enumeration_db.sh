@@ -15,7 +15,7 @@ source activate /project/projectdirs/m2755/GASpy_conda/
 PYTHONPATH='.' luigi \
     --module tasks EnumerateAlloys \
     --max-index 2 \
-    --scheduler-host gilgamesh.cheme.cmu.edu \
+    --scheduler-host 128.55.224.51 \
     --workers=32 \
     --log-level=WARNING \
     --parallel-scheduling \
