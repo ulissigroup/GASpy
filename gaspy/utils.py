@@ -236,14 +236,13 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     cat_hashes = hash_docs(cat_docs).keys()
 
     # Perform the filtering while simultaneously populating the `docs` output
-    docs = [cat_docs[i]
-            for i, cat_hash in enumerate(cat_hashes)
-            if cat_hash not in ads_hashes]
+    docs = [cat_docs[i] for i, cat_hash in enumerate(cat_hashes) if cat_hash not in ads_hashes]
+    # docs = [doc for doc in cat_docs if hash_doc(doc) not in ads_hashes]
+
     # Do the same for the `p_docs` output
     p_docs = dict.fromkeys(cat_p_docs)
     for fingerprint, data in cat_p_docs.iteritems():
-        p_docs[fingerprint] = [data[i]
-                               for i, cat_hash in enumerate(cat_hashes)
+        p_docs[fingerprint] = [data[i] for i, cat_hash in enumerate(cat_hashes)
                                if cat_hash not in ads_hashes]
 
     return docs, p_docs
@@ -271,11 +270,16 @@ def hash_docs(docs, ignore_ads=False):
     for doc in docs:
         # `system` will be one long string of the fingerprints
         system = ''
-        for key, value in doc.iteritems():
+        for key in sorted(doc.keys()):
             # Ignore mongo ID, because that'll always cause things to hash differently
             if key != 'mongo_id':
                 # Ignore adsorbates if the user wants to, as per the argument
                 if not (ignore_ads and key == 'adsorbate_names'):
+                    # Round floats to increase chances of matching
+                    value = doc[key]
+                    if isinstance(value, float):
+                        value = round(value, 2)
+
                     # Note that we turn the values into strings explicitly, because some
                     # fingerprint features may not be strings (e.g., list of miller indices).
                     system += str(key + '=' + str(value) + '; ')
