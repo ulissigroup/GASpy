@@ -3,6 +3,7 @@ This module houses various tasks that Luigi uses to set up calculations that can
 submitted to Fireworks. This is intended to be used in conjunction with a bash submission
 file.
 '''
+# pylint: disable=unsubscriptable-object
 import pdb
 import os
 import sys
@@ -21,6 +22,7 @@ from ase.build import rotate
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import average_coordination_number
+from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.matproj.rest import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
@@ -950,6 +952,49 @@ class GenerateAdSlabs(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+
+
+class MatchCatalogShift(luigi.Task):
+    '''
+    This class attempts to find the shift for slabs coming from a relaxed
+    bulk structure that correspond to a slab and shift in the catalog
+    '''
+    parameters = luigi.DictParameter()
+
+    def requires(self):
+        # We need both the relaxed and unrelaxed slabs to try and match them
+        yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
+                                        'slab': self.parameters['slab']})
+        yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
+                                        'slab': self.parameters['slab'],
+                                        'relaxed': True})
+
+    def run(self):
+        # Pull out the mongo docs for both the unrelaxed and the relaxed slabs, respectively.
+        all_cat_slab_docs = pickle.load(self.input()[1].open())
+        cat_slab_docs = [slab for slab in all_cat_slab_docs
+                         if np.abs(slab['tags']['shift']-self.parameters['slab']['shift'] < 0.01)]
+        slab_docs = pickle.load(self.input()[0].open())
+
+        # If it's 1-to-1, then assign the match and move on
+        if len(slab_docs) == 1 and len(cat_slab_docs) == 1:
+            shift = slab_docs[0]['tags']['shift']
+        # If there are multiple potential matches, then use PyMatGen's `StructureMatcher`
+        # class to figure out which relaxed structure corresponds to which catalog structure
+        else:
+            sm = StructureMatcher()
+            cat_structure = AseAtomsAdaptor.get_structure(mongo_doc_atoms(cat_slab_docs))
+            structures = [AseAtomsAdaptor.get_structure(mongo_doc_atoms(doc)) for doc in slab_docs]
+            scores = [sm.fit(cat_structure, structure) for structure in structures]
+            match_index = np.argmin(scores)
+            shift = slab_docs[match_index]['tags']['shift']
+
+        # Save the matched shift
+        with self.output().temporary_path() as self.temp_output_path:  # pylint:  disable=no-member
+            pickle.dump(shift, open(self.temp_output_path, 'w'))
+
+    def output(self):
+        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl' % (self.task_id))
 
 
 class FingerprintRelaxedAdslab(luigi.Task):
