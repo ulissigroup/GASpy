@@ -971,10 +971,10 @@ class MatchCatalogShift(luigi.Task):
 
     def run(self):
         # Pull out the mongo docs for both the unrelaxed and the relaxed slabs, respectively.
-        all_cat_slab_docs = pickle.load(self.input()[1].open())
+        all_cat_slab_docs = pickle.load(self.input()[0].open())
         cat_slab_docs = [slab for slab in all_cat_slab_docs
-                         if np.abs(slab['tags']['shift']-self.parameters['slab']['shift'] < 0.01)]
-        slab_docs = pickle.load(self.input()[0].open())
+                         if np.abs(slab['tags']['shift']-self.parameters['slab']['shift'] < 0.001)]
+        slab_docs = pickle.load(self.input()[1].open())
 
         # If it's 1-to-1, then assign the match and move on
         if len(slab_docs) == 1 and len(cat_slab_docs) == 1:
