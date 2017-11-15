@@ -964,16 +964,16 @@ class MatchCatalogShift(luigi.Task):
     def requires(self):
         # We need both the relaxed and unrelaxed slabs to try and match them
         yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
-                                        'slab': self.parameters['slab']})
-        yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
                                         'slab': self.parameters['slab'],
-                                        'relaxed': True})
+                                        'unrelaxed':True})
+        yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
+                                        'slab': self.parameters['slab']})
 
     def run(self):
         # Pull out the mongo docs for both the unrelaxed and the relaxed slabs, respectively.
         all_cat_slab_docs = pickle.load(self.input()[0].open())
         cat_slab_docs = [slab for slab in all_cat_slab_docs
-                         if np.abs(slab['tags']['shift']-self.parameters['slab']['shift'] < 0.001)]
+                         if np.abs(slab['tags']['shift']-self.parameters['slab']['shift'] < 0.01)]
         slab_docs = pickle.load(self.input()[1].open())
 
         # If it's 1-to-1, then assign the match and move on
@@ -983,7 +983,7 @@ class MatchCatalogShift(luigi.Task):
         # class to figure out which relaxed structure corresponds to which catalog structure
         else:
             sm = StructureMatcher()
-            cat_structure = AseAtomsAdaptor.get_structure(mongo_doc_atoms(cat_slab_docs))
+            cat_structure = AseAtomsAdaptor.get_structure(mongo_doc_atoms(cat_slab_docs[0]))
             structures = [AseAtomsAdaptor.get_structure(mongo_doc_atoms(doc)) for doc in slab_docs]
             scores = [sm.fit(cat_structure, structure) for structure in structures]
             match_index = np.argmin(scores)
