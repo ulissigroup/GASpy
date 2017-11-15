@@ -15,7 +15,6 @@ from collections import OrderedDict
 import cPickle as pickle
 import numpy as np
 from numpy.linalg import norm
-sys.path.append('..')
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.build import rotate

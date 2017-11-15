@@ -57,6 +57,13 @@ to the FireWorks Launchpad. Follow the example in `update_db.sh`, which lives in
 
 And while we're on the subject:  We recommend running `update_db.sh` on a cron to keep the databases up-to-date.
 
+** Installation
+Remember to add the repo to your Python path. The module importing assumes that you have GASpy in your Python path.
+You can do so by putting the following in your `.bashrc`:
+```
+export PYTHONPATH="/path/to/GASpy:${PYTHONPATH}"
+```
+
 * Under the hood
 Since we are performing a (very) large number of DFT simulations, we need to store the data somewhere.
 Our Primary, "blessed" database is a MongoDB that is managed by our FireWorks launchpad.
