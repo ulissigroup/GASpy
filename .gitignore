@@ -47,8 +47,6 @@ Thumbs.db
 *.swp
 *~
 
-# Sandboxing
-###################
-testing/
-archives/
-purge_list.sh
+# Config file #
+###############
+.gaspyrc.json

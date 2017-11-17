@@ -1,0 +1,37 @@
+{
+    "gaspy_path": "/path/to/gaspy",
+    "gasdb_path": "path/to/gasdb",
+    "conda_path": "/path/to/cond",
+    "lpad_path": "/path/to/fireworks/launchpad.yaml",
+    "lpad":{
+        "host": "host.name",
+        "nome": "name",
+        "username": "username",
+        "password": "pw",
+        "port": "99999"
+        },
+    "atoms_client":{
+        "host": "host.name",
+        "port": "99999",
+        "user": "user",
+        "password": "pw",
+        "database": "database",
+        "collection": "collection"
+        },
+    "adsorption_client":{
+        "host": "host.name",
+        "port": "99999",
+        "user": "user",
+        "password": "pw",
+        "database": "database",
+        "collection": "collection"
+        },
+    "catalog_client":{
+        "host": "host.name",
+        "port": "99999",
+        "user": "user",
+        "password": "pw",
+        "database": "database",
+        "collection": "collection"
+        }
+}

@@ -6,4 +6,4 @@
 #SBATCH -L SCRATCH   #Job requires $SCRATCH file system
 #SBATCH -C haswell   #Use Haswell nodes
 
-PYTHONPATH='../' python dump_images.py 
+python dump_images.py 

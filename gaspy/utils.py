@@ -1,9 +1,10 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
-import pdb
-import warnings
+import pdb  # noqa: F401
+import os
+from os.path import join
+import json
 from pprint import pprint
-from collections import OrderedDict
 import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
@@ -11,8 +12,45 @@ from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
-from vasp.mongo import MongoDatabase
 from . import defaults
+
+
+def read_rc():
+    '''
+    This function will pull out keys from the .gaspyrc file for you
+
+    Input:
+        keys    A list of strings indicating the configurations you want
+    Output:
+        configs A dictionary whose keys are the input keys and whose values
+                are the values that we found in the .gaspyrc file
+    '''
+    # Pull out the PYTHONPATH environment variable
+    # so that we know where to look for the .gaspyrc file
+    try:
+        python_paths = os.environ['PYTHONPATH'].split(os.pathsep)
+    except KeyError:
+        raise KeyError('You do not have the PYTHONPATH environment variable. You need to add GASpy to it')
+
+    # Initializating our search for the .gaspyrc file
+    rc_file = '.gaspyrc.json'
+    found_config = False
+    # Search our PYTHONPATH one-by-one
+    for path in python_paths:
+        for root, dirs, files in os.walk(path):
+            if rc_file in files:
+                rc_file = join(root, rc_file)
+                found_config = True
+                break
+        # Stop looking through the files if we've found it
+        if found_config:
+            break
+
+    # Now that we've found it, open it up and read from it
+    with open(rc_file, 'r') as rc:
+        configs = json.load(rc)
+
+    return configs
 
 
 def print_dict(d, indent=0):
@@ -42,250 +80,6 @@ def print_dict(d, indent=0):
                 print('\t' * (indent+1) + str(item))
     else:
         pass
-
-
-def get_aux_db():
-    ''' This is the information for the Auxiliary vasp.mongo database '''
-    return MongoDatabase(host='mongodb01.nersc.gov',
-                         port=27017,
-                         user='admin_zu_vaspsurfaces',
-                         password='$TPAHPmj',
-                         database='vasp_zu_vaspsurfaces',
-                         collection='atoms')
-
-
-def get_adsorption_db():
-    ''' This is the information for the Adsorption Energy vasp.mongo database '''
-    return MongoDatabase(host='mongodb01.nersc.gov',
-                         port=27017,
-                         user='admin_zu_vaspsurfaces',
-                         password='$TPAHPmj',
-                         database='vasp_zu_vaspsurfaces',
-                         collection='adsorption')
-
-
-def get_catalog_db():
-    ''' This is the information for the Adsorption Site Catalog vasp.mongo database '''
-    return MongoDatabase(host='mongodb01.nersc.gov',
-                         port=27017,
-                         user='admin_zu_vaspsurfaces',
-                         password='$TPAHPmj',
-                         database='vasp_zu_vaspsurfaces',
-                         collection='catalog')
-
-
-def get_docs(client=get_adsorption_db(), collection_name='adsorption', fingerprints=None,
-             adsorbates=None, calc_settings=None, vasp_settings=None,
-             energy_min=None, energy_max=None, f_max=None, max_atoms=None,
-             ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
-    # pylint: disable=too-many-branches, too-many-arguments
-    '''
-    This function uses a mongo aggregator to find unique mongo docs and then returns them
-    in two different forms:  a "raw" form (list of dicts) and a "parsed" form (dict of lists).
-    Note that since we use a mongo aggregator, this function will return only unique mongo
-    docs (as per the fingerprints supplied by the user); do not expect a mongo doc per
-    matching database entry.
-
-    Inputs:
-        client              Mongo client object
-        collection_name     The collection name within the client that you want to look at
-        fingerprints        A dictionary of fingerprints and their locations in our
-                            mongo documents. For example:
-                                fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
-                                                'coordination': '$processed_data.fp_init.coordination'}
-                            If `None`, then pull the default set of fingerprints.
-        adsorbates          A list of adsorbates that you want to find matches for
-        calc_settings       An optional argument that will only pull out data with these
-                            calc settings (e.g., 'beef-vdw' or 'rpbe').
-        vasp_settings       An optional argument that will only pull out data with these
-                            vasp settings. Any assignments to `gga` here will overwrite
-                            `calc_settings`.
-        energy_min          The minimum adsorption energy to pull from the Local DB (eV)
-        energy_max          The maximum adsorption energy to pull from the Local DB (eV)
-        f_max               The upper limit on the maximum force on an atom in the system
-        max_atoms           The maximum number of atoms in the system that you want to pull
-        ads_move_max        The maximum distance that an adsorbate atom may move (angstrom)
-        bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
-                            without an adsorbate (angstrom)
-        slab_move_max       The maximum distance that a slab atom may move (angstrom)
-    Output:
-        docs    Mongo docs; a list of dictionaries for each database entry
-        p_docs  "parsed docs"; a dictionary whose keys are the keys of `fingerprints` and
-                whose values are lists of the results returned by each query within
-                `fingerprints`.
-    '''
-    if not fingerprints:
-        fingerprints = defaults.fingerprints()
-
-    # Initialize
-    p_docs = dict.fromkeys(fingerprints)
-    # Put the "fingerprinting" into a `group` dictionary, which we will
-    # use to pull out data from the mongo database. Also, initialize
-    # a `match` dictionary, which we will use to filter results.
-    group = {'$group': {'_id': fingerprints}}
-    match = {'$match': {}}
-
-    # Create `match` filters to search by. Use if/then statements to create the filters
-    # only if the user specifies them.
-    if not calc_settings:
-        pass
-    elif calc_settings == 'rpbe':
-        match['$match']['processed_data.vasp_settings.gga'] = 'RP'
-    elif calc_settings == 'beef-vdw':
-        match['$match']['processed_data.vasp_settings.gga'] = 'BF'
-    else:
-        raise Exception('Unknown calc_settings')
-    if vasp_settings:
-        for key, value in vasp_settings.iteritems():
-            match['$match']['processed_data.vasp_settings.%s' % key] = value
-        # Alert the user that they tried to specify the gga twice.
-        if ('gga' in vasp_settings and calc_settings):
-            warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
-    if adsorbates:
-        match['$match']['processed_data.calculation_info.adsorbate_names'] = adsorbates
-    # Multi-conditional for the energy for the different ways a user can define
-    # energy constraints
-    if (energy_max and energy_min):
-        match['$match']['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
-    elif (energy_max and not energy_min):
-        match['$match']['results.energy'] = {'$lt': energy_max}
-    elif (not energy_max and energy_min):
-        match['$match']['results.energy'] = {'$gt': energy_min}
-    # We do a doubly-nested element match because `results.forces` is a doubly-nested
-    # list of forces (1st layer is atoms, 2nd layer is cartesian directions, final
-    # layer is the forces on that atom in that direction).
-    if f_max:
-        match['$match']['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
-    if max_atoms:
-        match['$match']['atoms.natoms'] = {'$lt': max_atoms}
-    if ads_move_max:
-        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
-            {'$lt': ads_move_max}
-    if bare_slab_move_max:
-        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
-            {'$lt': bare_slab_move_max}
-    if slab_move_max:
-        match['$match']['processed_data.movement_data.max_surface_movement'] = \
-            {'$lt': slab_move_max}
-
-    # Compile the pipeline; add matches only if any matches are specified
-    if match['$match']:
-        pipeline = [match, group]
-    else:
-        pipeline = [group]
-
-    # Get the particular collection from the mongo client's database
-    collection = getattr(client.db, collection_name)
-    # Create the cursor. We set allowDiskUse=True to allow mongo to write to
-    # temporary files, which it needs to do for large databases. We also
-    # set useCursor=True so that `aggregate` returns a cursor object
-    # (otherwise we run into memory issues).
-    cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
-    # Use the cursor to pull all of the information we want out of the database, and
-    # then parse it.
-    docs = [doc['_id'] for doc in cursor]
-    for key in p_docs.keys():
-        p_docs[key] = [doc[key] if key in doc else None for doc in docs]
-    return docs, p_docs
-
-
-def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
-                        fingerprints=None, max_atoms=None):
-    '''
-    The same as `get_docs`, but with already-simulated entries filtered out
-
-    Inputs:
-        adsorbates      A list of strings indicating the adsorbates that you want to make a
-                        prediction for.
-        calc_settings   The calculation settings that we want to filter by. If we are using
-                        something other than beef-vdw or rpbe, then we need to do some
-                        more hard-coding here so that we know what in the catalog
-                        can work as a flag for this new calculation method.
-        vasp_settings   The vasp settings that we want to filter by.
-        fingerprints    A dictionary of fingerprints and their locations in our
-                        mongo documents. This is how we can pull out more (or less)
-                        information from our database.
-        max_atoms       The maximum number of atoms in the system that you want to pull
-    Output:
-        docs    A list of dictionaries for various fingerprints. Useful for
-                creating lists of GASpy `parameters` dictionaries.
-        p_docs  A dictionary of lists for various fingerprints. Useful for
-                passing to GASpyRegressor.predict
-    '''
-    # Default value for fingerprints. Since it's a mutable dictionary, we define it
-    # down here instead of in the __init__ line.
-    if not fingerprints:
-        fingerprints = defaults.fingerprints()
-
-    # Fetch mongo docs for our results and catalog databases so that we can
-    # start filtering out cataloged sites that we've already simulated.
-    with get_adsorption_db() as ads_client:
-        ads_docs, _ = get_docs(ads_client, 'adsorption',
-                               calc_settings=calc_settings,
-                               vasp_settings=vasp_settings,
-                               fingerprints=fingerprints,
-                               adsorbates=adsorbates)
-    with get_catalog_db() as cat_client:
-        cat_docs, cat_p_docs = get_docs(cat_client, 'catalog',
-                                        fingerprints=fingerprints, max_atoms=max_atoms)
-    # Hash the docs so that we can filter out any items in the catalog
-    # that we have already relaxed. Note that we keep `ads_hash` in a dict so
-    # that we can search through it, but we turn `cat_hash` into a list so that
-    # we can iterate through it alongside `cat_docs`
-    ads_hashes = hash_docs(ads_docs)
-    cat_hashes = hash_docs(cat_docs).keys()
-
-    # Perform the filtering while simultaneously populating the `docs` output
-    docs = [cat_docs[i] for i, cat_hash in enumerate(cat_hashes) if cat_hash not in ads_hashes]
-    # docs = [doc for doc in cat_docs if hash_doc(doc) not in ads_hashes]
-
-    # Do the same for the `p_docs` output
-    p_docs = dict.fromkeys(cat_p_docs)
-    for fingerprint, data in cat_p_docs.iteritems():
-        p_docs[fingerprint] = [data[i] for i, cat_hash in enumerate(cat_hashes)
-                               if cat_hash not in ads_hashes]
-
-    return docs, p_docs
-
-
-def hash_docs(docs, ignore_ads=False):
-    '''
-    This function helps convert the important characteristics of our systems into hashes
-    so that we may sort through them more quickly. This is important to do when trying to
-    compare entries in our two databases; it helps speed things up.
-
-    Input:
-        docs        Mongo docs (list of dictionaries) that have been created using the
-                    gaspy.utils.get_docs function. Note that this is the unparsed version
-                    of mongo documents.
-        ignore_ads  A boolean that decides whether or not we hash the adsorbate.
-                    This is useful mainly for the "matching_ads" function.
-    Output:
-        systems     An ordered dictionary whose keys are hashes of the each doc in
-                    `docs` and whose values are empty. This dictionary is intended
-                    to be parsed alongside another `docs` object, which is why
-                    it's ordered.
-    '''
-    systems = OrderedDict()
-    for doc in docs:
-        # `system` will be one long string of the fingerprints
-        system = ''
-        for key in sorted(doc.keys()):
-            # Ignore mongo ID, because that'll always cause things to hash differently
-            if key != 'mongo_id':
-                # Ignore adsorbates if the user wants to, as per the argument
-                if not (ignore_ads and key == 'adsorbate_names'):
-                    # Round floats to increase chances of matching
-                    value = doc[key]
-                    if isinstance(value, float):
-                        value = round(value, 2)
-
-                    # Note that we turn the values into strings explicitly, because some
-                    # fingerprint features may not be strings (e.g., list of miller indices).
-                    system += str(key + '=' + str(value) + '; ')
-        systems[hash(system)] = None
-
-    return systems
 
 
 def vasp_settings_to_str(vasp_settings):
@@ -322,14 +116,14 @@ def ads_dict(adsorbate):
     try:
         atoms = Atoms(adsorbate)
     except ValueError:
-        pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..." \
+        pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..."
                % adsorbate)
 
         # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
             atoms = defaults.adsorbates_dict()[adsorbate]
         except KeyError:
-            print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults' \
+            print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults'
                   % adsorbate)
 
     # Return the atoms
@@ -478,10 +272,10 @@ def fingerprint_atoms(atoms):
 
     # Return a dictionary with each of the fingerprints. Any key/value pair can be added here
     # and will propagate up the chain
-    return {'coordination':coordination,
-            'neighborcoord':neighborcoord,
-            'natoms':len(atoms),
-            'nextnearestcoordination':coordination_nextnearest}
+    return {'coordination': coordination,
+            'neighborcoord': neighborcoord,
+            'natoms': len(atoms),
+            'nextnearestcoordination': coordination_nextnearest}
 
 
 def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
@@ -555,10 +349,11 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
         element = str(slab_struct[i].specie)
-        cn_Bulk = mean_cn_el[element]
         # If the coordination number of the atom changes between the slab and bulk structures
         # AND if the atom is above the centerline of the slab...
-        if (cn_surf[-1]<min_cn_el[element] and atom.coords[-1] > average_z and atom.coords[-1]>max_z-height_threshold) or atom.coords[-1]>max_z-1.:
+        if (cn_surf[-1] < min_cn_el[element] and
+                atom.coords[-1] > average_z and
+                atom.coords[-1] > max_z-height_threshold) or atom.coords[-1] > max_z-1.:
             # then the atom is labeled as a "surface" atom...
             plate_surf.append('surface')
         else:
@@ -566,7 +361,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
             plate_surf.append('subsurface')
 
     # We add "new_site_properties" to "slab_struct" [PyMatGen structure class]
-    new_site_properties = {'surface_properties':plate_surf, 'coord':cn_surf}
+    new_site_properties = {'surface_properties': plate_surf, 'coord': cn_surf}
     slab_struct = slab_struct.copy(site_properties=new_site_properties)
 
     return slab_struct

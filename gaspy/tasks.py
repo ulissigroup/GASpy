@@ -3,10 +3,8 @@ This module houses various tasks that Luigi uses to set up calculations that can
 submitted to Fireworks. This is intended to be used in conjunction with a bash submission
 file.
 '''
-# pylint: disable=unsubscriptable-object
-import pdb
-import os
-import sys
+
+import pdb  # noqa: F401
 import copy
 import math
 from datetime import datetime
@@ -20,7 +18,6 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from ase.build import rotate
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
-from pymatgen.analysis.structure_analyzer import average_coordination_number
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.matproj.rest import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -29,12 +26,17 @@ from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from fireworks import Workflow
 import luigi
 from vasp.mongo import mongo_doc, mongo_doc_atoms
-from gaspy import defaults
-from gaspy import utils
+from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
 
 
-LOCAL_DB_PATH = '/global/cscratch1/sd/zulissi/GASpy_DB/'
+# Get the path for the GASdb folder location from the gaspy config file
+GASdb_path = utils.read_rc()['gasdb_path']
+
+
+class GASpyTestTask(luigi.WrapperTask):
+    def requires(self):
+        print('Success!')
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -59,10 +61,10 @@ class UpdateAllDB(luigi.WrapperTask):
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
-        docs = utils.get_aux_db().find({'type':'slab+adsorbate'})
+        docs = gasdb.get_atoms_client().find({'type':'slab+adsorbate'})
         # Get all of the current fwid entries in the local DB
-        with utils.get_adsorption_db() as adsorption_db:
-            fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_db.find()]
+        with gasdb.get_adsorption_client() as adsorption_client:
+            fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
 
         # For each adsorbate/configuration, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
@@ -128,7 +130,7 @@ class UpdateEnumerations(luigi.Task):
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
     def run(self):
-        with utils.get_catalog_db() as catalog_db:
+        with gasdb.get_catalog_client() as catalog_client:
             # Load the configurations
             configs = pickle.load(self.input().open())
             # Find the unique configurations based on the fingerprint of each site
@@ -154,7 +156,7 @@ class UpdateEnumerations(luigi.Task):
                                                       'adsorbate': config['adsorbate'],
                                                       'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
-                catalog_db.write(slabadsdoc)
+                catalog_client.write(slabadsdoc)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -162,7 +164,7 @@ class UpdateEnumerations(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class DumpToAuxDB(luigi.Task):
@@ -175,11 +177,11 @@ class DumpToAuxDB(luigi.Task):
         lpad = fwhs.get_launchpad()
 
         # Create a class, "con", that has methods to interact with the database.
-        with utils.get_aux_db() as aux_db:
+        with gasdb.get_atoms_client() as atoms_client:
 
             # A list of integers containing the Fireworks job ID numbers that have been
             # added to the database already
-            fws = [a['fwid'] for a in aux_db.find({'fwid':{'$exists':True}})]
+            fws = [a['fwid'] for a in atoms_client.find({'fwid':{'$exists':True}})]
             # Get all of the completed fireworks. Note that we check to see if the shifts
             # exists. This is because an old version of GASpy did not log the shifts; we
             # don't want to use these.
@@ -239,7 +241,7 @@ class DumpToAuxDB(luigi.Task):
                         or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     # Write the doc onto the Auxiliary database
-                    aux_db.write(doc)
+                    atoms_client.write(doc)
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
                           % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
@@ -247,7 +249,7 @@ class DumpToAuxDB(luigi.Task):
                     yield DumpFWToTraj(fwid=fwid)
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/DumpToAuxDB.token')
+        return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
 
 
 class DumpFWToTraj(luigi.Task):
@@ -268,7 +270,7 @@ class DumpFWToTraj(luigi.Task):
                 fhandle.write(atoms_hex.decode('hex'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/FW_structures/%s.traj'%(self.fwid))
+        return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj'%(self.fwid))
 
 
 class DumpToAdsorptionDB(luigi.Task):
@@ -379,8 +381,8 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
-        with utils.get_adsorption_db() as adsorption_db:
-            adsorption_db.write(best_sys_pkl_slab_ads)
+        with gasdb.get_adsorption_client() as adsorption_client:
+            adsorption_client.write(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
@@ -388,7 +390,7 @@ class DumpToAdsorptionDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class SubmitToFW(luigi.Task):
@@ -449,8 +451,8 @@ class SubmitToFW(luigi.Task):
             #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
-        with utils.get_aux_db() as aux_db:
-            self.matching_doc = list(aux_db.find(search_strings))
+        with gasdb.get_atoms_client() as atoms_client:
+            self.matching_doc = list(atoms_client.find(search_strings))
         #print('Search string:  %s', % search_strings)
 
         # If there are no matching entries, we need to yield a requirement that will
@@ -471,8 +473,8 @@ class SubmitToFW(luigi.Task):
                                   'fwname.top':self.parameters['slab']['top'],
                                   'fwname.mpid':self.parameters['bulk']['mpid'],
                                   'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
-                with utils.get_aux_db() as aux_db:
-                    self.matching_docs_all_calcs = list(aux_db.find(search_strings))
+                with gasdb.get_atoms_client() as atoms_client:
+                    self.matching_docs_all_calcs = list(atoms_client.find(search_strings))
                 return FingerprintUnrelaxedAdslabs(self.parameters)
             if self.calctype == 'bulk':
                 return GenerateBulk({'bulk':self.parameters['bulk']})
@@ -654,7 +656,7 @@ class SubmitToFW(luigi.Task):
                     utils.print_dict(fw.name, indent=1)
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -675,7 +677,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateGas(luigi.Task):
@@ -690,7 +692,7 @@ class GenerateGas(luigi.Task):
             pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSlabs(luigi.Task):
@@ -795,7 +797,7 @@ class GenerateSlabs(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateSiteMarkers(luigi.Task):
@@ -892,7 +894,7 @@ class GenerateSiteMarkers(luigi.Task):
             pickle.dump(adslabs_to_save, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class GenerateAdSlabs(luigi.Task):
@@ -950,7 +952,7 @@ class GenerateAdSlabs(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class MatchCatalogShift(luigi.Task):
@@ -993,7 +995,7 @@ class MatchCatalogShift(luigi.Task):
             pickle.dump(shift, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class FingerprintRelaxedAdslab(luigi.Task):
@@ -1045,7 +1047,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class FingerprintUnrelaxedAdslabs(luigi.Task):
@@ -1092,7 +1094,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             pickle.dump(adslabs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -1190,7 +1192,7 @@ class CalculateEnergy(luigi.Task):
                      dE))
 
     def output(self):
-        return luigi.LocalTarget(LOCAL_DB_PATH+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
 
 
 class EnumerateAlloys(luigi.WrapperTask):

@@ -8,14 +8,21 @@
 #SBATCH --error=enumerate-%j.error
 #SBATCH --constraint=haswell
 
-module load python
-cd /global/project/projectdirs/m2755/GASpy/
-source activate /project/projectdirs/m2755/GASpy_conda/
+# Get path information from the .gaspyrc.json file
+gaspy_path="$(python ../.read_rc.py gaspy_path)"
+conda_path="$(python ../.read_rc.py conda_path)"
+luigi_port="$(python ../.read_rc.py luigi_port)"
 
-PYTHONPATH='.' luigi \
+# Load the appropriate environment, etc.
+module load python
+cd $gaspy_path/gaspy
+source activate $conda_path
+
+# Tell Luigi to do the enumeration
+PYTHONPATH=$PYTHONPATH luigi \
     --module tasks EnumerateAlloys \
     --max-index 2 \
-    --scheduler-host 128.55.224.51 \
+    --scheduler-host $luigi_port \
     --workers=32 \
     --log-level=WARNING \
     --parallel-scheduling \

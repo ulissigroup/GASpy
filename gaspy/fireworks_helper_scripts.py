@@ -6,9 +6,9 @@ import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 import ase.io
 from vasp import Vasp
-from .utils import vasp_settings_to_str, print_dict
+from .utils import vasp_settings_to_str, print_dict, read_rc
 from . import vasp_functions
-from .vasp_functions import atoms_to_hex, hex_to_file
+from .vasp_functions import atoms_to_hex
 
 
 def running_fireworks(name_dict, launchpad):
@@ -23,14 +23,14 @@ def running_fireworks(name_dict, launchpad):
     for key in name_dict:
         if isinstance(name_dict[key], dict) or isinstance(name_dict[key], OrderedDict):
             for key2 in name_dict[key]:
-                name['name.%s.%s'%(key, key2)] = name_dict[key][key2]
+                name['name.%s.%s' % (key, key2)] = name_dict[key][key2]
         else:
             if key == 'shift':
                 # Search for a range of shift parameters up to 4 decimal place
                 shift = float(np.round(name_dict[key], 4))
-                name['name.%s'%key] = {'$gte':shift-1e-4, '$lte':shift+1e-4}
+                name['name.%s' % key] = {'$gte': shift-1e-4, '$lte': shift+1e-4}
             else:
-                name['name.%s'%key] = name_dict[key]
+                name['name.%s' % key] = name_dict[key]
 
     # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
     # or defused.)
@@ -62,7 +62,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
         return
     # Notify the user if they try to create a firework with a high miller index
     if 'miller' in fw_name and (np.max(eval(str(fw_name['miller']))) > max_miller):
-        print('Not making firework because the miller index exceeds the maximum of %s' \
+        print('Not making firework because the miller index exceeds the maximum of %s'
               % max_miller)
         print_dict(fw_name, indent=1)
         return
@@ -78,7 +78,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
     with open(vasp_filename) as fhandle:
         vasp_functions_contents = fhandle.read()
 
-    write_python_file = FileWriteTask(files_to_write=[{'filename':'vasp_functions.py',
+    write_python_file = FileWriteTask(files_to_write=[{'filename': 'vasp_functions.py',
                                                        'contents': vasp_functions_contents}])
 
     write_atoms_file = PyTask(func='vasp_functions.hex_to_file',
@@ -96,12 +96,14 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
 
 
 def get_launchpad():
-    ''' This function contains the information about our FireWorks LaunchPad '''
-    return LaunchPad(host='mongodb01.nersc.gov',
-                     name='fw_zu_vaspsurfaces',
-                     username='admin_zu_vaspsurfaces',
-                     password='$TPAHPmj',
-                     port=27017)
+    ''' This function pulls the information about our FireWorks LaunchPad from the config file '''
+    # Pull the information from the .gaspyrc
+    configs = read_rc()
+    lpad = configs['lpad']
+    # Make sure that the port is an integer
+    lpad['port'] = int(lpad['port'])
+
+    return LaunchPad(**lpad)
 
 
 def get_firework_info(fw):
@@ -112,7 +114,6 @@ def get_firework_info(fw):
     # Pull the atoms objects from the firework. They are encoded, though
     atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
     #find the vasp_functions.hex_to_file task atoms object
-    atoms_energy = fw.launches[-1].action.stored_data['opt_results'][2]
     vasp_settings = fw.name['vasp_settings']
 
     # To decode the atoms objects, we need to write them into files and then load
@@ -126,8 +127,8 @@ def get_firework_info(fw):
     os.remove(fname)    # Clean up
 
     hex_to_file_tasks = [a for a in fw.spec['_tasks']
-                         if a['_fw_name'] == 'PyTask'
-                         and a['func'] == 'vasp_functions.hex_to_file']
+                         if a['_fw_name'] == 'PyTask' and
+                         a['func'] == 'vasp_functions.hex_to_file']
 
     if len(hex_to_file_tasks) > 0:
         spec_atoms_hex = hex_to_file_tasks[0]['args'][1]
