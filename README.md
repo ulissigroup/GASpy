@@ -1,16 +1,16 @@
-#+TITLE:  GASpy:  Generalized Adsorption Simulator for Python
+# GASpy:  Generalized Adsorption Simulator for Python
 
-* Purpose
+# Purpose
 To use Density Functional Theory (DFT) to calculate adsorption energies of adsorbates onto slabs,
 but to do it in a general way such that we may perform these calculations for an arbitrary
 number of configurations (e.g., slab materials, adsorbate types, adsorption sites, percent
 coverages, etc.).
 
-* Overview
+# Overview
 GASpy is written in Python, and we use various tools that enable us to begin DFT relaxations on
 "arbitrarily large" sample pools.
 
-** Tools
+## Tools
 ASE (https://wiki.fysik.dtu.dk/ase/about.html)
 
 PyMatGen (http://pymatgen.org/, https://github.com/zulissi/pymatgen)
@@ -27,7 +27,7 @@ Materials Project (https://materialsproject.org/)
 
 MongoDB (https://www.mongodb.com/)
 
-** Infrastructure
+## Infrastructure
 We created various Python classes (AKA "tasks") to automate adsorption energy calculations;
 these tasks live inside `gaspy/tasks.py`. For example:  We have a task to fetch bulk structures
 from the Materials Projec and then turn them into ASE atoms objects; we have a task that uses
@@ -46,7 +46,7 @@ Note also that there is a `gaspy` package with various helper functions that may
 used in tasks, where appropriate. For example:  `gaspy.gasdb.get_docs` is useful for
 pulling mongo documents from our database.
 
-* Use
+# Use
 We recommend using submodules (https://git-scm.com/docs/git-mv) to create/execute your own custom
 tasks or to analyze data that is created by GASpy. If you are interested in seeing a submodule but
 do not have access, simply request access from a GASpy owner.
@@ -59,7 +59,7 @@ the bash_scripts/folder.
 And while we're on the subject:  We recommend running `scripts/update_db.sh` on a cron to keep the
 databases up-to-date.
 
-** Installation
+## Installation
 You will need to add this repo your python path:
 ```
 export PYTHONPATH="/path/to/GASpy:${PYTHONPATH}"
@@ -70,7 +70,7 @@ this repository. A template, `.gaspyrc_template.json`, is included. You'll need 
 FireWorks, a couple of Mongo databases, and Luigi. The consequential login information will be
 stored in the `gaspyrc.json`.
 
-* Under the hood
+# Under the hood
 Since we are performing a (very) large number of DFT simulations, we need to store the data
 somewhere. Our Primary, "blessed" database is a MongoDB that is managed by our FireWorks
 launchpad.
