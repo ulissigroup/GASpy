@@ -1,4 +1,5 @@
 {
+    "luigi_port": "999.99.999.99",
     "gaspy_path": "/path/to/gaspy",
     "gasdb_path": "path/to/gasdb",
     "conda_path": "/path/to/cond",
