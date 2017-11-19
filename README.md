@@ -70,6 +70,13 @@ this repository. A template, `.gaspyrc_template.json`, is included. You'll need 
 FireWorks, a couple of Mongo databases, and Luigi. The consequential login information will be
 stored in the `gaspyrc.json`.
 
+Our scripts also assume that you have the `GASpy/` repository either in your home directory or
+symlinked to it. If you want to symlink it, then do a:
+```
+cd
+ln -s /path/to/GASpy GASpy/
+```
+
 # Under the hood
 Since we are performing a (very) large number of DFT simulations, we need to store the data
 somewhere. Our Primary, "blessed" database is a MongoDB that is managed by our FireWorks

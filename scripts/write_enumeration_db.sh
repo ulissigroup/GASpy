@@ -8,14 +8,16 @@
 #SBATCH --error=enumerate-%j.error
 #SBATCH --constraint=haswell
 
+# Go back to home directory, then go to GASpy
+cd
+cd GASpy/
 # Get path information from the .gaspyrc.json file
-gaspy_path="$(python ../.read_rc.py gaspy_path)"
-conda_path="$(python ../.read_rc.py conda_path)"
-luigi_port="$(python ../.read_rc.py luigi_port)"
+conda_path="$(python .read_rc.py conda_path)"
+luigi_port="$(python .read_rc.py luigi_port)"
 
 # Load the appropriate environment, etc.
 module load python
-cd $gaspy_path/gaspy
+cd gaspy/
 source activate $conda_path
 
 # Tell Luigi to do the enumeration

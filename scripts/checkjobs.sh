@@ -1,7 +1,10 @@
 #!/bin/sh
 
+# Go back to home directory, then go to GASpy
+cd
+cd GASpy/
 # Load the .gaspyrc, which has the lpad_loc variable we need
-lpad_path="$(python ../.read_rc.py lpad_path)"
+lpad_path="$(python .read_rc.py lpad_path)"
 
 echo 'RPBE:'
 queued=`lpad -l $lpad_path get_fws -q '{"name.vasp_settings.gga":"RP","state":"READY"}' -d count`
