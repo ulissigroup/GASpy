@@ -34,6 +34,7 @@ def fingerprints(simulated=False):
     if simulated:
         fingerprints = {'mongo_id': '$_id',
                         'mpid': '$processed_data.calculation_info.mpid',
+                        'formula': '$processed_data.calculation_info.formula',
                         'miller': '$processed_data.calculation_info.miller',
                         'shift': '$processed_data.calculation_info.shift',
                         'top': '$processed_data.calculation_info.top',
@@ -44,6 +45,7 @@ def fingerprints(simulated=False):
     else:
         fingerprints = {'mongo_id': '$_id',
                         'mpid': '$processed_data.calculation_info.mpid',
+                        'formula': '$processed_data.calculation_info.formula',
                         'miller': '$processed_data.calculation_info.miller',
                         'shift': '$processed_data.calculation_info.shift',
                         'top': '$processed_data.calculation_info.top',
