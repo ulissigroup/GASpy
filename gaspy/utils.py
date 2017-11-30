@@ -106,6 +106,43 @@ def vasp_settings_to_str(vasp_settings):
     return vasp_settings
 
 
+def docs_to_pdocs(docs):
+    '''
+    This function turns a list of mongo documents into "parsed" mongo documents.
+    Parsed mongo documents are dictionaries of arrays instead of lists of dictionaries.
+
+    Input:
+        docs    A list of mongo documents/dictionaries/jsons/whatever you want to call them.
+    Output:
+        p_docs  A dictionary whose key are identical to the keys in each mongo document,
+                but whose values are numpy arrays
+    '''
+    p_docs = dict.fromkeys(docs[0].keys())
+    for key in p_docs:
+        p_docs[key] = [doc[key] if key in doc else None for doc in docs]
+    return p_docs
+
+
+def pdocs_to_docs(p_docs):
+    '''
+    This function turns a list parsed mongo documents into mongo documents.
+    Parsed mongo documents are dictionaries of arrays instead of lists of dictionaries.
+
+    Input:
+        p_docs  A dictionary whose key are identical to the keys in each mongo document,
+                but whose values are numpy arrays
+    Output:
+        docs    A list of mongo documents/dictionaries/jsons/whatever you want to call them.
+    '''
+    docs = []
+    for i, _ in enumerate(p_docs.values()[0]):
+        doc = {}
+        for key in p_docs:
+            doc[key] = p_docs[key][i]
+        docs.append(doc)
+    return p_docs
+
+
 def ads_dict(adsorbate):
     '''
     This is a helper function to take an adsorbate as a string (e.g. 'CO') and attempt to

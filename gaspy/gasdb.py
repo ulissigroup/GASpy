@@ -82,8 +82,6 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     if not fingerprints:
         fingerprints = defaults.fingerprints()
 
-    # Initialize
-    p_docs = dict.fromkeys(fingerprints)
     # Put the "fingerprinting" into a `group` dictionary, which we will
     # use to pull out data from the mongo database. Also, initialize
     # a `match` dictionary, which we will use to filter results.
@@ -149,8 +147,7 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     # Use the cursor to pull all of the information we want out of the database, and
     # then parse it.
     docs = [doc['_id'] for doc in cursor]
-    for key in p_docs.keys():
-        p_docs[key] = [doc[key] if key in doc else None for doc in docs]
+    p_docs = utils.docs_to_pdocs(docs)
     return docs, p_docs
 
 
