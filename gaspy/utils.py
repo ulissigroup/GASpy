@@ -218,6 +218,9 @@ def constrain_slab(atoms, z_cutoff=3.):
         z_cutoff    The threshold to see if slab atoms are in the same plane as the
                     highest atom in the slab
     '''
+    #copy the input so we don't affect the original (reference) atoms
+    atoms = atoms.copy()
+
     # Remove the adsorbate so that we can find the number of slab atoms
     slab, binding_positions = remove_adsorbate(atoms)
     n_slab_atoms = len(slab)
