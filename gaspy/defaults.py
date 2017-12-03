@@ -280,4 +280,5 @@ def adsorption_parameters(adsorbate,
                                                  kpts=[4, 4, 1],
                                                  lreal='Auto',
                                                  ediffg=-0.03,
+                                                 symprec=1e-10,
                                                  **settings))
