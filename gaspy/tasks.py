@@ -1201,6 +1201,7 @@ class EnumerateAlloys(luigi.WrapperTask):
     '''
     max_index = luigi.IntParameter(1)
     xc = luigi.Parameter('rpbe')
+
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -1222,21 +1223,19 @@ class EnumerateAlloys(luigi.WrapperTask):
                         'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk',
                         'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
                         'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
-        #             'W', 'Al', 'Co', 'H', 'N', 'Ir', 'In']
-        #whitelist = ['Pt','Ga']
         whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
                      'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
-                     'Fe', 'V', 'Si', 'Sn', 'Sb']
-        #whitelist=['Pd','Cu','Ag']
+                     'Fe', 'V', 'Si', 'Sn', 'Sb',
+                     'Mo', 'Mn', 'Cr', 'Ti', 'Zn', 'Ge', 'As', 'Se', 'Ru', 'Pb', 'S']
 
         restricted_elements = [el for el in all_elements if el not in whitelist]
 
         # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
         # restricted elements
         with MPRester("MGOdX3P4nI18eKvE") as m:
-            results = m.query({"elements":{"$nin": restricted_elements},
-                               "e_above_hull":{"$lt":0.1},
-                               "formation_energy_per_atom":{"$lte":0.0}},
+            results = m.query({"elements": {"$nin": restricted_elements},
+                               "e_above_hull": {"$lt": 0.1},
+                               "formation_energy_per_atom": {"$lte": 0.0}},
                               ['pretty_formula',
                                'formula',
                                'spacegroup',
