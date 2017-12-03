@@ -24,6 +24,7 @@ source activate $conda_path
 PYTHONPATH=$PYTHONPATH luigi \
     --module tasks EnumerateAlloys \
     --max-index 2 \
+    --whitelist '["Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As", "Se", "Ru", "Pb", "S"]' \
     --scheduler-host $luigi_port \
     --workers=32 \
     --log-level=WARNING \
