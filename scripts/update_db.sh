@@ -1,4 +1,13 @@
-#!/bin/sh
+#!/bin/sh -l
+
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=00:30:00
+#SBATCH --partition=regular
+#SBATCH --job-name=update_db
+#SBATCH --output=update_db-%j.out
+#SBATCH --error=update_db-%j.error
+#SBATCH --constraint=haswell
 
 # Go back to home directory, then go to GASpy
 cd
@@ -22,5 +31,4 @@ PYTHONPATH=$PYTHONPATH luigi \
     --scheduler-host $luigi_port \
     --workers=1 \
     --log-level=WARNING \
-    --parallel-scheduling \
     --worker-timeout 300

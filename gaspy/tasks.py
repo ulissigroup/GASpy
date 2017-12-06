@@ -1200,7 +1200,7 @@ class EnumerateAlloys(luigi.WrapperTask):
     This class is meant to be called by Luigi to begin relaxations of a database of alloys
     '''
     max_index = luigi.IntParameter(1)
-    xc = luigi.Parameter('rpbe')
+    whitelist = luigi.ListParameter()
 
     def requires(self):
         """
@@ -1223,11 +1223,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                         'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk',
                         'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
                         'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
-        whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co',
-                     'Ir', 'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os',
-                     'Fe', 'V', 'Si', 'Sn', 'Sb',
-                     'Mo', 'Mn', 'Cr', 'Ti', 'Zn', 'Ge', 'As', 'Se', 'Ru', 'Pb', 'S']
-
+        whitelist = self.whitelist
         restricted_elements = [el for el in all_elements if el not in whitelist]
 
         # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
