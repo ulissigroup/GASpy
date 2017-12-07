@@ -18,7 +18,7 @@ PYTHONPATH=$PYTHONPATH luigi \
     --module tasks EnumerateAlloys \
     --max-index 2 \
     --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As", "Se", "Ru", "Pb", "S"]' \
-    --scheduler-host $luigi_port \
+    --scheduler-host $LUIGI_PORT \
     --workers=32 \
     --log-level=WARNING \
     --parallel-scheduling \

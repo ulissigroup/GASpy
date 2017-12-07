@@ -19,7 +19,7 @@ rm ${gasdb_path}/DumpToAuxDB.token
 PYTHONPATH=$PYTHONPATH luigi \
     --module tasks UpdateAllDB \
     --max-processes 0 \
-    --scheduler-host $luigi_port \
+    --scheduler-host $LUIGI_PORT \
     --workers=1 \
     --log-level=WARNING \
     --worker-timeout 300
