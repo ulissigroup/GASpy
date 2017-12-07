@@ -9,21 +9,12 @@
 #SBATCH --error=update_db-%j.error
 #SBATCH --constraint=haswell
 
-# Go back to home directory, then go to GASpy
-cd
-cd GASpy/
-# Get path information from the .gaspyrc.json file
-conda_path="$(python .read_rc.py conda_path)"
-luigi_port="$(python .read_rc.py luigi_port)"
-
-# Load the appropriate environment, etc.
-module load python
-cd gaspy/
-source activate $conda_path
+# Load GASpy
+. ~/GASpy/scripts/load_env.sh
+cd $GASPY_PATH/scripts
 
 # Remove the DB dumping token to make sure that we actually dump
 rm ${gasdb_path}/DumpToAuxDB.token
-
 # Tell Luigi to do the dumping
 PYTHONPATH=$PYTHONPATH luigi \
     --module tasks UpdateAllDB \

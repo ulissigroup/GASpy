@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -l
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -9,15 +9,9 @@
 #SBATCH --error=defuse_lost_runs-%j.error
 #SBATCH --constraint=haswell
 
-# Go back to home directory, then go to GASpy
-cd
-cd GASpy/
-# Get path information from the .gaspyrc.json file
-conda_path="$(python .read_rc.py conda_path)"
+# Load GASpy
+. ~/GASpy/scripts/load_env.sh
+cd $GASPY_PATH/scripts
 
-# Load the appropriate environment, etc.
-module load python
-cd scripts/
-source activate $conda_path
-
+# Defuse the lost runs
 python defuse_lostruns.py

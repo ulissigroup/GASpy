@@ -9,17 +9,9 @@
 #SBATCH --error=enumerate_catalog-%j.error
 #SBATCH --constraint=haswell
 
-# Go back to home directory, then go to GASpy
-cd
-cd GASpy/
-# Get path information from the .gaspyrc.json file
-conda_path="$(python .read_rc.py conda_path)"
-luigi_port="$(python .read_rc.py luigi_port)"
-
-# Load the appropriate environment, etc.
-module load python
-cd gaspy/
-source activate $conda_path
+# Load GASpy
+. ~/GASpy/scripts/load_env.sh
+cd $GASPY_PATH/scripts
 
 # Tell Luigi to do the enumeration
 PYTHONPATH=$PYTHONPATH luigi \
