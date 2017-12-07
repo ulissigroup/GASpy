@@ -4,9 +4,9 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=01:00:00
 #SBATCH --partition=regular
-#SBATCH --job-name=defuse_lost_runs
-#SBATCH --output=defuse_lost_runs-%j.out
-#SBATCH --error=defuse_lost_runs-%j.error
+#SBATCH --job-name=sync_images
+#SBATCH --output=sync_images-%j.out
+#SBATCH --error=sync_images-%j.error
 #SBATCH --constraint=haswell
 
 # Load GASpy
