@@ -9,15 +9,14 @@
 #SBATCH --error=update_db-%j.error
 #SBATCH --constraint=haswell
 
-# Load GASpy
-. ~/GASpy/scripts/load_env.sh
-cd $GASPY_PATH/scripts
+# Load GASpy environment and variables
+. ../.load_env.sh
 
 # Remove the DB dumping token to make sure that we actually dump
-rm ${gasdb_path}/DumpToAuxDB.token
+rm ${GASDB_PATH}/DumpToAuxDB.token
 # Tell Luigi to do the dumping
 PYTHONPATH=$PYTHONPATH luigi \
-    --module tasks UpdateAllDB \
+    --module gaspy.tasks UpdateAllDB \
     --max-processes 0 \
     --scheduler-host $LUIGI_PORT \
     --workers=1 \

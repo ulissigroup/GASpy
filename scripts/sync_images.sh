@@ -9,10 +9,6 @@
 #SBATCH --error=sync_images-%j.error
 #SBATCH --constraint=haswell
 
-# Load GASpy
-. ~/GASpy/scripts/load_env.sh
-cd $GASPY_PATH/scripts
-
 # Sync the pictures
 aws s3 sync $SCRATCH/GASpy_DB/images/adsorption s3://catalyst-thumbnails/
 aws s3 sync $SCRATCH/GASpy_DB/images/catalog s3://catalyst-thumbnails/

@@ -7,12 +7,13 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 
-from . import utils
-from . import defaults
-from . import gasdb
-from . import fireworks_helper_scripts
-from . import vasp_functions
-from . import debug
+# from . import readrc
+# from . import utils
+# from . import defaults
+# from . import gasdb
+# from . import fireworks_helper_scripts
+# from . import vasp_functions
+# from . import debug
 
 # Luigi cannot handle modules that have relative imports, which means that
 # task-containing modules cannot be part of packages. Do not try to add them

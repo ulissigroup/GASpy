@@ -3,7 +3,13 @@
 import pdb  # noqa: F401
 import warnings
 from collections import OrderedDict
-from vasp.mongo import MongoDatabase
+from itertools import islice
+import pickle
+from multiprocessing import Pool
+import glob
+import numpy as np
+from ase.io.png import write_png
+from vasp.mongo import MongoDatabase, mongo_doc_atoms
 from . import defaults, utils
 
 
@@ -248,3 +254,108 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
                                if cat_hash not in ads_hashes]
 
     return docs, p_docs
+
+
+# TODO:  Commend and clean up everything below here
+catalog = get_catalog_client().find()
+ads_dict = defaults.adsorbates_dict()
+del ads_dict['']
+del ads_dict['U']
+ads_to_run = ads_dict.keys()
+ads_to_run = ['CO', 'H']
+dump_dir = '/global/cscratch1/sd/zulissi/GASpy_DB/images/'
+
+
+def write_images(inputs):
+    doc, adsorbate = inputs
+    atoms = mongo_doc_atoms(doc)
+    slab = atoms.copy()
+    ads_pos = slab[0].position
+    del slab[0]
+    ads = ads_dict[adsorbate].copy()
+    ads.set_constraint()
+    ads.translate(ads_pos)
+    adslab = ads + slab
+    adslab.cell = slab.cell
+    adslab.pbc = [True, True, True]
+    adslab.set_constraint()
+    adslab = utils.constrain_slab(adslab)
+    size = adslab.positions.ptp(0)
+    i = size.argmin()
+    # rotation = ['-90y', '90x', ''][i]
+    # rotation = ''
+    size[i] = 0.0
+    scale = min(25, 100 / max(1, size.max()))
+    write_png(dump_dir + str(doc['_id']) + '-' + adsorbate + '.png',
+              adslab, show_unit_cell=1, scale=scale)
+    write_png(dump_dir + str(doc['_id']) + '-' + adsorbate + '-side.png',
+              adslab, show_unit_cell=1, rotation='90y, 90z', scale=scale)
+
+
+def write_adsorption_images(doc):
+    atoms = mongo_doc_atoms(doc)
+    adslab = atoms.copy()
+    size = adslab.positions.ptp(0)
+    i = size.argmin()
+    # rotation = ['-90y', '90x', ''][i]
+    # rotation = ''
+    size[i] = 0.0
+    scale = min(25, 100 / max(1, size.max()))
+    write_png(dump_dir + str(doc['_id']) + '.png', adslab, show_unit_cell=1, scale=scale)
+    write_png(dump_dir + str(doc['_id']) + '-side.png', adslab, show_unit_cell=1,
+              rotation='90y, 90z', scale=scale)
+
+
+def chunks(iterable, size=10):
+    iterator = iter(iterable)
+    for first in iterator:    # stops when iterator is depleted
+        def chunk():          # construct generator for next chunk
+            yield first       # yield element from for loop
+            for more in islice(iterator, size-1):
+                yield more    # yield more elements from the iterator
+        yield chunk()         # in outer generator, yield next chunkdef chunks(iterable, size=10):
+    iterator = iter(iterable)
+
+
+def make_images(todo, collection, completed_images):
+    pool = Pool(32)
+    k = 0
+    for chunk in chunks(todo, 10000):
+        ids, adsorbates = zip(*chunk)
+        uniques, inverse = np.unique(ids, return_inverse=True)
+        docs = np.array([collection.find_one({"_id": id}) for id in uniques])
+        to_run = zip(docs[inverse], adsorbates)
+        pool.map(write_images, to_run)
+        k += 1
+        print('%d/%d' % (k*len(to_run), len(todo)))
+        completed_images += zip(ids, adsorbates)
+        pickle.dump(completed_images, open('completed_images.pkl', 'w'))
+    pool.close()
+
+
+def make_images_adsorption(todo, collection, completed_images):
+    pool = Pool(32)
+    k = 0
+    for chunk in chunks(todo, 10000):
+        ids = list(chunk)
+        uniques, inverse = np.unique(ids, return_inverse=True)
+        docs = np.array([collection.find_one({"_id": id}) for id in uniques])
+        to_run = docs[inverse]
+        pool.map(write_adsorption_images, to_run)
+        k += 1
+        print('%d/%d' % (k*len(to_run), len(todo)))
+        completed_images += ids
+        pickle.dump(completed_images, open('completed_images.pkl', 'w'))
+    pool.close()
+
+
+def dump_images():
+    if len(glob.glob('completed_images.pkl')) > 0:
+        completed_images = pickle.load(open('completed_images.pkl'))
+    else:
+        completed_images = []
+
+    adsorption_ids = get_adsorption_client().db.adsorption.distinct('_id')
+    # unique_combinations = list(itertools.product(adsorption_ids, ads_to_run))
+    todo = list(set(adsorption_ids) - set(completed_images))
+    make_images_adsorption(todo, get_adsorption_client().db.adsorption, completed_images)

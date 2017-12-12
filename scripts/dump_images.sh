@@ -9,9 +9,5 @@
 #SBATCH --error=dump_images-%j.error
 #SBATCH -C haswell
 
-# Load GASpy
-. ~/GASpy/scripts/load_env.sh
-cd $GASPY_PATH/scripts
-
 # Dump the images
-python dump_images.py
+python -c 'from gaspy.gasdb import dump_images; dump_images()'

@@ -1,9 +1,6 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
 import pdb  # noqa: F401
-import os
-from os.path import join
-import json
 from pprint import pprint
 import numpy as np
 from ase import Atoms
@@ -12,44 +9,22 @@ from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
-from . import defaults
+from . import defaults, readrc
 
 
-def read_rc():
+def read_rc(key=None):
     '''
-    This function will pull out keys from the .gaspyrc file for you
+    This function will pull out keys from the .gaspyrc file for you.
+    Note that this is really only here as a pointer so that the user can look for
+    the function in both this module and the native module, `readrc`
 
     Input:
-        keys    A list of strings indicating the configurations you want
+        keys    [Optional] The string indicating the configuration you want
     Output:
         configs A dictionary whose keys are the input keys and whose values
                 are the values that we found in the .gaspyrc file
     '''
-    # Pull out the PYTHONPATH environment variable
-    # so that we know where to look for the .gaspyrc file
-    try:
-        python_paths = os.environ['PYTHONPATH'].split(os.pathsep)
-    except KeyError:
-        raise KeyError('You do not have the PYTHONPATH environment variable. You need to add GASpy to it')
-
-    # Initializating our search for the .gaspyrc file
-    rc_file = '.gaspyrc.json'
-    found_config = False
-    # Search our PYTHONPATH one-by-one
-    for path in python_paths:
-        for root, dirs, files in os.walk(path):
-            if rc_file in files:
-                rc_file = join(root, rc_file)
-                found_config = True
-                break
-        # Stop looking through the files if we've found it
-        if found_config:
-            break
-
-    # Now that we've found it, open it up and read from it
-    with open(rc_file, 'r') as rc:
-        configs = json.load(rc)
-
+    configs = readrc.read_rc(key)
     return configs
 
 

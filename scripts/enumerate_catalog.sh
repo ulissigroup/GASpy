@@ -9,13 +9,12 @@
 #SBATCH --error=enumerate_catalog-%j.error
 #SBATCH --constraint=haswell
 
-# Load GASpy
-. ~/GASpy/scripts/load_env.sh
-cd $GASPY_PATH/scripts
+# Load GASpy environment & variables
+. ../.load_env.sh
 
 # Tell Luigi to do the enumeration
 PYTHONPATH=$PYTHONPATH luigi \
-    --module tasks EnumerateAlloys \
+    --module gaspy.tasks EnumerateAlloys \
     --max-index 2 \
     --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As", "Se", "Ru", "Pb", "S"]' \
     --scheduler-host $LUIGI_PORT \

@@ -9,9 +9,5 @@
 #SBATCH --error=defuse_lost_runs-%j.error
 #SBATCH --constraint=haswell
 
-# Load GASpy
-. ~/GASpy/scripts/load_env.sh
-cd $GASPY_PATH/scripts
-
 # Defuse the lost runs
-python defuse_lostruns.py
+python -c "from gaspy.fireworks_helper_scripts import defuse_lost_runs; defuse_lostruns()"
