@@ -10,7 +10,7 @@
 #SBATCH --constraint=haswell
 
 # Load GASpy environment & variables
-. ../.load_env.sh
+. ~/GASpy/.load_env.sh
 
 # Tell Luigi to do the enumeration
 PYTHONPATH=$PYTHONPATH luigi \

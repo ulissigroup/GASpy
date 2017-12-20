@@ -151,9 +151,13 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     # (otherwise we run into memory issues).
     cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
     # Use the cursor to pull all of the information we want out of the database, and
-    # then parse it.
+    # then parse it. Note that we forgo parsing if we did not find any documents.
     docs = [doc['_id'] for doc in cursor]
-    p_docs = utils.docs_to_pdocs(docs)
+    if docs:
+        p_docs = utils.docs_to_pdocs(docs)
+    else:
+        warnings.warn('We did not find any matching documents', RuntimeWarning)
+        p_docs = []
     return docs, p_docs
 
 

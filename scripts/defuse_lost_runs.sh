@@ -10,4 +10,4 @@
 #SBATCH --constraint=haswell
 
 # Defuse the lost runs
-python -c "from gaspy.fireworks_helper_scripts import defuse_lost_runs; defuse_lostruns()"
+python -c "from gaspy.fireworks_helper_scripts import defuse_lost_runs; defuse_lost_runs()"

@@ -10,7 +10,7 @@
 #SBATCH --constraint=haswell
 
 # Load GASpy environment and variables
-. ../.load_env.sh
+. ~/GASpy/.load_env.sh
 
 # Remove the DB dumping token to make sure that we actually dump
 rm ${GASDB_PATH}/DumpToAuxDB.token
