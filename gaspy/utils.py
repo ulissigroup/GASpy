@@ -2,7 +2,9 @@
 
 import pdb  # noqa: F401
 from pprint import pprint
+import dill as pickle
 import numpy as np
+from pathos.multiprocessing import ProcessingPool as Pool
 from ase import Atoms
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
@@ -427,3 +429,59 @@ def find_max_movement(atoms_initial, atoms_final):
     dist, Dlen = find_mic(distances, atoms_final.cell, atoms_final.pbc)
 
     return np.max(Dlen)
+
+
+def map_method(instance, method, inputs, **kwargs):
+    '''
+    This function pools and maps methods of class instances. It does so by putting
+    the class instance into the global space so that each worker can pull it.
+    This prevents the multiprocessor from pickling/depickling the instance for
+    each worker, thus saving time. This is especially needed for lazy learning models
+    like GP.
+
+    Note that we set the pickling recursion option to `False` to prevent passing along
+    huge instances of objects, which can bottleneck multiprocessing.
+
+    Inputs:
+        instance    An instance of a class
+        method      A string indicating the method of the class that you want to map
+        inputs      A sequence of inputs that can be fed to the method one-at-a-time
+        kwargs      Any arguments that you should be passing to the method
+        nodes       The number of nodes you want to run across. Defaults to 1.
+    Outputs:
+        outputs     A list of the inputs mapped through the function
+    '''
+    # Push the class instance to global space for process sharing. Then pull
+    # out the method we'll be pooling.
+    global module_instance
+    module_instance = instance
+    def function(arg):  # noqa: E306
+        return getattr(module_instance, method)(arg, **kwargs)
+    # Use multiprocessing to perform the evaluations
+    with Pool() as pool:
+        pickle.settings['recurse'] = False
+        outputs = pool.map(function, (arg for arg in inputs))
+        # Clean up
+        pool.clear()
+    del globals()['module_instance']
+    return outputs
+
+
+def map(function, inputs):
+    '''
+    This function is a wrapper to parallelize a function. Note that we set the pickling
+    recursion option to `False` to prevent passing along huge instances of objects,
+    which can bottleneck multiprocessing.
+
+    Inputs:
+        function    The function you want to execute
+        inputs      A sequence of inputs that can be fed to the function one-at-a-time
+        nodes       The number of nodes you want to run across. Defaults to 1.
+    Outputs:
+        outputs     A list of the inputs mapped through the function
+    '''
+    with Pool() as pool:
+        pickle.settings['recurse'] = False
+        outputs = pool.map(function, (arg for arg in inputs))
+        pool.clear()
+    return outputs

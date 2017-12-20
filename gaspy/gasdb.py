@@ -244,15 +244,10 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     cat_hashes = hash_docs(cat_docs).keys()
 
     # Perform the filtering while simultaneously populating the `docs` output
-    docs = [cat_docs[i] for i, cat_hash in enumerate(cat_hashes) if cat_hash not in ads_hashes]
-    # docs = [doc for doc in cat_docs if hash_doc(doc) not in ads_hashes]
+    docs = [doc for doc, cat_hash in zip(cat_docs, cat_hashes) if cat_hash not in ads_hashes]
 
-    # Do the same for the `p_docs` output
-    p_docs = dict.fromkeys(cat_p_docs)
-    for fingerprint, data in cat_p_docs.iteritems():
-        p_docs[fingerprint] = [data[i] for i, cat_hash in enumerate(cat_hashes)
-                               if cat_hash not in ads_hashes]
-
+    # Return the output
+    p_docs = utils.docs_to_pdocs(docs)
     return docs, p_docs
 
 
