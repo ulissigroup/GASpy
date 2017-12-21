@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This function should be used to clear the entire Aux DB
 

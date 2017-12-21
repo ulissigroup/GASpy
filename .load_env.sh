@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash -l
 
 module load python
 
@@ -23,6 +23,7 @@ export PYTHONPATH=$PYTHONPATH
 export GASDB_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gasdb_path"))')"
 export CONDA_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("conda_path"))')"
 export LUIGI_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("luigi_port"))')"
+export LPAD_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad_path"))')"
 
 # Load the conda
 source activate $CONDA_PATH

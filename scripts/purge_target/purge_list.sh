@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash -l
 
 # Relaxations where we were not able to attach calculators when saving the atoms objects
 # to the Primary DB
