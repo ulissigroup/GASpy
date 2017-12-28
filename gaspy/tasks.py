@@ -502,7 +502,8 @@ class SubmitToFW(luigi.Task):
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['gas']['vasp_settings']))
+                                                       self.parameters['gas']['vasp_settings'],
+                                                       max_atoms=self.parameters['bulk']['max_atoms']))
 
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':

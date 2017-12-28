@@ -3,7 +3,7 @@ This modules contains default settings for various function and queries used in 
 submodules.
 '''
 
-import pdb
+import pdb  # noqa: F401
 import copy
 from collections import OrderedDict
 import cPickle as pickle
@@ -110,7 +110,7 @@ def gas_parameters(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings='beef-vdw', encut=500.):
+def bulk_parameters(mpid, settings='beef-vdw', encut=500., max_atoms=50):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
@@ -130,7 +130,7 @@ def bulk_parameters(mpid, settings='beef-vdw', encut=500.):
     settings['encut'] = encut
     return OrderedDict(mpid=mpid,
                        relaxed=True,
-                       max_atoms=50,
+                       max_atoms=max_atoms,
                        vasp_settings=OrderedDict(ibrion=1,
                                                  nsw=100,
                                                  isif=7,
