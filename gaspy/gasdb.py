@@ -256,17 +256,19 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
 
 
 # TODO:  Commend and clean up everything below here
-catalog = get_catalog_client().find()
+#catalog = get_catalog_client().find()
 ads_dict = defaults.adsorbates_dict()
 del ads_dict['']
 del ads_dict['U']
 ads_to_run = ads_dict.keys()
 ads_to_run = ['CO', 'H']
 dump_dir = '/global/cscratch1/sd/zulissi/GASpy_DB/images/'
+databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/pkls/CO2RR_predictions_GP_around_TPOT_FEATURES_coordcount_neighbors_coordcounts_RESPONSES_energy_BLOCKS_adsorbate.pkl',
+                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/pkls/HER_predictions_GP_around_TPOT_FEATURES_coordcount_neighbors_coordcounts_RESPONSES_energy_BLOCKS_adsorbate.pkl'}
 
 
-def write_images(inputs):
-    doc, adsorbate = inputs
+def writeImages(input):
+    doc, adsorbate = input
     atoms = mongo_doc_atoms(doc)
     slab = atoms.copy()
     ads_pos = slab[0].position
@@ -285,13 +287,13 @@ def write_images(inputs):
     # rotation = ''
     size[i] = 0.0
     scale = min(25, 100 / max(1, size.max()))
-    write_png(dump_dir + str(doc['_id']) + '-' + adsorbate + '.png',
+    write_png(dump_dir + 'catalog/'+str(doc['_id']) + '-' + adsorbate + '.png',
               adslab, show_unit_cell=1, scale=scale)
-    write_png(dump_dir + str(doc['_id']) + '-' + adsorbate + '-side.png',
+    write_png(dump_dir + 'catalog/' + str(doc['_id']) + '-' + adsorbate + '-side.png',
               adslab, show_unit_cell=1, rotation='90y, 90z', scale=scale)
 
 
-def write_adsorption_images(doc):
+def writeAdsorptionImages(doc):
     atoms = mongo_doc_atoms(doc)
     adslab = atoms.copy()
     size = adslab.positions.ptp(0)
@@ -300,8 +302,8 @@ def write_adsorption_images(doc):
     # rotation = ''
     size[i] = 0.0
     scale = min(25, 100 / max(1, size.max()))
-    write_png(dump_dir + str(doc['_id']) + '.png', adslab, show_unit_cell=1, scale=scale)
-    write_png(dump_dir + str(doc['_id']) + '-side.png', adslab, show_unit_cell=1,
+    write_png(dump_dir + 'adsorption/'+str(doc['_id']) + '.png', adslab, show_unit_cell=1, scale=scale)
+    write_png(dump_dir + 'adsorption/'+str(doc['_id']) + '-side.png', adslab, show_unit_cell=1,
               rotation='90y, 90z', scale=scale)
 
 
@@ -316,45 +318,51 @@ def chunks(iterable, size=10):
     iterator = iter(iterable)
 
 
-def make_images(todo, collection, completed_images):
+def MakeImages(todo, collection, completed_images):
     pool = Pool(32)
     k = 0
-    for chunk in chunks(todo, 10000):
+    for chunk in chunks(todo, 1000):
+        chunk = list(chunk)
         ids, adsorbates = zip(*chunk)
         uniques, inverse = np.unique(ids, return_inverse=True)
         docs = np.array([collection.find_one({"_id": id}) for id in uniques])
         to_run = zip(docs[inverse], adsorbates)
-        pool.map(write_images, to_run)
+        pool.map(writeImages, to_run)
         k += 1
         print('%d/%d' % (k*len(to_run), len(todo)))
-        completed_images += zip(ids, adsorbates)
-        pickle.dump(completed_images, open('completed_images.pkl', 'w'))
+        completed_images += chunk
+        pickle.dump(completed_images, open(dump_dir+'completed_images.pkl', 'w'))
     pool.close()
 
 
-def make_images_adsorption(todo, collection, completed_images):
+def MakeImagesAdsorption(todo, collection, completed_images):
     pool = Pool(32)
     k = 0
-    for chunk in chunks(todo, 10000):
+    for chunk in chunks(todo, 1000):
         ids = list(chunk)
         uniques, inverse = np.unique(ids, return_inverse=True)
         docs = np.array([collection.find_one({"_id": id}) for id in uniques])
         to_run = docs[inverse]
-        pool.map(write_adsorption_images, to_run)
+        pool.map(writeAdsorptionImages, to_run)
         k += 1
         print('%d/%d' % (k*len(to_run), len(todo)))
         completed_images += ids
-        pickle.dump(completed_images, open('completed_images.pkl', 'w'))
+        pickle.dump(completed_images, open(dump_dir+'completed_images.pkl', 'w'))
     pool.close()
 
 
 def dump_images():
-    if len(glob.glob('completed_images.pkl')) > 0:
-        completed_images = pickle.load(open('completed_images.pkl'))
+    if len(glob.glob(dump_dir+'completed_images.pkl')) > 0:
+        completed_images = pickle.load(open(dump_dir+'completed_images.pkl'))
     else:
         completed_images = []
 
-    adsorption_ids = get_adsorption_client().db.adsorption.distinct('_id')
-    # unique_combinations = list(itertools.product(adsorption_ids, ads_to_run))
-    todo = list(set(adsorption_ids) - set(completed_images))
-    make_images_adsorption(todo, get_adsorption_client().db.adsorption, completed_images)
+    for adsorbate in ['CO', 'H']:
+        results = pickle.load(open(databall_template[adsorbate]))
+        dft_ids = [a[0]['mongo_id'] for a in results[0]]
+        todo = list(set(dft_ids) - set(completed_images))
+        MakeImagesAdsorption(todo, get_adsorption_client().db.adsorption, completed_images)
+
+        dft_ids = [(a[0]['mongo_id'], adsorbate) for a in results[1]]
+        todo = list(set(dft_ids) - set(completed_images))
+        MakeImages(todo, get_catalog_client().db.catalog, completed_images)
