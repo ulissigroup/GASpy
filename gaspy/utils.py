@@ -11,6 +11,7 @@ from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+import tqdm
 from . import defaults, readrc
 
 
@@ -315,7 +316,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
     # be used to find adsorption sites
     vcf_surface = VoronoiCoordFinder(slab_struct, allow_pathological=True)
-    vcf_bulk = VoronoiCoordFinder(bulk_struct)
+    vcf_bulk = VoronoiCoordFinder(bulk_struct, allow_pathological=True)
 
     # Get the chemical formula
     formula = np.unique(slabAtoms.get_chemical_symbols())
@@ -467,7 +468,7 @@ def map_method(instance, method, inputs, **kwargs):
     return outputs
 
 
-def map(function, inputs):
+def multimap(function, inputs):
     '''
     This function is a wrapper to parallelize a function. Note that we set the pickling
     recursion option to `False` to prevent passing along huge instances of objects,
@@ -482,6 +483,7 @@ def map(function, inputs):
     '''
     with Pool() as pool:
         pickle.settings['recurse'] = False
-        outputs = pool.map(function, (arg for arg in inputs))
+        # use tqdm to add a little progress notifier to estimate running time/etc
+        outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs)), total=len(inputs)))
         pool.clear()
     return outputs
