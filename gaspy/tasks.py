@@ -10,6 +10,7 @@ import math
 from datetime import datetime
 from math import ceil
 from collections import OrderedDict
+import random
 import cPickle as pickle
 import numpy as np
 from numpy.linalg import norm
@@ -28,7 +29,6 @@ import luigi
 from vasp.mongo import mongo_doc, mongo_doc_atoms
 from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
-
 
 # Get the path for the GASdb folder location from the gaspy config file
 GASdb_path = utils.read_rc()['gasdb_path']
@@ -49,6 +49,7 @@ class UpdateAllDB(luigi.WrapperTask):
     # then there is no limit. This is used to limit the scope of a DB update for
     # debugging purposes.
     max_processes = luigi.IntParameter(0)
+
     def requires(self):
         '''
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -61,7 +62,7 @@ class UpdateAllDB(luigi.WrapperTask):
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
-        docs = gasdb.get_atoms_client().find({'type':'slab+adsorbate'})
+        docs = gasdb.get_atoms_client().find({'type': 'slab+adsorbate'})
         # Get all of the current fwid entries in the local DB
         with gasdb.get_adsorption_client() as adsorption_client:
             fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
@@ -77,10 +78,9 @@ class UpdateAllDB(luigi.WrapperTask):
             # Only make the task if 1) the fireworks task is not already in the database,
             # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of docs
             # to dump.
-            if (doc['fwid'] not in fwids
-                    and doc['fwname']['adsorbate'] != ''
-                    and ((self.max_processes == 0) or \
-                         (self.max_processes > 0 and i < self.max_processes))):
+            if (doc['fwid'] not in fwids and
+                    doc['fwname']['adsorbate'] != '' and
+                    ((self.max_processes == 0) or (self.max_processes > 0 and i < self.max_processes))):
                 # Pull information from the Aux DB
                 mpid = doc['fwname']['mpid']
                 miller = doc['fwname']['miller']
@@ -96,17 +96,17 @@ class UpdateAllDB(luigi.WrapperTask):
                     if key in doc['fwname']['vasp_settings']:
                         settings[key] = doc['fwname']['vasp_settings'][key]
                 # Create the nested dictionary of information that we will store in the Aux DB
-                parameters = {'bulk':defaults.bulk_parameters(mpid, settings=settings),
-                              'gas':defaults.gas_parameters(gasname='CO', settings=settings),
-                              'slab':defaults.slab_parameters(miller=miller,
-                                                              shift=shift,
-                                                              top=top,
-                                                              settings=settings),
-                              'adsorption':defaults.adsorption_parameters(adsorbate=adsorbate,
-                                                                          num_slab_atoms=num_slab_atoms,
-                                                                          slabrepeat=slabrepeat,
-                                                                          adsorption_site=adsorption_site,
-                                                                          settings=settings)}
+                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings),
+                              'gas': defaults.gas_parameters(gasname='CO', settings=settings),
+                              'slab': defaults.slab_parameters(miller=miller,
+                                                               shift=shift,
+                                                               top=top,
+                                                               settings=settings),
+                              'adsorption': defaults.adsorption_parameters(adsorbate=adsorbate,
+                                                                           num_slab_atoms=num_slab_atoms,
+                                                                           slabrepeat=slabrepeat,
+                                                                           adsorption_site=adsorption_site,
+                                                                           settings=settings)}
 
                 # Increment the number of processes we've executed
                 # and then flag for hitting max_dump
@@ -145,16 +145,16 @@ class UpdateEnumerations(luigi.Task):
                 atoms = config['atoms']
                 slabadsdoc = mongo_doc(config['atoms'])
                 processed_data = {'fp_init': config['fp'],
-                                  'calculation_info':{'type':'slab+adsorbate',
-                                                      'formula':atoms.get_chemical_formula('hill'),
-                                                      'mpid': self.parameters['bulk']['mpid'],
-                                                      'miller': config['miller'],
-                                                      'num_slab_atoms': len(atoms)-len(config['adsorbate']),
-                                                      'top': config['top'],
-                                                      'slabrepeat': config['slabrepeat'],
-                                                      'relaxed': False,
-                                                      'adsorbate': config['adsorbate'],
-                                                      'shift': config['shift']}}
+                                  'calculation_info': {'type': 'slab+adsorbate',
+                                                       'formula': atoms.get_chemical_formula('hill'),
+                                                       'mpid': self.parameters['bulk']['mpid'],
+                                                       'miller': config['miller'],
+                                                       'num_slab_atoms': len(atoms)-len(config['adsorbate']),
+                                                       'top': config['top'],
+                                                       'slabrepeat': config['slabrepeat'],
+                                                       'relaxed': False,
+                                                       'adsorbate': config['adsorbate'],
+                                                       'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
                 catalog_client.write(slabadsdoc)
 
@@ -164,7 +164,7 @@ class UpdateEnumerations(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class DumpToAuxDB(luigi.Task):
@@ -181,20 +181,20 @@ class DumpToAuxDB(luigi.Task):
 
             # A list of integers containing the Fireworks job ID numbers that have been
             # added to the database already
-            fws = [a['fwid'] for a in atoms_client.find({'fwid':{'$exists':True}})]
+            fws = [a['fwid'] for a in atoms_client.find({'fwid': {'$exists': True}})]
             # Get all of the completed fireworks. Note that we check to see if the shifts
             # exists. This is because an old version of GASpy did not log the shifts; we
             # don't want to use these.
-            fws_cmpltd = lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'unit cell optimization'}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'gas phase optimization'}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'slab optimization',
-                                          'name.shift': {'$exists': True}}) + \
-                         lpad.get_fw_ids({'state':'COMPLETED',
-                                          'name.calculation_type':'slab+adsorbate optimization',
-                                          'name.shift': {'$exists': True}})
+            fws_cmpltd = lpad.get_fw_ids({'state': 'COMPLETED',
+                                          'name.calculation_type': 'unit cell optimization'}) + \
+                lpad.get_fw_ids({'state': 'COMPLETED',
+                                 'name.calculation_type': 'gas phase optimization'}) + \
+                lpad.get_fw_ids({'state': 'COMPLETED',
+                                 'name.calculation_type': 'slab optimization',
+                                 'name.shift': {'$exists': True}}) + \
+                lpad.get_fw_ids({'state': 'COMPLETED',
+                                 'name.calculation_type': 'slab+adsorbate optimization',
+                                 'name.shift': {'$exists': True}})
 
             # For each fireworks object, turn the results into a mongo doc so that we can
             # dump the mongo doc into the Aux DB.
@@ -202,13 +202,16 @@ class DumpToAuxDB(luigi.Task):
                 if fwid not in fws:
                     # Get the information from the class we just pulled from the launchpad
                     fw = lpad.get_fw_by_id(fwid)
-                    atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
+                    try:
+                        atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
+                    except RuntimeError:
+                        continue
 
                     # In an older version of GASpy, we did not use tags to identify
                     # whether an atom was part of the slab or an adsorbate. Here, we
                     # add the tags back in.
-                    if (fw.created_on < datetime(2017, 7, 20)
-                        and fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+                    if (fw.created_on < datetime(2017, 7, 20) and
+                            fw.name['calculation_type'] == 'slab+adsorbate optimization'):
                         # In this old version, the adsorbates were added onto the slab.
                         # Thus, the slab atoms came before the adsorbate atoms in
                         # the indexing. We use this information to create the tags list.
@@ -238,12 +241,11 @@ class DumpToAuxDB(luigi.Task):
                     # Convert the miller indices from strings to integers
                     if 'miller' in fw.name:
                         if isinstance(fw.name['miller'], str) \
-                        or isinstance(fw.name['miller'], unicode):
+                                or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     # Write the doc onto the Auxiliary database
                     atoms_client.write(doc)
-                    print('Dumped a %s firework (FW ID %s) into the Auxiliary DB:' \
-                          % (doc['type'], fwid))
+                    print('Dumped a %s firework (FW ID %s) into the Auxiliary DB: ' % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
                     # And while we're at it, dump the traj files, too
                     yield DumpFWToTraj(fwid=fwid)
@@ -270,7 +272,7 @@ class DumpFWToTraj(luigi.Task):
                 fhandle.write(atoms_hex.decode('hex'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj'%(self.fwid))
+        return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj' % (self.fwid))
 
 
 class DumpToAdsorptionDB(luigi.Task):
@@ -285,7 +287,7 @@ class DumpToAdsorptionDB(luigi.Task):
         return [CalculateEnergy(self.parameters),
                 FingerprintRelaxedAdslab(self.parameters),
                 SubmitToFW(calctype='bulk',
-                           parameters={'bulk':self.parameters['bulk']})]
+                           parameters={'bulk': self.parameters['bulk']})]
 
     def run(self):
         # Load the structure
@@ -306,6 +308,7 @@ class DumpToAdsorptionDB(luigi.Task):
         def unit_vector(vector):
             ''' Returns the unit vector of the vector.  '''
             return vector / np.linalg.norm(vector)
+
         def angle_between(v1, v2):
             ''' Returns the angle in radians between vectors 'v1' and 'v2'::  '''
             v1_u = unit_vector(v1)
@@ -359,18 +362,18 @@ class DumpToAdsorptionDB(luigi.Task):
         processed_data = {'fp_final': fp_final,
                           'fp_init': fp_init,
                           'vasp_settings': self.parameters['adsorption']['vasp_settings'],
-                          'calculation_info':{'type': 'slab+adsorbate',
-                                              'formula': best_sys.get_chemical_formula('hill'),
-                                              'mpid': self.parameters['bulk']['mpid'],
-                                              'miller': self.parameters['slab']['miller'],
-                                              'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
-                                              'top': self.parameters['slab']['top'],
-                                              'slabrepeat': self.parameters['adsorption']['slabrepeat'],
-                                              'relaxed': True,
-                                              'adsorbates': self.parameters['adsorption']['adsorbates'],
-                                              'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
-                                              'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
-                          'FW_info': {'slab+adsorbate':best_sys_pkl['slab+ads']['fwid'],
+                          'calculation_info': {'type': 'slab+adsorbate',
+                                               'formula': best_sys.get_chemical_formula('hill'),
+                                               'mpid': self.parameters['bulk']['mpid'],
+                                               'miller': self.parameters['slab']['miller'],
+                                               'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
+                                               'top': self.parameters['slab']['top'],
+                                               'slabrepeat': self.parameters['adsorption']['slabrepeat'],
+                                               'relaxed': True,
+                                               'adsorbates': self.parameters['adsorption']['adsorbates'],
+                                               'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
+                                               'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
+                          'FW_info': {'slab+adsorbate': best_sys_pkl['slab+ads']['fwid'],
                                       'slab': best_sys_pkl['slab']['fwid'],
                                       'bulk': bulk[bulkmin]['fwid']},
                           'movement_data': {'max_surface_movement': max_surface_movement,
@@ -390,7 +393,7 @@ class DumpToAdsorptionDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class SubmitToFW(luigi.Task):
@@ -409,17 +412,17 @@ class SubmitToFW(luigi.Task):
         # Define a dictionary that will be used to search the Auxiliary database and find
         # the correct entry
         if self.calctype == 'gas':
-            search_strings = {'type':'gas',
-                              'fwname.gasname':self.parameters['gas']['gasname']}
+            search_strings = {'type': 'gas',
+                              'fwname.gasname': self.parameters['gas']['gasname']}
             for key in self.parameters['gas']['vasp_settings']:
-                search_strings['fwname.vasp_settings.%s'%key] = \
-                        self.parameters['gas']['vasp_settings'][key]
+                search_strings['fwname.vasp_settings.%s' % key] = \
+                    self.parameters['gas']['vasp_settings'][key]
         elif self.calctype == 'bulk':
-            search_strings = {'type':'bulk',
-                              'fwname.mpid':self.parameters['bulk']['mpid']}
+            search_strings = {'type': 'bulk',
+                              'fwname.mpid': self.parameters['bulk']['mpid']}
             for key in self.parameters['bulk']['vasp_settings']:
-                search_strings['fwname.vasp_settings.%s'%key] = \
-                        self.parameters['bulk']['vasp_settings'][key]
+                search_strings['fwname.vasp_settings.%s' % key] = \
+                    self.parameters['bulk']['vasp_settings'][key]
         elif self.calctype == 'slab':
             search_strings = {'type': 'slab',
                               'fwname.miller': list(self.parameters['slab']['miller']),
@@ -428,22 +431,22 @@ class SubmitToFW(luigi.Task):
                               'fwname.mpid': self.parameters['bulk']['mpid']}
             for key in self.parameters['slab']['vasp_settings']:
                 if key not in ['isym']:
-                    search_strings['fwname.vasp_settings.%s'%key] = \
-                            self.parameters['slab']['vasp_settings'][key]
+                    search_strings['fwname.vasp_settings.%s' % key] = \
+                        self.parameters['slab']['vasp_settings'][key]
         elif self.calctype == 'slab+adsorbate':
-            search_strings = {'type':'slab+adsorbate',
-                              'fwname.miller':list(self.parameters['slab']['miller']),
-                              'fwname.top':self.parameters['slab']['top'],
-                              'fwname.shift':self.parameters['slab']['shift'],
-                              'fwname.mpid':self.parameters['bulk']['mpid'],
-                              'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
+            search_strings = {'type': 'slab+adsorbate',
+                              'fwname.miller': list(self.parameters['slab']['miller']),
+                              'fwname.top': self.parameters['slab']['top'],
+                              'fwname.shift': self.parameters['slab']['shift'],
+                              'fwname.mpid': self.parameters['bulk']['mpid'],
+                              'fwname.adsorbate': self.parameters['adsorption']['adsorbates'][0]['name']}
             for key in self.parameters['adsorption']['vasp_settings']:
-                if key not in ['nsw', 'isym','symprec']:
-                    search_strings['fwname.vasp_settings.%s'%key] = \
-                            self.parameters['adsorption']['vasp_settings'][key]
+                if key not in ['nsw', 'isym', 'symprec']:
+                    search_strings['fwname.vasp_settings.%s' % key] = \
+                        self.parameters['adsorption']['vasp_settings'][key]
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = \
-                        self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
+                    self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
@@ -468,18 +471,28 @@ class SubmitToFW(luigi.Task):
                                                   slab=self.parameters['slab']))]
             if self.calctype == 'slab+adsorbate':
                 # Return the base structure, and all possible matching ones for the surface
-                search_strings = {'type':'slab+adsorbate',
-                                  'fwname.miller':list(self.parameters['slab']['miller']),
-                                  'fwname.top':self.parameters['slab']['top'],
-                                  'fwname.mpid':self.parameters['bulk']['mpid'],
-                                  'fwname.adsorbate':self.parameters['adsorption']['adsorbates'][0]['name']}
+                search_strings = {'type': 'slab+adsorbate',
+                                  'fwname.miller': list(self.parameters['slab']['miller']),
+                                  'fwname.top': self.parameters['slab']['top'],
+                                  'fwname.mpid': self.parameters['bulk']['mpid'],
+                                  'fwname.adsorbate': self.parameters['adsorption']['adsorbates'][0]['name']}
                 with gasdb.get_atoms_client() as atoms_client:
                     self.matching_docs_all_calcs = list(atoms_client.find(search_strings))
-                return FingerprintUnrelaxedAdslabs(self.parameters)
+
+                #If we don't modify the parameters, the parameters will contain the FP for the request. This will trigger
+                # a FingerprintUnrelaxedAdslabs for each FP, which is entirely unnecessary. The result is the same
+                # regardless of what parameters['adsorption'][0]['fp'] happens to be
+
+                parameters_copy = copy.deepcopy(self.parameters)
+                if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
+                    del parameters_copy['adsorption']['adsorbates'][0]['fp']
+
+                return FingerprintUnrelaxedAdslabs(parameters_copy)
+
             if self.calctype == 'bulk':
-                return GenerateBulk({'bulk':self.parameters['bulk']})
+                return GenerateBulk({'bulk': self.parameters['bulk']})
             if self.calctype == 'gas':
-                return GenerateGas({'gas':self.parameters['gas']})
+                return GenerateGas({'gas': self.parameters['gas']})
 
     def run(self):
         # If there are matching entries, this is easy, just dump the matching entries
@@ -496,9 +509,9 @@ class SubmitToFW(luigi.Task):
 
             # A way to append `tosubmit`, but specialized for gas relaxations
             if self.calctype == 'gas':
-                name = {'vasp_settings':self.parameters['gas']['vasp_settings'],
-                        'gasname':self.parameters['gas']['gasname'],
-                        'calculation_type':'gas phase optimization'}
+                name = {'vasp_settings': self.parameters['gas']['vasp_settings'],
+                        'gasname': self.parameters['gas']['gasname'],
+                        'calculation_type': 'gas phase optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
@@ -507,9 +520,9 @@ class SubmitToFW(luigi.Task):
 
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
-                name = {'vasp_settings':self.parameters['bulk']['vasp_settings'],
-                        'mpid':self.parameters['bulk']['mpid'],
-                        'calculation_type':'unit cell optimization'}
+                name = {'vasp_settings': self.parameters['bulk']['vasp_settings'],
+                        'mpid': self.parameters['bulk']['mpid'],
+                        'calculation_type': 'unit cell optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
@@ -520,9 +533,9 @@ class SubmitToFW(luigi.Task):
             if self.calctype == 'slab':
                 slab_docs = pickle.load(self.input()[0].open())
                 atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
-                              if float(np.round(slab_doc['tags']['shift'], 2)) == \
-                                 float(np.round(self.parameters['slab']['shift'], 2))
-                              and slab_doc['tags']['top'] == self.parameters['slab']['top']]
+                              if float(np.round(slab_doc['tags']['shift'], 2)) ==
+                              float(np.round(self.parameters['slab']['shift'], 2)) and
+                              slab_doc['tags']['top'] == self.parameters['slab']['top']]
                 if len(atoms_list) > 0:
                     #raise Exception('We found more than one slab that matches the shift')
                     #min_eng=np.argmin([atoms.get_potential_energy() for atoms in atoms_list])
@@ -533,13 +546,13 @@ class SubmitToFW(luigi.Task):
                     raise Exception('We did not find any slab that matches the shift')
                 elif len(atoms_list) == 1:
                     atoms = atoms_list[0]
-                name = {'shift':self.parameters['slab']['shift'],
-                        'mpid':self.parameters['bulk']['mpid'],
-                        'miller':self.parameters['slab']['miller'],
-                        'top':self.parameters['slab']['top'],
-                        'vasp_settings':self.parameters['slab']['vasp_settings'],
-                        'calculation_type':'slab optimization',
-                        'num_slab_atoms':len(atoms)}
+                name = {'shift': self.parameters['slab']['shift'],
+                        'mpid': self.parameters['bulk']['mpid'],
+                        'miller': self.parameters['slab']['miller'],
+                        'top': self.parameters['slab']['top'],
+                        'vasp_settings': self.parameters['slab']['vasp_settings'],
+                        'calculation_type': 'slab optimization',
+                        'num_slab_atoms': len(atoms)}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        self.parameters['slab']['vasp_settings'],
@@ -549,6 +562,7 @@ class SubmitToFW(luigi.Task):
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
                 fpd_structs = pickle.load(self.input().open())
+
                 def matchFP(entry, fp):
                     '''
                     This function checks to see if the first argument, `entry`, matches
@@ -571,15 +585,15 @@ class SubmitToFW(luigi.Task):
                 else:
                     if self.parameters['adsorption']['adsorbates'][0]['name'] != '':
                         matching_docs = [doc for doc in fpd_structs
-                                         if doc['adsorption_site'] == \
-                                            self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
+                                         if doc['adsorption_site'] ==
+                                         self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_docs = [doc for doc in fpd_structs]
                 #if len(matching_docs) == 0:
                     #print('No docs matching the desired FP/Site!')
-                    #print('Desired sites:')
+                    #print('Desired sites: ')
                     #pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
-                    #print('Available Sites:')
+                    #print('Available Sites: ')
                     #pprint(fpd_structs)
                     #pprint(self.input().fn)
                     #pprint(self.parameters)
@@ -595,16 +609,16 @@ class SubmitToFW(luigi.Task):
                 # Add each of the matchig docs to `tosubmit`
                 for doc in matching_docs:
                     # The name of our firework is actually a dictionary, as defined here
-                    name = {'mpid':self.parameters['bulk']['mpid'],
-                            'miller':self.parameters['slab']['miller'],
-                            'top':self.parameters['slab']['top'],
-                            'shift':doc['shift'],
-                            'adsorbate':self.parameters['adsorption']['adsorbates'][0]['name'],
-                            'adsorption_site':doc['adsorption_site'],
-                            'vasp_settings':self.parameters['adsorption']['vasp_settings'],
-                            'num_slab_atoms':self.parameters['adsorption']['num_slab_atoms'],
-                            'slabrepeat':self.parameters['adsorption']['slabrepeat'],
-                            'calculation_type':'slab+adsorbate optimization'}
+                    name = {'mpid': self.parameters['bulk']['mpid'],
+                            'miller': self.parameters['slab']['miller'],
+                            'top': self.parameters['slab']['top'],
+                            'shift': doc['shift'],
+                            'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
+                            'adsorption_site': doc['adsorption_site'],
+                            'vasp_settings': self.parameters['adsorption']['vasp_settings'],
+                            'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
+                            'slabrepeat': self.parameters['adsorption']['slabrepeat'],
+                            'calculation_type': 'slab+adsorbate optimization'}
                     # If there is no adsorbate, then the 'adsorption_site' key is irrelevant
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
@@ -630,8 +644,8 @@ class SubmitToFW(luigi.Task):
                     else:
                         atoms = doc['atoms']
                     if len(guess_docs) > 0:
-                        name['guessed_from'] = {'xc':guess['fwname']['vasp_settings']['xc'],
-                                                'encut':guess['fwname']['vasp_settings']['encut']}
+                        name['guessed_from'] = {'xc': guess['fwname']['vasp_settings']['xc'],
+                                                'encut': guess['fwname']['vasp_settings']['encut']}
 
                     # Add the firework if it's not already running
                     if len(fwhs.running_fireworks(name, launchpad)) == 0:
@@ -652,12 +666,12 @@ class SubmitToFW(luigi.Task):
             if len(tosubmit) > 0:
                 wflow = Workflow(tosubmit, name='vasp optimization')
                 launchpad.add_wf(wflow)
-                print('Just submitted the following Fireworks:')
+                print('Just submitted the following Fireworks: ')
                 for fw in tosubmit:
                     utils.print_dict(fw.name, indent=1)
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -678,7 +692,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class GenerateGas(luigi.Task):
@@ -693,7 +707,7 @@ class GenerateGas(luigi.Task):
             pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class GenerateSlabs(luigi.Task):
@@ -709,9 +723,9 @@ class GenerateSlabs(luigi.Task):
         the `Bulk` class. If it needs to be relaxed, then we submit it to Fireworks.
         '''
         if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
-            return GenerateBulk(parameters={'bulk':self.parameters['bulk']})
+            return GenerateBulk(parameters={'bulk': self.parameters['bulk']})
         else:
-            return SubmitToFW(calctype='bulk', parameters={'bulk':self.parameters['bulk']})
+            return SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
 
     def run(self):
         # Preparation work with ASE and PyMatGen before we start creating the slabs
@@ -743,16 +757,16 @@ class GenerateSlabs(luigi.Task):
                    rotate_cell=True)
             # Save the slab, but only if it isn't already in the database
             top = True
-            tags = {'type':'slab',
-                    'top':top,
-                    'mpid':self.parameters['bulk']['mpid'],
-                    'miller':self.parameters['slab']['miller'],
-                    'shift':shift,
-                    'num_slab_atoms':len(atoms_slab),
-                    'relaxed':False,
+            tags = {'type': 'slab',
+                    'top': top,
+                    'mpid': self.parameters['bulk']['mpid'],
+                    'miller': self.parameters['slab']['miller'],
+                    'shift': shift,
+                    'num_slab_atoms': len(atoms_slab),
+                    'relaxed': False,
                     'bulk_fwid': bulk_fwid,
-                    'slab_generate_settings':self.parameters['slab']['slab_generate_settings'],
-                    'get_slab_settings':self.parameters['slab']['get_slab_settings']}
+                    'slab_generate_settings': self.parameters['slab']['slab_generate_settings'],
+                    'get_slab_settings': self.parameters['slab']['get_slab_settings']}
             slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
             slabdoc['tags'] = tags
             slabsave.append(slabdoc)
@@ -780,15 +794,15 @@ class GenerateSlabs(luigi.Task):
 
                 # and if it is not in the database, then save it.
                 slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
-                tags = {'type':'slab',
-                        'top':not(top),
-                        'mpid':self.parameters['bulk']['mpid'],
-                        'miller':self.parameters['slab']['miller'],
-                        'shift':shift,
-                        'num_slab_atoms':len(atoms_slab),
-                        'relaxed':False,
-                        'slab_generate_settings':self.parameters['slab']['slab_generate_settings'],
-                        'get_slab_settings':self.parameters['slab']['get_slab_settings']}
+                tags = {'type': 'slab',
+                        'top': not(top),
+                        'mpid': self.parameters['bulk']['mpid'],
+                        'miller': self.parameters['slab']['miller'],
+                        'shift': shift,
+                        'num_slab_atoms': len(atoms_slab),
+                        'relaxed': False,
+                        'slab_generate_settings': self.parameters['slab']['slab_generate_settings'],
+                        'get_slab_settings': self.parameters['slab']['get_slab_settings']}
                 slabdoc['tags'] = tags
                 slabsave.append(slabdoc)
 
@@ -798,7 +812,7 @@ class GenerateSlabs(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class GenerateSiteMarkers(luigi.Task):
@@ -819,17 +833,17 @@ class GenerateSiteMarkers(luigi.Task):
             return [GenerateSlabs(parameters=OrderedDict(unrelaxed=True,
                                                          bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
-                    GenerateBulk(parameters={'bulk':self.parameters['bulk']})]
+                    GenerateBulk(parameters={'bulk': self.parameters['bulk']})]
         else:
             return [SubmitToFW(calctype='slab',
                                parameters=OrderedDict(bulk=self.parameters['bulk'],
                                                       slab=self.parameters['slab'])),
                     SubmitToFW(calctype='bulk',
-                               parameters={'bulk':self.parameters['bulk']})]
+                               parameters={'bulk': self.parameters['bulk']})]
 
     def run(self):
         # Defire our marker, a uraniom Atoms object. Then pull out the slabs and bulk
-        adsorbate = {'name':'U', 'atoms':Atoms('U')}
+        adsorbate = {'name': 'U', 'atoms': Atoms('U')}
         slab_docs = pickle.load(self.input()[0].open())
         bulk_doc = pickle.load(self.input()[1].open())[0]
         bulk = mongo_doc_atoms(bulk_doc)
@@ -869,15 +883,15 @@ class GenerateSiteMarkers(luigi.Task):
                     shift = self.parameters['slab']['shift']
                     top = self.parameters['slab']['top']
                     miller = self.parameters['slab']['miller']
-                tags = {'type':'slab+adsorbate',
-                        'adsorption_site':str(np.round(site, decimals=2)),
-                        'slabrepeat':str(slabrepeat),
-                        'adsorbate':adsorbate['name'],
-                        'top':top,
-                        'miller':miller,
-                        'shift':shift,
-                        'slab_fwid':slab_fwid,
-                        'relaxed':False}
+                tags = {'type': 'slab+adsorbate',
+                        'adsorption_site': str(np.round(site, decimals=2)),
+                        'slabrepeat': str(slabrepeat),
+                        'adsorbate': adsorbate['name'],
+                        'top': top,
+                        'miller': miller,
+                        'shift': shift,
+                        'slab_fwid': slab_fwid,
+                        'relaxed': False}
                 # Then add the adsorbate marker on top of the slab. Note that we use a local,
                 # deep copy of the marker because the marker was created outside of this loop.
                 _adsorbate = adsorbate['atoms'].copy()
@@ -895,7 +909,7 @@ class GenerateSiteMarkers(luigi.Task):
             pickle.dump(adslabs_to_save, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class GenerateAdSlabs(luigi.Task):
@@ -953,7 +967,7 @@ class GenerateAdSlabs(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class MatchCatalogShift(luigi.Task):
@@ -967,7 +981,7 @@ class MatchCatalogShift(luigi.Task):
         # We need both the relaxed and unrelaxed slabs to try and match them
         yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
                                         'slab': self.parameters['slab'],
-                                        'unrelaxed':True})
+                                        'unrelaxed': True})
         yield GenerateSlabs(parameters={'bulk': self.parameters['bulk'],
                                         'slab': self.parameters['slab']})
 
@@ -1048,7 +1062,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class FingerprintUnrelaxedAdslabs(luigi.Task):
@@ -1068,7 +1082,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
         param_slab = copy.deepcopy(self.parameters)
         param_slab['adsorption']['adsorbates'] = \
-                [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
+            [OrderedDict(name='', atoms=pickle.dumps(Atoms('')).encode('hex'))]
         return [GenerateAdSlabs(self.parameters),
                 GenerateAdSlabs(parameters=param_slab)]
 
@@ -1076,8 +1090,8 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the
         # number of slab atoms
         adslabs = pickle.load(self.input()[0].open())
-        slab = pickle.load(self.input()[1].open())
-        expected_slab_atoms = len(slab[0]['atoms'])
+        # slab = pickle.load(self.input()[1].open())
+        # expected_slab_atoms = len(slab[0]['atoms'])
         # len(slabs[0]['atoms']['atoms'])*np.prod(eval(adslabs[0]['slabrepeat']))
 
         # Fingerprint each adslab
@@ -1095,7 +1109,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             pickle.dump(adslabs, open(self.temp_output_path, 'w'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -1126,7 +1140,7 @@ class CalculateEnergy(luigi.Task):
 
         # Lastly, we need to relax the base gases.
         for gasname in ['CO', 'H2', 'H2O']:
-            param = copy.deepcopy({'gas':self.parameters['gas']})
+            param = copy.deepcopy({'gas': self.parameters['gas']})
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
 
@@ -1152,9 +1166,9 @@ class CalculateEnergy(luigi.Task):
         slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), slab_docs))
 
         # Get the per-atom energies as a linear combination of the basis set
-        mono_atom_energies = {'H':gasEnergies['H2']/2.,
-                              'O':gasEnergies['H2O']-gasEnergies['H2'],
-                              'C':gasEnergies['CO']-(gasEnergies['H2O']-gasEnergies['H2'])}
+        mono_atom_energies = {'H': gasEnergies['H2']/2.,
+                              'O': gasEnergies['H2O'] - gasEnergies['H2'],
+                              'C': gasEnergies['CO'] - (gasEnergies['H2O']-gasEnergies['H2'])}
 
         # Get the total energy of the stoichiometry amount of gas reference species
         gas_energy = 0
@@ -1176,24 +1190,23 @@ class CalculateEnergy(luigi.Task):
         towrite = {'atoms': adjusted_atoms,
                    'slab+ads': adslab_docs[lowest_energy_adslab],
                    'slab': slab_docs[lowest_energy_slab],
-                   'gas':{'CO': pickle.load(inputs[2].open())[0],
-                          'H2': pickle.load(inputs[3].open())[0],
-                          'H2O' :pickle.load(inputs[4].open())[0]}}
+                   'gas': {'CO': pickle.load(inputs[2].open())[0],
+                           'H2': pickle.load(inputs[3].open())[0],
+                           'H2O': pickle.load(inputs[4].open())[0]}}
 
         # Write the dictionary as a pickle
         with self.output().temporary_path() as self.temp_output_path:
             pickle.dump(towrite, open(self.temp_output_path, 'w'))
 
         for ads in self.parameters['adsorption']['adsorbates']:
-            print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' \
-                  % (ads['name'],
-                     self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
-                     self.parameters['bulk']['mpid'],
-                     self.parameters['slab']['miller'],
-                     dE))
+            print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' % (ads['name'],
+                  self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
+                  self.parameters['bulk']['mpid'],
+                  self.parameters['slab']['miller'],
+                  dE))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl'%(self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
 
 
 class EnumerateAlloys(luigi.WrapperTask):
@@ -1202,6 +1215,7 @@ class EnumerateAlloys(luigi.WrapperTask):
     '''
     max_index = luigi.IntParameter(1)
     whitelist = luigi.ListParameter()
+    max_to_submit = luigi.IntParameter(1000)
 
     def requires(self):
         """
@@ -1252,14 +1266,33 @@ class EnumerateAlloys(luigi.WrapperTask):
             return map(lambda x: [result['task_id'], x], miller_list)
 
         # Generate all facets for each material in parallel
-        all_miller = map(processStruc, results)
+        all_miller = utils.multimap(processStruc, results)
 
-        for facets in all_miller:
+        print('Total # of matching surfaces in MP: %d' % (np.sum([len(x) for x in all_miller])))
+
+        tasks_to_submit = []
+        for facets in reversed(all_miller):
             for facet in facets:
-                yield UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                bulk=defaults.bulk_parameters(facet[0]),
-                                                                slab=defaults.slab_parameters(facet[1], True, 0),
-                                                                gas=defaults.gas_parameters('CO'),
-                                                                adsorption=defaults.adsorption_parameters('U',
-                                                                                                          '[3.36 1.16 24.52]',
-                                                                                                          '(1, 1)', 24)))
+                task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
+                                                                 bulk=defaults.bulk_parameters(facet[0]),
+                                                                 slab=defaults.slab_parameters(facet[1], True, 0),
+                                                                 gas=defaults.gas_parameters('CO'),
+                                                                 adsorption=defaults.adsorption_parameters('U',
+                                                                                                           '[3.36 1.16 24.52]',
+                                                                                                           '(1, 1)', 24)))
+                if not(task.complete()):
+                    tasks_to_submit.append(task)
+
+        random.shuffle(tasks_to_submit)
+
+        if len(tasks_to_submit) > self.max_to_submit:
+            tasks_to_submit = tasks_to_submit[0: self.max_to_submit]
+
+        return tasks_to_submit
+
+        #    for i in range(self.max_to_submit):
+        #        yield tasks_to_submit
+        #            submitted+=1
+        #            yield t
+        #            if submitted > self.max_to_submit:
+        #                return
