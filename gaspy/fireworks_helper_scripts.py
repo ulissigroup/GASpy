@@ -142,8 +142,7 @@ def get_firework_info(fw):
         os.remove(fname)    # Clean up
 
         if len(spec_atoms) != len(starting_atoms):
-            raise Exception('Spec atoms does not match starting atoms, investigate FW %d'
-                            % fw.fw_id)
+            raise RuntimeError('Spec atoms does not match starting atoms, investigate FW %d' % fw.fw_id)
 
         # The relaxation often mangles the tags and constraints due to limitations in
         # in vasp() calculators.  We fix this by using the spec constraints/tags
