@@ -1,15 +1,17 @@
 import os
 import uuid
 import numpy as np
-from ase.io import read, write
+from ase.io import read
 from ase.io.trajectory import TrajectoryWriter
-from ase.optimize import QuasiNewton, BFGS
+from ase.optimize import BFGS
 from ase.calculators.vasp import Vasp
 from vasp.vasprc import VASPRC
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
+# noqa: E731
 
 # Need to handle setting the pseudopotential directory, probably in the submission
 # config if it stays constant? (vasp_qadapter.yaml)
+
 
 def runVasp(fname_in, fname_out, vaspflags, npar=4):
     '''
@@ -48,41 +50,43 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     elif 'SLURM_CLUSTER_NAME' in os.environ:
         NPROCS = int(os.environ['SLURM_NPROCS'])
 
+    # If we're on Gilgamesh...
     if 'PBS_NODEFILE' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
-        # We're on gilgamesh
         vaspflags['npar'] = 4
         vasp_cmd = '/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
         NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
-        mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
+        mpicall = lambda x, y: 'mpirun -np %i %s' % (x, y)  # noqa: E731
+    # If we're on Arjuna...
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'arjuna':
-        # We're on arjuna
+        # If this is a GPU job...
         if os.environ['CUDA_VISIBLE_DEVICES'] != 'NoDevFiles':
-            # We have a GPU job on arjuna
             vaspflags['ncore'] = 1
             vaspflags['kpar'] = 16
             vaspflags['nsim'] = 8
             vaspflags['lreal'] = 'Auto'
             vasp_cmd = 'vasp_gpu'
-            mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
+            mpicall = lambda x, y: 'mpirun -np %i %s' % (x, y)  # noqa: E731
+        # If this is a CPU job...
         else:
-            # We're running CPU only
             if NPROCS > 16:
                 vaspflags['ncore'] = 4
                 vaspflags['kpar'] = 4
             else:
                 vaspflags['kpar'] = 1
                 vaspflags['ncore'] = 4
-            print('we found arjuna cpu!')
-            mpicall = lambda x, y: 'mpirun -np %i %s' %(x, y)
+            mpicall = lambda x, y: 'mpirun -np %i %s' % (x, y)  # noqa: E731
+    # If we're on Cori, use SLURM. Note that we decrease the priority by 1000
+    # in order to prioritize other things higher, such as modeling and prediction
+    # in GASpy_regression
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'cori':
-        # We're on cori
+        # If we're on a Haswell node...
         if os.environ['CRAY_CPU_TARGET'] == 'haswell':
-            # We're on a haswell CPU node
             NNODES = int(os.environ['SLURM_NNODES'])
             vaspflags['kpar'] = NNODES
-            mpicall = lambda x, y: 'srun -n %d %s' %(x, y)
+            mpicall = lambda x, y: 'srun -n %d %s' % (x, y)  # noqa: E731
+        # If we're on a KNL node...
         elif os.environ['CRAY_CPU_TARGET'] == 'knl':
-            mpicall = lambda x, y: 'srun -n %d -c8 --cpu_bind=cores %s' %(x*32, y)
+            mpicall = lambda x, y: 'srun -n %d -c8 --cpu_bind=cores %s' % (x*32, y)  # noqa: E731
             vaspflags['ncore'] = 1
 
     # Set the pseudopotential type by setting 'xc' in Vasp()
