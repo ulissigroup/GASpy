@@ -57,30 +57,24 @@ class UpdateAllDB(luigi.WrapperTask):
         `run`, and `output` methods), we put all of the "action" into the `requires`
         method.
         '''
-
         # Dump from the Primary DB to the Aux DB
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
         docs = gasdb.get_atoms_client().find({'type': 'slab+adsorbate'})
-        # Get all of the current fwid entries in the local DB
+        # Get all of the current fwids numbers in the adsorption collection.
+        # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.get_adsorption_client() as adsorption_client:
             fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
+        fwids = dict.fromkeys(fwids)
 
         # For each adsorbate/configuration, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
         i = 0
         for doc in docs:
-            # Break the loop if we reach the maxmimum number of processes
-            if i+1 == self.max_processes:
-                break
-
-            # Only make the task if 1) the fireworks task is not already in the database,
-            # 2) there is an adsorbate, and 3) we haven't reached the (non-zero) limit of docs
-            # to dump.
-            if (doc['fwid'] not in fwids and
-                    doc['fwname']['adsorbate'] != '' and
-                    ((self.max_processes == 0) or (self.max_processes > 0 and i < self.max_processes))):
+            # Only make the task if 1) the fireworks task is not already in the database, and
+            # 2) there is an adsorbate
+            if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != ''):
                 # Pull information from the Aux DB
                 mpid = doc['fwname']['mpid']
                 miller = doc['fwname']['miller']
@@ -108,11 +102,11 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                            adsorption_site=adsorption_site,
                                                                            settings=settings)}
 
-                # Increment the number of processes we've executed
-                # and then flag for hitting max_dump
+                # If we've hit the maxmum number of processes, flag and stop
                 i += 1
-                if (i >= self.max_processes and self.max_processes != 0):
+                if i == self.max_processes:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
+                    break
 
                 yield DumpToAdsorptionDB(parameters)
 
@@ -176,15 +170,13 @@ class DumpToAuxDB(luigi.Task):
     def run(self):
         lpad = fwhs.get_launchpad()
 
-        # Create a class, "con", that has methods to interact with the database.
+        # Get all of the FW numbers that have been loaded into the atoms collection already.
+        # We turn the list into a dictionary so that we can parse through it more quickly.
         with gasdb.get_atoms_client() as atoms_client:
+            atoms_fws = [a['fwid'] for a in atoms_client.find({'fwid': {'$exists': True}})]
+            atoms_fws = dict.fromkeys(atoms_fws)
 
-            # A list of integers containing the Fireworks job ID numbers that have been
-            # added to the database already
-            fws = [a['fwid'] for a in atoms_client.find({'fwid': {'$exists': True}})]
-            # Get all of the completed fireworks. Note that we check to see if the shifts
-            # exists. This is because an old version of GASpy did not log the shifts; we
-            # don't want to use these.
+            # Get all of the completed fireworks from the Primary DB
             fws_cmpltd = lpad.get_fw_ids({'state': 'COMPLETED',
                                           'name.calculation_type': 'unit cell optimization'}) + \
                 lpad.get_fw_ids({'state': 'COMPLETED',
@@ -199,8 +191,9 @@ class DumpToAuxDB(luigi.Task):
             # For each fireworks object, turn the results into a mongo doc so that we can
             # dump the mongo doc into the Aux DB.
             for fwid in fws_cmpltd:
-                if fwid not in fws:
-                    # Get the information from the class we just pulled from the launchpad
+                if fwid not in atoms_fws:
+                    # Get the information from the class we just pulled from the launchpad.
+                    # Move on if we fail to get the info.
                     fw = lpad.get_fw_by_id(fwid)
                     try:
                         atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
@@ -240,8 +233,7 @@ class DumpToAuxDB(luigi.Task):
 
                     # Convert the miller indices from strings to integers
                     if 'miller' in fw.name:
-                        if isinstance(fw.name['miller'], str) \
-                                or isinstance(fw.name['miller'], unicode):
+                        if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     # Write the doc onto the Auxiliary database
                     atoms_client.write(doc)
