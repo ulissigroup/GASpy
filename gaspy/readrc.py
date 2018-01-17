@@ -9,12 +9,14 @@ from os.path import join
 import json
 
 
-def read_rc(key=None):
+def read_rc(query=None):
     '''
     This function will pull out keys from the .gaspyrc file for you
 
     Input:
-        key     [Optional] The string indicating the configuration you want
+        query   [Optional] The string indicating the configuration you want.
+                If you're looking for nested information, use the syntax
+                "foo.bar.key"
     Output:
         configs A dictionary whose keys are the input keys and whose values
                 are the values that we found in the .gaspyrc file
@@ -47,11 +49,14 @@ def read_rc(key=None):
         configs = json.load(rc)
 
     # Return out the keys you asked for. If the user did not specif the key, then return it all
-    if key:
-        try:
-            return configs[key]
-        except KeyError as err:
-            err.message += "; Check the spelling/capitalization of the config you're looking for"
-            raise
+    if query:
+        keys = query.split('.')
+        for key in keys:
+            try:
+                configs = configs[key]
+            except KeyError as err:
+                err.message += "; Check the spelling/capitalization of the config you're looking for"
+                raise
+        return configs
     else:
         return configs

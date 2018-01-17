@@ -24,6 +24,17 @@ export GASDB_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc(
 export CONDA_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("conda_path"))')"
 export LUIGI_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("luigi_port"))')"
 export LPAD_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad_path"))')"
+# Mongo info
+export FW_HOST="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.host"))')"
+export FW_DB="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.name"))')"
+export FW_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.port"))')"
+export FW_USER="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.username"))')"
+export FW_PW="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.password"))')"
+export AUX_HOST="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("atoms_client.host"))')"
+export AUX_DB="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("atoms_client.database"))')"
+export AUX_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("atoms_client.port"))')"
+export AUX_USER="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("atoms_client.user"))')"
+export AUX_PW="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("atoms_client.password"))')"
 
 # Load the conda
 source activate $CONDA_PATH
