@@ -33,7 +33,6 @@
 *.out
 *.error
 *.out
-logs/*
 
 # OS generated files #
 ######################
