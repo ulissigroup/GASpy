@@ -1,6 +1,7 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
 import pdb  # noqa: F401
+import os
 import warnings
 from collections import OrderedDict
 from itertools import islice
@@ -8,6 +9,7 @@ import pickle
 from multiprocessing import Pool
 import glob
 import numpy as np
+import tqdm
 from ase.io.png import write_png
 from vasp.mongo import MongoDatabase, mongo_doc_atoms
 from . import defaults, utils
@@ -81,9 +83,6 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
         slab_move_max       The maximum distance that a slab atom may move (angstrom)
     Output:
         docs    Mongo docs; a list of dictionaries for each database entry
-        p_docs  "parsed docs"; a dictionary whose keys are the keys of `fingerprints` and
-                whose values are lists of the results returned by each query within
-                `fingerprints`.
     '''
     if not fingerprints:
         fingerprints = defaults.fingerprints()
@@ -142,23 +141,40 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
         pipeline = [match, group]
     else:
         pipeline = [group]
-
     # Get the particular collection from the mongo client's database
     collection = getattr(client.db, collection_name)
+
+    # TODO:  Remove this part of the code and fix it the right way.
+    # We cache the catalog documents right now because this collection tends to break.
+    if collection_name == 'catalog':
+        scratch_loc = os.environ['SCRATCH']
+        cache_name = scratch_loc + '/' + str(hash(str(pipeline))) + '.pkl'
+        try:
+            with open(cache_name, 'rb') as f:
+                docs = pickle.load(f)
+            return docs
+        except IOError:
+            pass
+
     # Create the cursor. We set allowDiskUse=True to allow mongo to write to
     # temporary files, which it needs to do for large databases. We also
     # set useCursor=True so that `aggregate` returns a cursor object
     # (otherwise we run into memory issues).
+    print('Starting to pull documents...')
+    # print(client.db.command('aggregate', collection_name, pipeline=pipeline, explain=True))
     cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
     # Use the cursor to pull all of the information we want out of the database, and
     # then parse it. Note that we forgo parsing if we did not find any documents.
-    docs = [doc['_id'] for doc in cursor]
-    if docs:
-        p_docs = utils.docs_to_pdocs(docs)
-    else:
+    docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
+    if not docs:
         warnings.warn('We did not find any matching documents', RuntimeWarning)
-        p_docs = []
-    return docs, p_docs
+
+    # TODO:  Remove this part of the code and fix it the right way
+    if collection_name == 'catalog':
+        with open(cache_name, 'wb') as f:
+            pickle.dump(docs, f)
+
+    return docs
 
 
 def hash_docs(docs, ignore_ads=False):
@@ -169,7 +185,7 @@ def hash_docs(docs, ignore_ads=False):
 
     Input:
         docs        Mongo docs (list of dictionaries) that have been created using the
-                    gaspy.utils.get_docs function. Note that this is the unparsed version
+                    gaspy.gasdb.get_docs function. Note that this is the unparsed version
                     of mongo documents.
         ignore_ads  A boolean that decides whether or not we hash the adsorbate.
                     This is useful mainly for the "matching_ads" function.
@@ -221,8 +237,6 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     Output:
         docs    A list of dictionaries for various fingerprints. Useful for
                 creating lists of GASpy `parameters` dictionaries.
-        p_docs  A dictionary of lists for various fingerprints. Useful for
-                passing to GASpyRegressor.predict
     '''
     # Default value for fingerprints. Since it's a mutable dictionary, we define it
     # down here instead of in the __init__ line.
@@ -232,14 +246,13 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     # Fetch mongo docs for our results and catalog databases so that we can
     # start filtering out cataloged sites that we've already simulated.
     with get_adsorption_client() as ads_client:
-        ads_docs, _ = get_docs(ads_client, 'adsorption',
-                               calc_settings=calc_settings,
-                               vasp_settings=vasp_settings,
-                               fingerprints=fingerprints,
-                               adsorbates=adsorbates)
+        ads_docs = get_docs(ads_client, 'adsorption',
+                            calc_settings=calc_settings,
+                            vasp_settings=vasp_settings,
+                            fingerprints=fingerprints,
+                            adsorbates=adsorbates)
     with get_catalog_client() as cat_client:
-        cat_docs, cat_p_docs = get_docs(cat_client, 'catalog',
-                                        fingerprints=fingerprints, max_atoms=max_atoms)
+        cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
     # Hash the docs so that we can filter out any items in the catalog
     # that we have already relaxed. Note that we keep `ads_hash` in a dict so
     # that we can search through it, but we turn `cat_hash` into a list so that
@@ -249,10 +262,7 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
 
     # Perform the filtering while simultaneously populating the `docs` output
     docs = [doc for doc, cat_hash in zip(cat_docs, cat_hashes) if cat_hash not in ads_hashes]
-
-    # Return the output
-    p_docs = utils.docs_to_pdocs(docs)
-    return docs, p_docs
+    return docs
 
 
 # TODO:  Commend and clean up everything below here
