@@ -2,13 +2,10 @@
 This module is not meant to be called by GASpy, but rather by a user trying to
 investigate/debug things going on with GASpy.
 '''
-import sys
-import pdb
-from pprint import pprint
+import pdb  # noqa: F401
 from vasp.mongo import mongo_doc_atoms
 from ase.visualize import view
 from . import utils
-from . import defaults
 from . import fireworks_helper_scripts as fwhs
 
 
@@ -42,6 +39,7 @@ class AuxPull(object):
     def mdoc(self):
         ''' Return the mongo document for the first matching entry '''
         return self.docs[0]
+
     def mdocs(self):
         ''' Return the mongo documents for all matching entries '''
         return self.docs
@@ -49,6 +47,7 @@ class AuxPull(object):
     def atoms(self):
         ''' Return the atoms object for the first matching entry '''
         return mongo_doc_atoms(self.docs[0])
+
     def atomss(self):
         ''' Return the atoms objects for all matching entries '''
         return [mongo_doc_atoms(doc) for doc in self.docs]
@@ -56,6 +55,7 @@ class AuxPull(object):
     def fw(self):
         ''' Return the fw object for the first matching entry '''
         return self.lpad.get_fw_by_id(self.docs[0]['fwid'])
+
     def fws(self):
         ''' Return the fw objects for all matching entries '''
         return [self.lpad.get_fw_by_id(doc['fwid']) for doc in self.docs]
