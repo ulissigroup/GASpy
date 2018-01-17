@@ -1,7 +1,6 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
 import pdb  # noqa: F401
-import os
 import warnings
 from collections import OrderedDict
 from itertools import islice
@@ -147,8 +146,8 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     # TODO:  Remove this part of the code and fix it the right way.
     # We cache the catalog documents right now because this collection tends to break.
     if collection_name == 'catalog':
-        scratch_loc = os.environ['SCRATCH']
-        cache_name = scratch_loc + '/' + str(hash(str(pipeline))) + '.pkl'
+        gasdb_path = utils.read_rc('gasdb_path')
+        cache_name = gasdb_path + '/pickles/' + str(hash(str(pipeline))) + '.pkl'
         try:
             with open(cache_name, 'rb') as f:
                 docs = pickle.load(f)
