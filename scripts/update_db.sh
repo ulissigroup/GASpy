@@ -19,6 +19,6 @@ PYTHONPATH=$PYTHONPATH luigi \
     --module gaspy.tasks UpdateAllDB \
     --max-processes 0 \
     --scheduler-host $LUIGI_PORT \
-    --workers=1 \
+    --workers=4 \
     --log-level=WARNING \
     --worker-timeout 300

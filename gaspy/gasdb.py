@@ -2,7 +2,6 @@
 
 import pdb  # noqa: F401
 import warnings
-from collections import OrderedDict
 from itertools import islice
 import pickle
 from multiprocessing import Pool
@@ -83,6 +82,8 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     Output:
         docs    Mongo docs; a list of dictionaries for each database entry
     '''
+
+
     if not fingerprints:
         fingerprints = defaults.fingerprints()
 
@@ -148,30 +149,35 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     if collection_name == 'catalog':
         gasdb_path = utils.read_rc('gasdb_path')
         cache_name = gasdb_path + '/pickles/' + str(hash(str(pipeline))) + '.pkl'
+        # Load the cache.
         try:
+            print('Trying to open the catalog cache...')
             with open(cache_name, 'rb') as f:
                 docs = pickle.load(f)
+            print('Opened!')
             return docs
+        # If it's not there, then pull from Mongo and save it
         except IOError:
-            pass
+            print('Sike. Pulling it instead.')
+            cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
+            docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
+            if not docs:
+                warnings.warn('We did not find any matching documents', RuntimeWarning)
+            with open(cache_name, 'wb') as f:
+                pickle.dump(docs, f)
+            return docs
 
     # Create the cursor. We set allowDiskUse=True to allow mongo to write to
     # temporary files, which it needs to do for large databases. We also
     # set useCursor=True so that `aggregate` returns a cursor object
     # (otherwise we run into memory issues).
     print('Starting to pull documents...')
-    # print(client.db.command('aggregate', collection_name, pipeline=pipeline, explain=True))
     cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
     # Use the cursor to pull all of the information we want out of the database, and
     # then parse it. Note that we forgo parsing if we did not find any documents.
     docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
     if not docs:
         warnings.warn('We did not find any matching documents', RuntimeWarning)
-
-    # TODO:  Remove this part of the code and fix it the right way
-    if collection_name == 'catalog':
-        with open(cache_name, 'wb') as f:
-            pickle.dump(docs, f)
 
     return docs
 
@@ -194,8 +200,8 @@ def hash_docs(docs, ignore_ads=False):
                     to be parsed alongside another `docs` object, which is why
                     it's ordered.
     '''
-    systems = OrderedDict()
-    for doc in docs:
+    def hash_doc(doc):
+        ''' Make a function that hashes one document so that we can monitor progress '''
         # `system` will be one long string of the fingerprints
         system = ''
         for key in sorted(doc.keys()):
@@ -211,8 +217,10 @@ def hash_docs(docs, ignore_ads=False):
                     # Note that we turn the values into strings explicitly, because some
                     # fingerprint features may not be strings (e.g., list of miller indices).
                     system += str(key + '=' + str(value) + '; ')
-        systems[hash(system)] = None
+        return hash(system)
 
+    # Hash with a progress bar
+    systems = [hash_doc(doc) for doc in tqdm.tqdm(docs)]
     return systems
 
 
@@ -252,20 +260,23 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
                             adsorbates=adsorbates)
     with get_catalog_client() as cat_client:
         cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
-    # Hash the docs so that we can filter out any items in the catalog
-    # that we have already relaxed. Note that we keep `ads_hash` in a dict so
-    # that we can search through it, but we turn `cat_hash` into a list so that
-    # we can iterate through it alongside `cat_docs`
-    ads_hashes = hash_docs(ads_docs)
-    cat_hashes = hash_docs(cat_docs).keys()
 
-    # Perform the filtering while simultaneously populating the `docs` output
-    docs = [doc for doc, cat_hash in zip(cat_docs, cat_hashes) if cat_hash not in ads_hashes]
+    # Hash the docs so that we can filter out any items in the catalog
+    # that we have already relaxed.
+    print('Hashing adsorbates...')
+    ads_hashes = hash_docs(ads_docs)
+    print('Hashing catalog...')
+    cat_hashes = hash_docs(cat_docs)
+    unsim_hashes = set(cat_hashes)-set(ads_hashes)
+
+    # Perform the filtering while simultaneously populating the `docs` output.
+    print('Filtering out simulated catalog items...')
+    docs = [doc for doc, cat_hash in tqdm.tqdm(zip(cat_docs, cat_hashes))
+            if cat_hash in unsim_hashes]
     return docs
 
 
 # TODO:  Commend and clean up everything below here
-#catalog = get_catalog_client().find()
 ads_dict = defaults.adsorbates_dict()
 del ads_dict['']
 del ads_dict['U']

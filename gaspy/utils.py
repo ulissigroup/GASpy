@@ -4,7 +4,8 @@ import pdb  # noqa: F401
 from pprint import pprint
 import dill as pickle
 import numpy as np
-from pathos.multiprocessing import ProcessingPool as Pool
+from multiprocess import Pool
+import gc
 from ase import Atoms
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
@@ -432,7 +433,7 @@ def find_max_movement(atoms_initial, atoms_final):
     return np.max(Dlen)
 
 
-def map_method(instance, method, inputs, **kwargs):
+def map_method(instance, method, inputs, processes=32, maxtasksperchild=10, chunksize=10, **kwargs):
     '''
     This function pools and maps methods of class instances. It does so by putting
     the class instance into the global space so that each worker can pull it.
@@ -444,11 +445,16 @@ def map_method(instance, method, inputs, **kwargs):
     huge instances of objects, which can bottleneck multiprocessing.
 
     Inputs:
-        instance    An instance of a class
-        method      A string indicating the method of the class that you want to map
-        inputs      A sequence of inputs that can be fed to the method one-at-a-time
-        kwargs      Any arguments that you should be passing to the method
-        nodes       The number of nodes you want to run across. Defaults to 1.
+        instance        An instance of a class
+        method          A string indicating the method of the class that you want to map
+        inputs          A sequence of inputs that can be fed to the method one-at-a-time
+        processes       The number of threads/processes you want to be using
+        maxtaskperchild The maximum number of tasks that a child process may do before
+                        terminating (and therefore clearing its memory cache).
+        chunksize       How many chunks of processing you want to have each single
+                        iteration to do. Smaller chunks means more memory shuffling.
+                        Bigger chunks means more RAM requirements.
+        kwargs          Any arguments that you should be passing to the method
     Outputs:
         outputs     A list of the inputs mapped through the function
     '''
@@ -458,12 +464,17 @@ def map_method(instance, method, inputs, **kwargs):
     module_instance = instance
     def function(arg):  # noqa: E306
         return getattr(module_instance, method)(arg, **kwargs)
+
+    print('Garbage collecting before multiprocessing a method...')
+    gc.collect()
     # Use multiprocessing to perform the evaluations
-    with Pool() as pool:
-        pickle.settings['recurse'] = False
-        outputs = pool.map(function, (arg for arg in inputs))
-        # Clean up
-        pool.clear()
+    pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
+    pickle.settings['recurse'] = False
+    # use tqdm to add a little progress notifier to estimate running time/etc
+    outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs), chunksize=chunksize),
+                             total=len(inputs)))
+    # Clean up
+    pool.terminate()
     del globals()['module_instance']
     return outputs
 
@@ -477,13 +488,12 @@ def multimap(function, inputs):
     Inputs:
         function    The function you want to execute
         inputs      A sequence of inputs that can be fed to the function one-at-a-time
-        nodes       The number of nodes you want to run across. Defaults to 1.
     Outputs:
         outputs     A list of the inputs mapped through the function
     '''
-    with Pool() as pool:
-        pickle.settings['recurse'] = False
-        # use tqdm to add a little progress notifier to estimate running time/etc
-        outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs)), total=len(inputs)))
-        pool.clear()
+    pool = Pool()
+    pickle.settings['recurse'] = False
+    # use tqdm to add a little progress notifier to estimate running time/etc
+    outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs)), total=len(inputs)))
+    pool.terminate()
     return outputs
