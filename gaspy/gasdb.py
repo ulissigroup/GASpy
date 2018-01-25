@@ -3,7 +3,7 @@
 import pdb  # noqa: F401
 import warnings
 from itertools import islice
-import pickle
+import cPickle as pickle
 from multiprocessing import Pool
 import glob
 import numpy as np
