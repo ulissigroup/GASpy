@@ -535,7 +535,7 @@ class SubmitToFW(luigi.Task):
                     print('We found more than one slab that matches the shift. Just submitting the first one.')
                     atoms = atoms_list[0]
                 elif len(atoms_list) == 0:
-                    raise Exception('We did not find any slab that matches the shift')
+                    raise Exception('We did not find any slab that matches the shift: ' + str(self.parameters))
                 elif len(atoms_list) == 1:
                     atoms = atoms_list[0]
                 name = {'shift': self.parameters['slab']['shift'],
