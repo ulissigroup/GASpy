@@ -433,7 +433,7 @@ def find_max_movement(atoms_initial, atoms_final):
     return np.max(Dlen)
 
 
-def map_method(instance, method, inputs, processes=32, maxtasksperchild=10, chunksize=10, **kwargs):
+def map_method(instance, method, inputs, processes=32, maxtasksperchild=1, chunksize=1, **kwargs):
     '''
     This function pools and maps methods of class instances. It does so by putting
     the class instance into the global space so that each worker can pull it.
@@ -450,9 +450,10 @@ def map_method(instance, method, inputs, processes=32, maxtasksperchild=10, chun
         inputs          A sequence of inputs that can be fed to the method one-at-a-time
         processes       The number of threads/processes you want to be using
         maxtaskperchild The maximum number of tasks that a child process may do before
-                        terminating (and therefore clearing its memory cache).
-        chunksize       How many chunks of processing you want to have each single
-                        iteration to do. Smaller chunks means more memory shuffling.
+                        terminating (and therefore clearing its memory cache to avoid
+                        memory overload).
+        chunksize       How many calculations you want to have each single processor do
+                        per task. Smaller chunks means more memory shuffling.
                         Bigger chunks means more RAM requirements.
         kwargs          Any arguments that you should be passing to the method
     Outputs:
