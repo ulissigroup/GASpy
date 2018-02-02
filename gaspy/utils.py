@@ -251,6 +251,7 @@ def fingerprint_atoms(atoms):
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
     vcf = VoronoiCoordFinder(struct, allow_pathological=True)
+    #pdb.set_trace()
     coordinated_atoms = vcf.get_coordinated_sites(len(atoms)-1, 0.8)
     # Create a list of symbols of the coordinations, remove uranium from the list, and
     # then turn the list into a single, human-readable string.
@@ -323,7 +324,7 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     formula = np.unique(slabAtoms.get_chemical_symbols())
     # Initialize the keys for "cn_el" [dict], which will hold the [list of int] coordination
     # numbers of each of atom in the bulk, with the key being the element. Coordination
-    # numbers of atoms that share an element with another atom in the bulk are addended to
+    # numbers of atoms that share an element with another atom in the bulk are appended to
     # each element's list.
     cn_el = {}
     for element in formula:
@@ -346,7 +347,6 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     mean_cn_el = {}
     min_cn_el = {}
     for element in formula:
-        #mean_cn_el[element] = float(sum(cn_el[element]))/len(cn_el[element])
         mean_cn_el[element] = sum(cn_el[element])/len(cn_el[element])
         min_cn_el[element] = np.min(cn_el[element])
 
@@ -359,11 +359,8 @@ def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
     plate_surf = []
     # For each atom in the slab, we calculate the coordination number and then determine whether
     # or not the atom is on the surface.
-
     for i, atom in enumerate(slab_struct):
         # "cn_surf" [list of floats] holds the coordination numbers of the atoms in the slab.
-        # Note that we use a tolerance of 0.2 instead of 0.1. This may improve the scripts
-        # ability to identify adsorption sites.
         cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.4)))
         # Given this atom's element, we fetch the mean coordination number of the same element,
         # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
@@ -397,11 +394,10 @@ def find_adsorption_sites(slabAtoms, bulkAtoms):
         sites       [list]  A list of [array]s, which contain the x-y-z coordinates
                             [floats] of the adsorptions sites.
     '''
+    # Create a class instance of `AdsorbateSiteFinder`, which will do the work for us
     slab_struct = _label_structure_with_surface(slabAtoms, bulkAtoms)
-    # Finally, we call "AdsorbateSiteFinder", which is a function in a branch of PyMatGen,
-    # to create "asf" [class]
     asf = AdsorbateSiteFinder(slab_struct)
-    # Then we use "asf" [class] to calculate "sites" [list of arrays of floats], which holds
+    # Calculate "sitedict" [dict of arrays of floats], which holds
     # the cartesion coordinates for each of the adsorption sites.
     sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
     # Some versions of PyMatGen provide an `all` key. If it's there, then just pull out
@@ -433,7 +429,55 @@ def find_max_movement(atoms_initial, atoms_final):
     return np.max(Dlen)
 
 
-def map_method(instance, method, inputs, processes=32, maxtasksperchild=1, chunksize=1, **kwargs):
+def multimap(function, inputs, chunked=False, processes=32,
+             maxtasksperchild=1, chunksize=1, n_calcs=None):
+    '''
+    This function is a wrapper to parallelize a function. Note that we set the pickling
+    recursion option to `False` to prevent passing along huge instances of objects,
+    which can bottleneck multiprocessing.
+
+    Inputs:
+        function        The function you want to execute
+        inputs          An iterable that yields proper arguments to the function
+        chunked         A boolean indicating whether your function expects single arguments
+                        or "chunked" iterables.
+        processes       The number of threads/processes you want to be using
+        maxtaskperchild The maximum number of tasks that a child process may do before
+                        terminating (and therefore clearing its memory cache to avoid
+                        memory overload).
+        chunksize       How many calculations you want to have each single processor do
+                        per task. Smaller chunks means more memory shuffling.
+                        Bigger chunks means more RAM requirements.
+        n_calcs         How many calculations you have. Only necessary for adding a
+                        percentage timer to the progress bar.
+    Outputs:
+        outputs     A list of the inputs mapped through the function
+    '''
+    # Collect garbage before we begin multiprocessing to make sure we don't pass things we don't
+    # need to
+    gc.collect()
+    pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
+
+    # We set pickle recursion to false so that we don't accidentally pass unneccessary information
+    # to each thread
+    pickle.settings['recurse'] = False
+
+    # Use multiprocessing to perform the calculations. We use imap instead of map so that
+    # we get an iterator, which we need for tqdm (the progress bar) to work.
+    if not chunked:
+        iterator = pool.imap(function, inputs, chunksize=chunksize)
+    # If our function expects chunks, then we have to unpack our inputs appropriately
+    else:
+        iterator = pool.imap(function, (list(arg) for arg in inputs), chunksize=chunksize)
+    outputs = list(tqdm.tqdm(iterator, total=n_calcs))
+
+    # Clean up and output
+    pool.terminate()
+    return outputs
+
+
+def map_method(instance, method, inputs, chunked=False, processes=32,
+               maxtasksperchild=1, chunksize=1, n_calcs=None, **kwargs):
     '''
     This function pools and maps methods of class instances. It does so by putting
     the class instance into the global space so that each worker can pull it.
@@ -447,7 +491,9 @@ def map_method(instance, method, inputs, processes=32, maxtasksperchild=1, chunk
     Inputs:
         instance        An instance of a class
         method          A string indicating the method of the class that you want to map
-        inputs          A sequence of inputs that can be fed to the method one-at-a-time
+        inputs          An iterable that yields proper arguments to the method
+        chunked         A boolean indicating whether your function expects single arguments
+                        or "chunked" iterables.
         processes       The number of threads/processes you want to be using
         maxtaskperchild The maximum number of tasks that a child process may do before
                         terminating (and therefore clearing its memory cache to avoid
@@ -455,46 +501,27 @@ def map_method(instance, method, inputs, processes=32, maxtasksperchild=1, chunk
         chunksize       How many calculations you want to have each single processor do
                         per task. Smaller chunks means more memory shuffling.
                         Bigger chunks means more RAM requirements.
+        n_calcs         How many calculations you have. Only necessary for adding a
+                        percentage timer to the progress bar.
         kwargs          Any arguments that you should be passing to the method
     Outputs:
         outputs     A list of the inputs mapped through the function
     '''
-    # Push the class instance to global space for process sharing. Then pull
-    # out the method we'll be pooling.
+    # Push the class instance to global space for process sharing.
     global module_instance
     module_instance = instance
+
+    # Full the method out of the class instance
     def function(arg):  # noqa: E306
         return getattr(module_instance, method)(arg, **kwargs)
 
-    print('Garbage collecting before multiprocessing a method...')
-    gc.collect()
-    # Use multiprocessing to perform the evaluations
-    pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
-    pickle.settings['recurse'] = False
-    # use tqdm to add a little progress notifier to estimate running time/etc
-    outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs), chunksize=chunksize),
-                             total=len(inputs)))
-    # Clean up
-    pool.terminate()
+    # Call the `multimap` function for the rest of the work
+    outputs = multimap(function, inputs, chunked=chunked,
+                       processes=processes,
+                       maxtasksperchild=maxtasksperchild,
+                       chunksize=chunksize,
+                       n_calcs=n_calcs)
+
+    # Clean up and output
     del globals()['module_instance']
-    return outputs
-
-
-def multimap(function, inputs):
-    '''
-    This function is a wrapper to parallelize a function. Note that we set the pickling
-    recursion option to `False` to prevent passing along huge instances of objects,
-    which can bottleneck multiprocessing.
-
-    Inputs:
-        function    The function you want to execute
-        inputs      A sequence of inputs that can be fed to the function one-at-a-time
-    Outputs:
-        outputs     A list of the inputs mapped through the function
-    '''
-    pool = Pool()
-    pickle.settings['recurse'] = False
-    # use tqdm to add a little progress notifier to estimate running time/etc
-    outputs = list(tqdm.tqdm(pool.imap(function, (arg for arg in inputs)), total=len(inputs)))
-    pool.terminate()
     return outputs

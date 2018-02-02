@@ -24,6 +24,21 @@ def get_catalog_client():
     return MongoDatabase(**kwargs)
 
 
+def get_catalog_client_readonly():
+    '''
+    This is the information for a read-only version of our `catalog` collection
+    in our vasp.mongo database. This is useful for pulling information more
+    quickly than normal while acknowledging that we will not be changing it.
+    '''
+    # Open the appropriate information from the RC file
+    kwargs = utils.read_rc()['catalog_client_readonly']
+    # Turn the port number into an integer
+    for key, value in kwargs.iteritems():
+        if key == 'port':
+            kwargs[key] = int(value)
+    return MongoDatabase(**kwargs)
+
+
 def get_atoms_client():
     ''' This is the information for the `atoms` collection in our vasp.mongo database '''
     # Open the appropriate information from the RC file
@@ -82,8 +97,6 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     Output:
         docs    Mongo docs; a list of dictionaries for each database entry
     '''
-
-
     if not fingerprints:
         fingerprints = defaults.fingerprints()
 
@@ -141,31 +154,13 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
         pipeline = [match, group]
     else:
         pipeline = [group]
-    # Get the particular collection from the mongo client's database
-    collection = getattr(client.db, collection_name)
-
-    # TODO:  Remove this part of the code and fix it the right way.
-    # We cache the catalog documents right now because this collection tends to break.
+    # Get the particular collection from the mongo client's database.
+    # We we're pulling the catalog, then get the read only version of the database
+    # so that we pull it even faster.
     if collection_name == 'catalog':
-        gasdb_path = utils.read_rc('gasdb_path')
-        cache_name = gasdb_path + '/pickles/' + str(hash(str(pipeline))) + '.pkl'
-        # Load the cache.
-        try:
-            print('Trying to open the catalog cache...')
-            with open(cache_name, 'rb') as f:
-                docs = pickle.load(f)
-            print('Opened!')
-            return docs
-        # If it's not there, then pull from Mongo and save it
-        except IOError:
-            print('Sike. Pulling it instead.')
-            cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
-            docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
-            if not docs:
-                warnings.warn('We did not find any matching documents', RuntimeWarning)
-            with open(cache_name, 'wb') as f:
-                pickle.dump(docs, f)
-            return docs
+        collection = getattr(get_catalog_client_readonly().db, collection_name)
+    else:
+        collection = getattr(client.db, collection_name)
 
     # Create the cursor. We set allowDiskUse=True to allow mongo to write to
     # temporary files, which it needs to do for large databases. We also
@@ -182,18 +177,19 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     return docs
 
 
-def hash_docs(docs, ignore_ads=False):
+def hash_docs(docs, ignore_ads=False, ignore_energy=True):
     '''
     This function helps convert the important characteristics of our systems into hashes
     so that we may sort through them more quickly. This is important to do when trying to
     compare entries in our two databases; it helps speed things up.
 
     Input:
-        docs        Mongo docs (list of dictionaries) that have been created using the
-                    gaspy.gasdb.get_docs function. Note that this is the unparsed version
-                    of mongo documents.
-        ignore_ads  A boolean that decides whether or not we hash the adsorbate.
-                    This is useful mainly for the "matching_ads" function.
+        docs            Mongo docs (list of dictionaries) that have been created using the
+                        gaspy.gasdb.get_docs function. Note that this is the unparsed version
+                        of mongo documents.
+        ignore_ads      A boolean that decides whether or not we hash the adsorbate.
+                        This is useful mainly for the "matching_ads" function.
+        ignore_energy   A boolean that decides whether or not we hash the energy.
     Output:
         systems     An ordered dictionary whose keys are hashes of the each doc in
                     `docs` and whose values are empty. This dictionary is intended
@@ -207,21 +203,52 @@ def hash_docs(docs, ignore_ads=False):
         for key in sorted(doc.keys()):
             # Ignore mongo ID, because that'll always cause things to hash differently
             if key != 'mongo_id':
-                # Ignore adsorbates if the user wants to, as per the argument
+                # Ignore adsorbates if the user wants to, as per the argument.
+                # Do the same for energy.
                 if not (ignore_ads and key == 'adsorbate_names'):
-                    # Round floats to increase chances of matching
-                    value = doc[key]
-                    if isinstance(value, float):
-                        value = round(value, 2)
+                    if not (ignore_energy and key == 'energy'):
+                        # Round floats to increase chances of matching
+                        value = doc[key]
+                        if isinstance(value, float):
+                            value = round(value, 2)
 
-                    # Note that we turn the values into strings explicitly, because some
-                    # fingerprint features may not be strings (e.g., list of miller indices).
-                    system += str(key + '=' + str(value) + '; ')
+                        # Note that we turn the values into strings explicitly, because some
+                        # fingerprint features may not be strings (e.g., list of miller indices).
+                        system += str(key + '=' + str(value) + '; ')
         return hash(system)
 
     # Hash with a progress bar
     systems = [hash_doc(doc) for doc in tqdm.tqdm(docs)]
     return systems
+
+
+def split_catalog(ads_docs, cat_docs):
+    '''
+    The same as `get_docs`, but with already-simulated entries filtered out
+
+    Inputs:
+        ads_docs    A list of docs coming from get_docs that correspond to the adsorption database
+        cat_docs    A list of docs coming from get_docs that correspond to the catalog database
+    Output:
+        sim_inds    A list of indices in cat_docs that have been simulation (match sites
+                    in ads_docs)
+        unsim_inds  A list of indices in cat_docs that have not been simulated (do not
+                    match sites in ads_docs)
+    '''
+    # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
+    print('Hashing adsorbates...')
+    ads_hashes = hash_docs(ads_docs)
+    print('Hashing catalog...')
+    cat_hashes = hash_docs(cat_docs)
+    unsim_hashes = set(cat_hashes)-set(ads_hashes)
+
+    # Perform the filtering while simultaneously populating the `docs` output.
+    print('Filtering by the hashes...')
+    unsim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
+                  if cat_hash in unsim_hashes]
+    sim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
+                if cat_hash not in unsim_hashes]
+    return set(sim_inds), set(unsim_inds)
 
 
 def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
@@ -261,18 +288,10 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     with get_catalog_client() as cat_client:
         cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
 
-    # Hash the docs so that we can filter out any items in the catalog
-    # that we have already relaxed.
-    print('Hashing adsorbates...')
-    ads_hashes = hash_docs(ads_docs)
-    print('Hashing catalog...')
-    cat_hashes = hash_docs(cat_docs)
-    unsim_hashes = set(cat_hashes)-set(ads_hashes)
-
-    # Perform the filtering while simultaneously populating the `docs` output.
-    print('Filtering out simulated catalog items...')
-    docs = [doc for doc, cat_hash in tqdm.tqdm(zip(cat_docs, cat_hashes))
-            if cat_hash in unsim_hashes]
+    # Use the `split_catalog` function to find the indices in `cat_docs` that correspond
+    # with item that we have not yet simulated. Then use that list to build the documents.
+    _, unsim_inds = split_catalog(ads_docs, cat_docs)
+    docs = [cat_docs[i] for i in unsim_inds]
     return docs
 
 

@@ -581,14 +581,6 @@ class SubmitToFW(luigi.Task):
                                          self.parameters['adsorption']['adsorbates'][0]['adsorption_site']]
                     else:
                         matching_docs = [doc for doc in fpd_structs]
-                #if len(matching_docs) == 0:
-                    #print('No docs matching the desired FP/Site!')
-                    #print('Desired sites: ')
-                    #pprint(str(self.parameters['adsorption']['adsorbates'][0]['fp']))
-                    #print('Available Sites: ')
-                    #pprint(fpd_structs)
-                    #pprint(self.input().fn)
-                    #pprint(self.parameters)
 
                 # If there is no adsorbate, then trim the matching_docs to the first doc we found.
                 # Otherwise, trim the matching_docs to `numtosubmit`, a user-specified value that
@@ -1082,9 +1074,6 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the
         # number of slab atoms
         adslabs = pickle.load(self.input()[0].open())
-        # slab = pickle.load(self.input()[1].open())
-        # expected_slab_atoms = len(slab[0]['atoms'])
-        # len(slabs[0]['atoms']['atoms'])*np.prod(eval(adslabs[0]['slabrepeat']))
 
         # Fingerprint each adslab
         for adslab in adslabs:

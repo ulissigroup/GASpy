@@ -34,5 +34,13 @@
         "password": "pw",
         "database": "database",
         "collection": "collection"
+        },
+    "catalog_client_readonly":{
+        "host": "host.name",
+        "port": "99999",
+        "user": "user",
+        "password": "pw",
+        "database": "database",
+        "collection": "collection"
         }
 }
