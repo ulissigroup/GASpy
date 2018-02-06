@@ -177,7 +177,7 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     return docs
 
 
-def hash_docs(docs, ignore_ads=False, ignore_energy=True):
+def hash_docs(docs, ignore_keys=None):
     '''
     This function helps convert the important characteristics of our systems into hashes
     so that we may sort through them more quickly. This is important to do when trying to
@@ -187,34 +187,38 @@ def hash_docs(docs, ignore_ads=False, ignore_energy=True):
         docs            Mongo docs (list of dictionaries) that have been created using the
                         gaspy.gasdb.get_docs function. Note that this is the unparsed version
                         of mongo documents.
-        ignore_ads      A boolean that decides whether or not we hash the adsorbate.
-                        This is useful mainly for the "matching_ads" function.
-        ignore_energy   A boolean that decides whether or not we hash the energy.
+        ignore_keys     A list of strings indicating the keys that you want to ignore
+                        when hashing.
     Output:
         systems     An ordered dictionary whose keys are hashes of the each doc in
                     `docs` and whose values are empty. This dictionary is intended
                     to be parsed alongside another `docs` object, which is why
                     it's ordered.
     '''
+    # Python doesn't do well with mutable default arguments. We define defaults like this
+    # to address that issue.
+    if not ignore_keys:
+        ignore_keys = []
+    # Add the mongo ID to the list of ignored keys, because that'll always yield a different
+    # hash. Then turn it into a set to speed up searching.
+    ignore_keys.append('mongo_id')
+    ignore_keys = set(ignore_keys)
+
     def hash_doc(doc):
         ''' Make a function that hashes one document so that we can monitor progress '''
         # `system` will be one long string of the fingerprints
         system = ''
         for key in sorted(doc.keys()):
-            # Ignore mongo ID, because that'll always cause things to hash differently
-            if key != 'mongo_id':
-                # Ignore adsorbates if the user wants to, as per the argument.
-                # Do the same for energy.
-                if not (ignore_ads and key == 'adsorbate_names'):
-                    if not (ignore_energy and key == 'energy'):
-                        # Round floats to increase chances of matching
-                        value = doc[key]
-                        if isinstance(value, float):
-                            value = round(value, 2)
+            # Skip this key if we want to ignore it
+            if key not in ignore_keys:
+                # Round floats to increase chances of matching
+                value = doc[key]
+                if isinstance(value, float):
+                    value = round(value, 2)
 
-                        # Note that we turn the values into strings explicitly, because some
-                        # fingerprint features may not be strings (e.g., list of miller indices).
-                        system += str(key + '=' + str(value) + '; ')
+                # Note that we turn the values into strings explicitly, because some
+                # fingerprint features may not be strings (e.g., list of miller indices).
+                system += str(key + '=' + str(value) + '; ')
         return hash(system)
 
     # Hash with a progress bar
@@ -224,7 +228,9 @@ def hash_docs(docs, ignore_ads=False, ignore_energy=True):
 
 def split_catalog(ads_docs, cat_docs):
     '''
-    The same as `get_docs`, but with already-simulated entries filtered out
+    The same as `get_docs`, but with already-simulated entries filtered out.
+    This is best done right after you pull the docs; don't modify them too much
+    unless you know what you're doing.
 
     Inputs:
         ads_docs    A list of docs coming from get_docs that correspond to the adsorption database
@@ -236,10 +242,12 @@ def split_catalog(ads_docs, cat_docs):
                     match sites in ads_docs)
     '''
     # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
+    # Note that we ignore any energy values in the adsorbate collection, because there are no
+    # energy values in the catalog.
     print('Hashing adsorbates...')
-    ads_hashes = hash_docs(ads_docs)
+    ads_hashes = hash_docs(ads_docs, ignore_keys=['energy', 'formula', 'shift', 'top'])
     print('Hashing catalog...')
-    cat_hashes = hash_docs(cat_docs)
+    cat_hashes = hash_docs(cat_docs, ignore_keys=['formula', 'shift', 'top'])
     unsim_hashes = set(cat_hashes)-set(ads_hashes)
 
     # Perform the filtering while simultaneously populating the `docs` output.
