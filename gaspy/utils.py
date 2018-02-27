@@ -251,7 +251,6 @@ def fingerprint_atoms(atoms):
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
     vcf = VoronoiCoordFinder(struct, allow_pathological=True)
-    #pdb.set_trace()
     coordinated_atoms = vcf.get_coordinated_sites(len(atoms)-1, 0.8)
     # Create a list of symbols of the coordinations, remove uranium from the list, and
     # then turn the list into a single, human-readable string.

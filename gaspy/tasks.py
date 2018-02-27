@@ -667,7 +667,7 @@ class GenerateBulk(luigi.Task):
 
     def run(self):
         # Connect to the Materials Project database
-        with MPRester("MGOdX3P4nI18eKvE") as m:
+        with MPRester(utils.read_rc()['matproj_api_key']) as m:
             # Pull out the PyMatGen structure and convert it to an ASE atoms object
             structure = m.get_structure_by_material_id(self.parameters['bulk']['mpid'])
             atoms = AseAtomsAdaptor.get_atoms(structure)
