@@ -41,7 +41,8 @@ def fingerprints(simulated=False):
                         'coordination': '$processed_data.fp_final.coordination',
                         'neighborcoord': '$processed_data.fp_final.neighborcoord',
                         'nextnearestcoordination': '$processed_data.fp_final.nextnearestcoordination',
-                        'energy': '$results.energy'}
+                        'energy': '$results.energy',
+                        'adsorbates': '$processed_data.calculation_info.adsorbate_names'}
     else:
         fingerprints = {'mongo_id': '$_id',
                         'mpid': '$processed_data.calculation_info.mpid',
