@@ -11,6 +11,7 @@ import tqdm
 from ase.io.png import write_png
 from vasp.mongo import MongoDatabase, mongo_doc_atoms
 from . import defaults, utils
+from bson.objectid import ObjectId
 
 
 def get_catalog_client():
@@ -310,8 +311,8 @@ del ads_dict['U']
 ads_to_run = ads_dict.keys()
 ads_to_run = ['CO', 'H']
 dump_dir = '/global/cscratch1/sd/zulissi/GASpy_DB/images/'
-databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/pkls/CO2RR_predictions_GP_around_TPOT_FEATURES_coordcount_neighbors_coordcounts_RESPONSES_energy_BLOCKS_adsorbate.pkl',
-                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/pkls/HER_predictions_GP_around_TPOT_FEATURES_coordcount_neighbors_coordcounts_RESPONSES_energy_BLOCKS_adsorbate.pkl'}
+databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/CO2RR_predictions_TPOT_FEATURES_coordcount_RESPONSES_energy_BLOCKS_adsorbate.pkl',
+                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/HER_predictions_TPOT_FEATURES_coordcount_RESPONSES_energy_BLOCKS_adsorbate.pkl '}
 
 
 def writeImages(input):
@@ -372,7 +373,7 @@ def MakeImages(todo, collection, completed_images):
         chunk = list(chunk)
         ids, adsorbates = zip(*chunk)
         uniques, inverse = np.unique(ids, return_inverse=True)
-        docs = np.array([collection.find_one({"_id": id}) for id in uniques])
+        docs = np.array([collection.find_one({"_id": ObjectId(id)}) for id in uniques])
         to_run = zip(docs[inverse], adsorbates)
         pool.map(writeImages, to_run)
         k += 1
@@ -388,9 +389,9 @@ def MakeImagesAdsorption(todo, collection, completed_images):
     for chunk in chunks(todo, 1000):
         ids = list(chunk)
         uniques, inverse = np.unique(ids, return_inverse=True)
-        docs = np.array([collection.find_one({"_id": id}) for id in uniques])
+        docs = np.array([collection.find_one({"_id": ObjectId(id)}) for id in uniques])
         to_run = docs[inverse]
-        pool.map(writeAdsorptionImages, to_run)
+        map(writeAdsorptionImages, to_run)
         k += 1
         print('%d/%d' % (k*len(to_run), len(todo)))
         completed_images += ids
