@@ -169,11 +169,17 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     # (otherwise we run into memory issues).
     print('Starting to pull documents...')
     cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
-    # Use the cursor to pull all of the information we want out of the database, and
-    # then parse it. Note that we forgo parsing if we did not find any documents.
+    # Use the cursor to pull all of the information we want out of the database.
     docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
     if not docs:
         warnings.warn('We did not find any matching documents', RuntimeWarning)
+
+    # If any document is missing fingerprints or has any empty keys, then delete it.
+    for doc in docs:
+        if set(fingerprints.keys()).issubset(doc.keys()) and all(doc.values()):
+            pass
+        else:
+            del doc
 
     return docs
 
