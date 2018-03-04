@@ -11,21 +11,21 @@ GASpy is written in Python, and we use various tools that enable us to begin DFT
 "arbitrarily large" sample pools.
 
 ## Tools
-ASE (https://wiki.fysik.dtu.dk/ase/about.html)
+[ASE](https://wiki.fysik.dtu.dk/ase/about.html)
 
-PyMatGen (http://pymatgen.org/, https://github.com/zulissi/pymatgen)
+[PyMatGen](http://pymatgen.org/)
 
-Luigi (https://github.com/spotify/luigi)
+[Luigi](https://github.com/spotify/luigi)
 
-FireWorks (https://pythonhosted.org/FireWorks/index.html)
+[FireWorks](https://pythonhosted.org/FireWorks/index.html)
 
-VASP (https://www.vasp.at/index.php/about-vasp/59-about-vasp)
+[VASP](https://www.vasp.at/index.php/about-vasp/59-about-vasp)
 
-VASP.py (https://github.com/jkitchin/vasp)
+[VASP.py](https://github.com/jkitchin/vasp)
 
-Materials Project (https://materialsproject.org/)
+[Materials Project](https://materialsproject.org/)
 
-MongoDB (https://www.mongodb.com/)
+[MongoDB](https://www.mongodb.com/)
 
 ## Infrastructure
 We created various Python classes (AKA "tasks") to automate adsorption energy calculations;
@@ -47,7 +47,7 @@ used in tasks, where appropriate. For example:  `gaspy.gasdb.get_docs` is useful
 pulling mongo documents from our database.
 
 # Use
-We recommend using submodules (https://git-scm.com/docs/git-mv) to create/execute your own custom
+We recommend using [submodules](https://git-scm.com/docs/git-submodule) to create/execute your own custom
 tasks or to analyze data that is created by GASpy. If you are interested in seeing a submodule but
 do not have access, simply request access from a GASpy owner.
 
