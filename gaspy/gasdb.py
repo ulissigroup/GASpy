@@ -317,8 +317,8 @@ del ads_dict['U']
 ads_to_run = ads_dict.keys()
 ads_to_run = ['CO', 'H']
 dump_dir = '/global/cscratch1/sd/zulissi/GASpy_DB/images/'
-databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/CO2RR_predictions_TPOT_FEATURES_coordcount_RESPONSES_energy_BLOCKS_adsorbate.pkl',
-                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/HER_predictions_TPOT_FEATURES_coordcount_RESPONSES_energy_BLOCKS_adsorbate.pkl '}
+databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/CO2RR_predictions_TPOT_FEATURES_coordatoms_chemfp0_neighbors_chemfp0_RESPONSES_energy_BLOCKS_adsorbate.pkl',
+                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/HER_predictions_TPOT_FEATURES_coordatoms_chemfp0_neighbors_chemfp0_RESPONSES_energy_BLOCKS_adsorbate.pkl'}
 
 
 def writeImages(input):
