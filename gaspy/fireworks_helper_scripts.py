@@ -44,7 +44,7 @@ def running_fireworks(name_dict, launchpad):
     return fw_list
 
 
-def make_firework(atoms, fw_name, vasp_setngs, max_atoms=50, max_miller=2):
+def make_firework(atoms, fw_name, vasp_setngs, max_atoms=80, max_miller=2):
     '''
     This function makes a simple vasp relaxation firework
     atoms       atoms object to relax
