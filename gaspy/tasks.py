@@ -932,6 +932,14 @@ class GenerateAdSlabs(luigi.Task):
             # keeps the constraints of the first atoms object).
             del slab[-1]
             ads.translate(ads_pos)
+
+            # If there is a hookean constraining the adsorbate to a local position, we need to adjust
+            # it based on ads_pos. We only do this for hookean constraints fixed to a point
+            for constraint in ads.constraints:
+                dict_repr = constraint.todict()
+                if dict_repr['name'] == 'Hookean' and constraint._type == 'point':
+                    constraint.origin += ads_pos
+
             adslab = ads + slab
             adslab.cell = slab.cell
             adslab.pbc = [True, True, True]
