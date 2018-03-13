@@ -111,7 +111,7 @@ def gas_parameters(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings='beef-vdw', encut=500., max_atoms=50):
+def bulk_parameters(mpid, settings='beef-vdw', encut=500., max_atoms=80):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
