@@ -226,6 +226,15 @@ def adsorbates_dict():
     ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
                         ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
     adsorbates['OOH'] = ooh
+    # Below is for CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
+    # Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure is H-C-O
+    cho = Atoms('CHO', positions=[[0., 0., 1.],
+                                  [-0.94, 0.2, 1.7],  # position of H
+                                  [0.986, 0.6, 1.8]])  # position of O
+    cho.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),
+                        # Bind CH, initially used k=7, lowered to 5
+                        ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
+    adsorbates['CHO'] = cho
 
     # below is for COH, assumed C binds to surface (index 0), O (index 1), and H(index 2)
     # trying to apply Hookean so that CH bound doesn't dissociate

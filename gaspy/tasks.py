@@ -1347,7 +1347,7 @@ class EnumerateAlloys(luigi.WrapperTask):
         for facets in reversed(all_miller):
             for facet in facets:
                 task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                 bulk=defaults.bulk_parameters(facet[0]),
+                                                                 bulk=defaults.bulk_parameters(facet[0], max_atoms = 50),
                                                                  slab=defaults.slab_parameters(facet[1], True, 0),
                                                                  gas=defaults.gas_parameters('CO'),
                                                                  adsorption=defaults.adsorption_parameters('U',
