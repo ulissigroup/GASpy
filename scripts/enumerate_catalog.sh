@@ -21,9 +21,9 @@ export OMP_NUM_THREADS=1
 
 PYTHONPATH=$PYTHONPATH luigi \
     --module gaspy.tasks EnumerateAlloys \
-    --max-to-submit 1000 \
+    --max-to-submit 3000 \
     --max-index 2 \
-    --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As", "Se", "Ru", "Pb", "S", "Nb", "Ca", "Na"]' \
+    --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As",  "Ru", "Pb", "Nb", "Ca", "Na"]' \
     --scheduler-host $LUIGI_PORT \
     --workers=32 \
     --log-level=WARNING \
