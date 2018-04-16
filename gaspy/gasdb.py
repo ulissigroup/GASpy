@@ -397,7 +397,7 @@ def MakeImagesAdsorption(todo, collection, completed_images):
         uniques, inverse = np.unique(ids, return_inverse=True)
         docs = np.array([collection.find_one({"_id": ObjectId(id)}) for id in uniques])
         to_run = docs[inverse]
-        map(writeAdsorptionImages, to_run)
+        pool.map(writeAdsorptionImages, to_run)
         k += 1
         print('%d/%d' % (k*len(to_run), len(todo)))
         completed_images += ids
