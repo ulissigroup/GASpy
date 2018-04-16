@@ -61,17 +61,49 @@ class UpdateAllDB(luigi.WrapperTask):
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
-        docs = gasdb.get_atoms_client().find({'type': 'slab+adsorbate'})
+        ads_docs = gasdb.get_atoms_client().find({'type': 'slab+adsorbate'})
+        surface_energy_docs = list(gasdb.get_atoms_client().find({'type': 'slab_surface_energy'}))
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.get_adsorption_client() as adsorption_client:
             fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
         fwids = dict.fromkeys(fwids)
 
+        with gasdb.get_surface_energy_client() as surface_energy_client:
+            surface_fwids = [doc['processed_data']['FW_info'].values() for doc in surface_energy_client.find()]
+        surface_fwids = dict.fromkeys([item for sublist in surface_fwids for item in sublist])
+
         # For each adsorbate/configuration, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
+
         i = 0
-        for doc in docs:
+        for doc in surface_energy_docs:
+            if doc['fwid'] not in surface_fwids:
+                mpid = doc['fwname']['mpid']
+                miller = doc['fwname']['miller']
+                shift = doc['fwname']['shift']
+                keys = ['gga', 'encut', 'zab_vdw', 'lbeefens', 'luse_vdw', 'pp', 'pp_version']
+                settings = OrderedDict()
+                for key in keys:
+                    if key in doc['fwname']['vasp_settings']:
+                        settings[key] = doc['fwname']['vasp_settings'][key]
+                # Create the nested dictionary of information that we will store in the Aux DB
+                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings, max_atoms = 110),
+                              'slab': defaults.slab_parameters(miller=miller,
+                                                               shift=shift,
+                                                               top=True,
+                                                               settings=settings)} 
+                #parameters['slab']['vasp_settings']=doc['fwname']['vasp_settings']
+                parameters['slab']['slab_surface_energy_num_layers']=3
+
+                i += 1
+                if i >= self.max_processes:
+                    print('Reached the maximum number of processes, %s' % self.max_processes)
+                    break
+
+                yield DumpToSurfaceEnergyDB(parameters)
+
+        for doc in ads_docs:
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != ''):
@@ -104,7 +136,7 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 # If we've hit the maxmum number of processes, flag and stop
                 i += 1
-                if i == self.max_processes:
+                if i >= self.max_processes:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
                     break
 
@@ -186,6 +218,9 @@ class DumpToAuxDB(luigi.Task):
                                  'name.shift': {'$exists': True}}) + \
                 lpad.get_fw_ids({'state': 'COMPLETED',
                                  'name.calculation_type': 'slab+adsorbate optimization',
+                                 'name.shift': {'$exists': True}})+ \
+                lpad.get_fw_ids({'state': 'COMPLETED',
+                                 'name.calculation_type': 'slab_surface_energy optimization',
                                  'name.shift': {'$exists': True}})
 
             # For each fireworks object, turn the results into a mongo doc so that we can
@@ -228,6 +263,8 @@ class DumpToAuxDB(luigi.Task):
                         doc['type'] = 'gas'
                     elif fw.name['calculation_type'] == 'slab optimization':
                         doc['type'] = 'slab'
+                    elif fw.name['calculation_type'] == 'slab_surface_energy optimization':
+                        doc['type'] = 'slab_surface_energy'
                     elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                         doc['type'] = 'slab+adsorbate'
 
@@ -425,6 +462,16 @@ class SubmitToFW(luigi.Task):
                 if key not in ['isym']:
                     search_strings['fwname.vasp_settings.%s' % key] = \
                         self.parameters['slab']['vasp_settings'][key]
+        elif self.calctype == 'slab_surface_energy':
+            search_strings = {'type': 'slab_surface_energy',
+                              'fwname.miller': list(self.parameters['slab']['miller']),
+                              'fwname.num_slab_atoms': self.parameters['slab']['natoms'],
+                              'fwname.shift': self.parameters['slab']['shift'],
+                              'fwname.mpid': self.parameters['bulk']['mpid']}
+            for key in self.parameters['slab']['vasp_settings']:
+                if key not in ['isym']:
+                    search_strings['fwname.vasp_settings.%s' % key] = \
+                        self.parameters['slab']['vasp_settings'][key]
         elif self.calctype == 'slab+adsorbate':
             search_strings = {'type': 'slab+adsorbate',
                               'fwname.miller': list(self.parameters['slab']['miller']),
@@ -448,12 +495,21 @@ class SubmitToFW(luigi.Task):
         # Grab all of the matching entries in the Auxiliary database
         with gasdb.get_atoms_client() as atoms_client:
             self.matching_doc = list(atoms_client.find(search_strings))
+      
         #print('Search string:  %s', % search_strings)
 
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
         if len(self.matching_doc) == 0:
             if self.calctype == 'slab':
+                return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
+                                                  slab=self.parameters['slab'])),
+                        # We are also vaing the unrelaxed slabs just in case. We can delete if
+                        # we can find shifts successfully.
+                        GenerateSlabs(OrderedDict(unrelaxed=True,
+                                                  bulk=self.parameters['bulk'],
+                                                  slab=self.parameters['slab']))]
+            if self.calctype == 'slab_surface_energy':
                 return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
                         # We are also vaing the unrelaxed slabs just in case. We can delete if
@@ -550,7 +606,35 @@ class SubmitToFW(luigi.Task):
                                                        self.parameters['slab']['vasp_settings'],
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
-
+            # A way to append `tosubmit`, but specialized for slab relaxations
+            if self.calctype == 'slab_surface_energy':
+                slab_docs = pickle.load(self.input()[0].open())
+                atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
+                              if float(np.round(slab_doc['tags']['shift'], 2)) ==
+                              float(np.round(self.parameters['slab']['shift'], 2))]
+                if len(atoms_list) > 0:
+                    #raise Exception('We found more than one slab that matches the shift')
+                    #min_eng=np.argmin([atoms.get_potential_energy() for atoms in atoms_list])
+                    #atoms=atoms_list[min_eng]
+                    print('We found more than one slab that matches the shift. Just submitting the first one.')
+                    atoms = atoms_list[0]
+                elif len(atoms_list) == 0:
+                    raise Exception('We did not find any slab that matches the shift: ' + str(self.parameters))
+                elif len(atoms_list) == 1:
+                    atoms = atoms_list[0]
+                name = {'shift': self.parameters['slab']['shift'],
+                        'mpid': self.parameters['bulk']['mpid'],
+                        'miller': self.parameters['slab']['miller'],
+                        'vasp_settings': self.parameters['slab']['vasp_settings'],
+                        'calculation_type': 'slab_surface_energy optimization',
+                        'num_slab_atoms': len(atoms)}
+                atoms.constraints=[]
+                atoms = utils.constrain_slab(atoms, symmetric=True)
+                if len(fwhs.running_fireworks(name, launchpad)) == 0:
+                    tosubmit.append(fwhs.make_firework(atoms, name,
+                                                       self.parameters['slab']['vasp_settings'],
+                                                       max_atoms=self.parameters['bulk']['max_atoms'],
+                                                       max_miller=self.parameters['slab']['max_miller']))
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
                 fpd_structs = pickle.load(self.input().open())
@@ -1285,3 +1369,183 @@ class EnumerateAlloys(luigi.WrapperTask):
         #            yield t
         #            if submitted > self.max_to_submit:
         #                return
+
+class CalculateSlabSurfaceEnergy(luigi.Task):
+    parameters = luigi.DictParameter()
+
+    def requires(self):
+        # define bulk
+
+        #check if bulk exists, and if so pull it. if not require it
+
+        bulk_task = SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
+        if not(bulk_task.output().exists()):
+            bulk_task.requires()
+            bulk_task.run()
+        # Preparation work with ASE and PyMatGen before we start creating the slabs
+        bulk_doc = pickle.load(bulk_task.output().open())[0]
+
+        # Pull out the fwid of the relaxed bulk (if there is one)
+        if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
+            bulk_fwid = bulk_doc['fwid']
+        else:
+            bulk_fwid = None
+        bulk = mongo_doc_atoms(bulk_doc)
+
+        structure = AseAtomsAdaptor.get_structure(bulk)
+        sga = SpacegroupAnalyzer(structure, symprec=0.1)
+        structure = sga.get_conventional_standard_structure()
+        slab_generate_settings = copy.deepcopy(self.parameters['slab']['slab_generate_settings'])
+        del slab_generate_settings['min_vacuum_size']
+        del slab_generate_settings['min_slab_size']
+        gen = SlabGenerator(structure,
+                            self.parameters['slab']['miller'],
+                            min_vacuum_size=0.,
+                            min_slab_size=0.,**slab_generate_settings)
+        
+        #get the minimum depth slab cut
+        #slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
+
+        h = gen._proj_height
+        min_slabs = int(np.ceil(self.parameters['slab']['slab_generate_settings']['min_slab_size']/h))
+        
+        req_list = []
+        for nslabs in range(min_slabs,min_slabs+int(self.parameters['slab']['slab_surface_energy_num_layers'])):
+            cur_min_slab_size = h*nslabs
+            gen = SlabGenerator(structure,
+                            self.parameters['slab']['miller'],
+                            min_vacuum_size=self.parameters['slab']['slab_generate_settings']['min_vacuum_size'],
+                            min_slab_size=cur_min_slab_size,**slab_generate_settings)
+            gen.min_slab_size = cur_min_slab_size
+            slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
+            param_to_submit = copy.deepcopy(dict(self.parameters))
+            param_to_submit['type'] = 'slab_surface_energy'
+            param_to_submit['slab']['natoms'] = len(slab)
+            if len(slab)>80:
+                print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'%
+                  (self.parameters['bulk']['mpid'],self.parameters['slab']['miller'], self.parameters['slab']['shift']))
+
+            del param_to_submit['slab']['top']
+            param_to_submit['slab']['slab_generate_settings']['min_slab_size'] = cur_min_slab_size
+            req_list.append(SubmitToFW(calctype = 'slab_surface_energy', parameters = copy.deepcopy(param_to_submit)))
+
+        return req_list
+
+    def run(self):
+        requirements = self.input()
+        def load_atoms(req):
+            doc = pickle.load(req.open())[0]
+            return mongo_doc_atoms(doc)
+
+        doc_list = [pickle.load(req.open())[0] for req in requirements]
+        atoms_list = [mongo_doc_atoms(doc) for doc in doc_list]
+
+        number_atoms = [len(atoms) for atoms in atoms_list]
+        if np.max(number_atoms)>80:
+            print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'% 
+              (self.parameters['bulk']['mpid'],self.parameters['slab']['miller'], self.parameters['slab']['shift']))
+        energies = [atoms.get_potential_energy() for atoms in atoms_list]
+        energies = energies/np.linalg.norm(np.cross(atoms_list[0].cell[0],atoms_list[0].cell[1]))
+        energies = energies/2
+        import statsmodels.api as sm
+        def OLSfit(X,y):
+            data = sm.add_constant(X)
+            mod = sm.OLS(y, data)
+            res = mod.fit()
+            return res.params[0], res.bse[0]
+        fit = OLSfit(number_atoms,energies)
+        towrite = copy.deepcopy(doc_list)
+        towrite[0]['processed_data']={}
+        towrite[0]['processed_data']['FW_info']={}
+        for i in range(len(atoms_list)):
+             towrite[i]['atoms']=atoms_list[i]
+             towrite[0]['processed_data']['FW_info'][str(len(atoms_list[i]))]=doc_list[i]['fwid']
+        towrite[0]['processed_data']['surface_energy_info']={}
+        towrite[0]['processed_data']['surface_energy_info']['intercept'] = fit[0]
+        towrite[0]['processed_data']['surface_energy_info']['intercept_uncertainty'] = fit[1]
+        towrite[0]['processed_data']['surface_energy_info']['num_points'] = len(atoms_list)
+        towrite[0]['processed_data']['surface_energy_info']['energies'] = [atoms.get_potential_energy() for atoms in atoms_list]
+        towrite[0]['processed_data']['surface_energy_info']['num_atoms'] = [len(atoms) for atoms in atoms_list]
+  
+        with self.output().temporary_path() as self.temp_output_path:
+            pickle.dump(towrite, open(self.temp_output_path, 'w'))
+
+    def output(self):
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+
+
+class DumpFWToTraj(luigi.Task):
+    '''
+    Given a FWID, this task will dump a traj file into GASdb/FW_structures for viewing/debugging
+    purposes
+    '''
+    fwid = luigi.IntParameter()
+
+    def run(self):
+        lpad = fwhs.get_launchpad()
+        fw = lpad.get_fw_by_id(self.fwid)
+        atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+
+        # Write a blank token file to indicate this was done so that the entry is not written again
+        with self.output().temporary_path() as self.temp_output_path:
+            with open(self.temp_output_path, 'w') as fhandle:
+                fhandle.write(atoms_hex.decode('hex'))
+
+    def output(self):
+        return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj' % (self.fwid))
+
+
+class DumpToSurfaceEnergyDB(luigi.Task):
+    ''' This class dumps the adsorption energies from our pickles to our tertiary databases '''
+    parameters = luigi.DictParameter()
+
+    def requires(self):
+        '''
+        We want the lowest energy structure (with adsorption energy), the fingerprinted structure,
+        and the bulk structure
+        '''
+        return [CalculateSlabSurfaceEnergy(self.parameters),
+                SubmitToFW(calctype='bulk',
+                           parameters={'bulk': self.parameters['bulk']})]
+
+    def run(self):
+        # Load the structures
+        surface_energy_pkl = pickle.load(self.input()[0].open())
+        # Extract the atoms object
+        surface_energy_atoms = surface_energy_pkl[0]['atoms']
+        # Get the lowest energy bulk structure
+        bulk = pickle.load(self.input()[1].open())
+        bulkmin = np.argmin(map(lambda x: x['results']['energy'], bulk))
+ 
+        
+        max_surface_movement = [utils.find_max_movement(doc['atoms'], mongo_doc_atoms(doc['initial_configuration']))
+                                  for doc in surface_energy_pkl]
+
+        # Make a dictionary of tags to add to the database
+        processed_data = {'vasp_settings': self.parameters['slab']['vasp_settings'],
+                          'calculation_info': {'type': 'slab_surface_energy',
+                                               'formula': surface_energy_atoms.get_chemical_formula('hill'),
+                                               'mpid': self.parameters['bulk']['mpid'],
+                                               'miller': self.parameters['slab']['miller'],
+                                               'num_slab_atoms':  len(surface_energy_atoms),
+                                               'relaxed': True,
+                                               'shift': surface_energy_pkl[0]['fwname']['shift']},
+                          'FW_info': surface_energy_pkl[0]['processed_data']['FW_info'],
+                          'surface_energy_info': surface_energy_pkl[0]['processed_data']['surface_energy_info'],
+                          'movement_data': {'max_surface_movement': max_surface_movement}}
+        processed_data['FW_info']['bulk'] = bulk[bulkmin]['fwid']
+        surface_energy_pkl_slab = mongo_doc(surface_energy_atoms)
+        surface_energy_pkl_slab['initial_configuration'] = surface_energy_pkl[0]['initial_configuration']
+        surface_energy_pkl_slab['processed_data'] = processed_data
+        # Write the entry into the database
+
+        with gasdb.get_surface_energy_client() as surface_energy_client:
+            surface_energy_client.write(surface_energy_pkl_slab)
+
+        # Write a blank token file to indicate this was done so that the entry is not written again
+        with self.output().temporary_path() as self.temp_output_path:
+            with open(self.temp_output_path, 'w') as fhandle:
+                fhandle.write(' ')
+
+    def output(self):
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
