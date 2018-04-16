@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script will first execute `lpad admin maintain` to clean up some fizzled fireworks.
-# It will also delete any broken fireworks.
+# It will also delete any broken fireworks and remove duplicate entries
 
 # Load the launchpad and mongo information
 source ~/GASpy/.load_env.sh
@@ -26,3 +26,6 @@ while [[ ! -z "$our_error" ]]; do
     error=$(lpad -l $LPAD_PATH admin maintain 2>&1 >/dev/null)
     our_error=$(echo $error | grep "detect_lostruns")
 done
+
+# Now remove duplicate entries from GASdb
+python -c "from gaspy.gasdb import remove_duplicates; remove_duplicates()"

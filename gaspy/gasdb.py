@@ -60,6 +60,17 @@ def get_surface_energy_client():
             kwargs[key] = int(value)
     return MongoDatabase(**kwargs)
 
+def get_surface_energy_client():
+    ''' This is the information for the `atoms` collection in our vasp.mongo database '''
+    # Open the appropriate information from the RC file
+    kwargs = utils.read_rc()['surface_energy_client']
+    # Turn the port number into an integer
+    for key, value in kwargs.iteritems():
+        if key == 'port':
+            kwargs[key] = int(value)
+    return MongoDatabase(**kwargs)
+
+
 def get_adsorption_client():
     ''' This is the information for the `adsorption` collection in our vasp.mongo database '''
     # Open the appropriate information from the RC file
@@ -319,7 +330,48 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
     return docs
 
 
-# TODO:  Commend and clean up everything below here
+def remove_duplicates():
+    '''
+    This function will find duplicate entries in the adsorption and atoms collections
+    and delete them.
+    '''
+    # Get the FW info for everything in adsorption DB
+    ads_client = get_adsorption_client()
+    ads_docs = list(ads_client.db.adsorption.find({}, {'processed_data.FW_info.slab+adsorbate': 1, '_id': 1}))
+
+    # Find all of the unique slab+adsorbate FW ID's
+    uniques, inverse, counts = np.unique([doc['processed_data']['FW_info']['slab+adsorbate']
+                                          for doc in ads_docs], return_counts=True, return_inverse=True)
+
+    # For each unique FW ID, see if there is more than one entry.
+    # If so, remove all but the first instance
+    for ind, count in enumerate(counts):
+        if count > 1:
+            matching = np.where(inverse == ind)[0]
+            print(matching)
+            for match in matching[1:]:
+                ads_client.db.adsorption.remove({'_id': ads_docs[match]['_id']})
+
+
+    # Do it all again, but for the AuxDB (AKA the "atoms" collection)
+    atoms_client = get_atoms_client()
+    atoms_docs = list(atoms_client.db.atoms.find({}, {'processed_data.fwid+adsorbate': 1, '_id': 1}))
+
+    # Find all of the unique slab+adsorbate FW ID's
+    uniques, inverse, counts = np.unique([doc['processed_data']['FW_info']['slab+adsorbate']
+                                          for doc in atoms_docs], return_counts=True, return_inverse=True)
+
+    # For each unique FW ID, see if there is more than one entry.
+    # If so, remove all but the first instance
+    for ind, count in enumerate(counts):
+        if count > 1:
+            matching = np.where(inverse == ind)[0]
+            print(matching)
+            for match in matching[1:]:
+                atoms_client.db.atoms.remove({'_id': atoms_docs[match]['_id']})
+
+
+# TODO:  Comment and clean up everything below here
 ads_dict = defaults.adsorbates_dict()
 del ads_dict['']
 del ads_dict['U']
