@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # This script will first execute `lpad admin maintain` to clean up some fizzled fireworks.
 # It will also delete any broken fireworks and remove duplicate entries
 

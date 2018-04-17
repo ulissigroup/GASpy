@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/sh -l
 
 # This function should be used to clear "bad" things from our databases.
 # Input:
