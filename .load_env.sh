@@ -3,6 +3,7 @@
 module load python
 
 # Get information from the .gaspyrc.json file
+export GASPY_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gaspy_path"))')"
 export GASDB_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gasdb_path"))')"
 export CONDA_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("conda_path"))')"
 export LUIGI_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("luigi_port"))')"
