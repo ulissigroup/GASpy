@@ -29,6 +29,7 @@ import luigi
 from vasp.mongo import mongo_doc, mongo_doc_atoms
 from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
+import statsmodels.api as sm
 
 # Get the path for the GASdb folder location from the gaspy config file
 GASdb_path = utils.read_rc()['gasdb_path']
@@ -73,12 +74,13 @@ class UpdateAllDB(luigi.WrapperTask):
             surface_fwids = [doc['processed_data']['FW_info'].values() for doc in surface_energy_client.find()]
         surface_fwids = dict.fromkeys([item for sublist in surface_fwids for item in sublist])
 
-        # For each adsorbate/configuration, make a task to write the results to the output
+        # For each adsorbate/configuration and surface energy calc, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
-
         i = 0
         for doc in surface_energy_docs:
+            # Only make the task if the fireworks task is not already in the database
             if doc['fwid'] not in surface_fwids:
+                # Pull information from the Aux DB
                 mpid = doc['fwname']['mpid']
                 miller = doc['fwname']['miller']
                 shift = doc['fwname']['shift']
@@ -93,7 +95,8 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                shift=shift,
                                                                top=True,
                                                                settings=settings)} 
-                #parameters['slab']['vasp_settings']=doc['fwname']['vasp_settings']
+
+                # default to three points needed for the linear interpolation fit
                 parameters['slab']['slab_surface_energy_num_layers']=3
 
                 i += 1
@@ -463,6 +466,8 @@ class SubmitToFW(luigi.Task):
                     search_strings['fwname.vasp_settings.%s' % key] = \
                         self.parameters['slab']['vasp_settings'][key]
         elif self.calctype == 'slab_surface_energy':
+            #pretty much identical to "slab" above, except no top since top/bottom 
+            # surfaces are both relaxed
             search_strings = {'type': 'slab_surface_energy',
                               'fwname.miller': list(self.parameters['slab']['miller']),
                               'fwname.num_slab_atoms': self.parameters['slab']['natoms'],
@@ -606,7 +611,10 @@ class SubmitToFW(luigi.Task):
                                                        self.parameters['slab']['vasp_settings'],
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
-            # A way to append `tosubmit`, but specialized for slab relaxations
+            # A way to append `tosubmit`, but specialized for surface energy calculations. Pretty much
+            # identical to slab calcs, but different calculation type to keep them seperate and using
+            # symmetric slab constraints (keep top and bottom layers free. For that reason, there is 
+            # thus not top
             if self.calctype == 'slab_surface_energy':
                 slab_docs = pickle.load(self.input()[0].open())
                 atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
@@ -1371,17 +1379,29 @@ class EnumerateAlloys(luigi.WrapperTask):
         #                return
 
 class CalculateSlabSurfaceEnergy(luigi.Task):
+    '''
+    This function attempts to calculate the surface energy of a slab using the 
+    linear interpolation method. First, we have to find the minimum depth of the slab
+    and then figure out which three slabs we want to ask for. This logic makes the requires
+    function a little more complicated than it otherwise would be
+    '''
     parameters = luigi.DictParameter()
 
     def requires(self):
-        # define bulk
 
-        #check if bulk exists, and if so pull it. if not require it
-
+        #check if bulk exists, and if so pull it. 
         bulk_task = SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
         if not(bulk_task.output().exists()):
             bulk_task.requires()
             bulk_task.run()
+
+            #If running the SubmitToFW task does not yield an output, then we probably
+            # need to actually require it and let it work through more logic to generate
+            # the necessary bulk structure. We will have to re-run this function after the 
+            # the bulk is generated to get the surface energy calculations submitted
+            if not(bulk_task.output().exists):
+                return bulk_task
+
         # Preparation work with ASE and PyMatGen before we start creating the slabs
         bulk_doc = pickle.load(bulk_task.output().open())[0]
 
@@ -1390,8 +1410,9 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
             bulk_fwid = bulk_doc['fwid']
         else:
             bulk_fwid = None
-        bulk = mongo_doc_atoms(bulk_doc)
 
+        #Generate the minimum slab depth slab we can
+        bulk = mongo_doc_atoms(bulk_doc)
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
@@ -1403,12 +1424,14 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
                             min_vacuum_size=0.,
                             min_slab_size=0.,**slab_generate_settings)
         
-        #get the minimum depth slab cut
+        #Get the minimum depth slab cut
         #slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
 
+        #Get the number of layers necessary to satisfy the required min_slab_size
         h = gen._proj_height
         min_slabs = int(np.ceil(self.parameters['slab']['slab_generate_settings']['min_slab_size']/h))
         
+        # generate the necessary slabs (base thickness + some number of additional layers)
         req_list = []
         for nslabs in range(min_slabs,min_slabs+int(self.parameters['slab']['slab_surface_energy_num_layers'])):
             cur_min_slab_size = h*nslabs
@@ -1421,39 +1444,50 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
             param_to_submit = copy.deepcopy(dict(self.parameters))
             param_to_submit['type'] = 'slab_surface_energy'
             param_to_submit['slab']['natoms'] = len(slab)
+
+            #Print a warning if the slab is thicker than 80, which means it may not run
             if len(slab)>80:
                 print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'%
                   (self.parameters['bulk']['mpid'],self.parameters['slab']['miller'], self.parameters['slab']['shift']))
 
+            #Generate the SubmitToFW that will trigger the necessary calculation
             del param_to_submit['slab']['top']
             param_to_submit['slab']['slab_generate_settings']['min_slab_size'] = cur_min_slab_size
             req_list.append(SubmitToFW(calctype = 'slab_surface_energy', parameters = copy.deepcopy(param_to_submit)))
 
+        #Submit all of the the required slabs
         return req_list
 
     def run(self):
+
+        #Load all of the slabs and turn them into atoms objects
         requirements = self.input()
         def load_atoms(req):
             doc = pickle.load(req.open())[0]
             return mongo_doc_atoms(doc)
-
         doc_list = [pickle.load(req.open())[0] for req in requirements]
         atoms_list = [mongo_doc_atoms(doc) for doc in doc_list]
 
+        #Pull the number of atoms of each slab
         number_atoms = [len(atoms) for atoms in atoms_list]
-        if np.max(number_atoms)>80:
-            print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'% 
-              (self.parameters['bulk']['mpid'],self.parameters['slab']['miller'], self.parameters['slab']['shift']))
+        
+        #Get the energy per cross sectional area for each slab (averaged for top/bottom)
         energies = [atoms.get_potential_energy() for atoms in atoms_list]
         energies = energies/np.linalg.norm(np.cross(atoms_list[0].cell[0],atoms_list[0].cell[1]))
         energies = energies/2
-        import statsmodels.api as sm
+
+        #Define how to do a linear regression using statsmodel
         def OLSfit(X,y):
             data = sm.add_constant(X)
             mod = sm.OLS(y, data)
             res = mod.fit()
+            #Return the intercept and the error estimate on the intercept
             return res.params[0], res.bse[0]
+
+        #Do the linear fit
         fit = OLSfit(number_atoms,energies)
+
+        #formulate the dictionary and save it as output
         towrite = copy.deepcopy(doc_list)
         towrite[0]['processed_data']={}
         towrite[0]['processed_data']['FW_info']={}
@@ -1496,28 +1530,31 @@ class DumpFWToTraj(luigi.Task):
 
 
 class DumpToSurfaceEnergyDB(luigi.Task):
-    ''' This class dumps the adsorption energies from our pickles to our tertiary databases '''
+    ''' This class dumps the surface energies from our pickles to our tertiary databases '''
     parameters = luigi.DictParameter()
 
     def requires(self):
         '''
-        We want the lowest energy structure (with adsorption energy), the fingerprinted structure,
-        and the bulk structure
+        We want the slabs at various thicknessed from CalculateSlabSurfaceEnergy and
+        the relevant bulk relaxation
         '''
         return [CalculateSlabSurfaceEnergy(self.parameters),
                 SubmitToFW(calctype='bulk',
                            parameters={'bulk': self.parameters['bulk']})]
 
     def run(self):
+
         # Load the structures
         surface_energy_pkl = pickle.load(self.input()[0].open())
+
         # Extract the atoms object
         surface_energy_atoms = surface_energy_pkl[0]['atoms']
+
         # Get the lowest energy bulk structure
         bulk = pickle.load(self.input()[1].open())
         bulkmin = np.argmin(map(lambda x: x['results']['energy'], bulk))
  
-        
+        #Calculate the movement for each relaxed slab        
         max_surface_movement = [utils.find_max_movement(doc['atoms'], mongo_doc_atoms(doc['initial_configuration']))
                                   for doc in surface_energy_pkl]
 
@@ -1537,8 +1574,8 @@ class DumpToSurfaceEnergyDB(luigi.Task):
         surface_energy_pkl_slab = mongo_doc(surface_energy_atoms)
         surface_energy_pkl_slab['initial_configuration'] = surface_energy_pkl[0]['initial_configuration']
         surface_energy_pkl_slab['processed_data'] = processed_data
-        # Write the entry into the database
 
+        # Write the entry into the database
         with gasdb.get_surface_energy_client() as surface_energy_client:
             surface_energy_client.write(surface_energy_pkl_slab)
 

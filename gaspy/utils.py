@@ -196,6 +196,9 @@ def constrain_slab(atoms, z_cutoff=3., symmetric = False):
                     any adsorbate atom is tagged with a positive integer.
         z_cutoff    The threshold to see if slab atoms are in the same plane as the
                     highest atom in the slab
+        symmetric   If symmetric is False, we constrain everything but the top surface
+                    layer. This is the default for adsorption calculations. For surface
+                    energy calculations, we want the top and bottom to be relaxed.
     '''
     #copy the input so we don't affect the original (reference) atoms
     atoms = atoms.copy()
