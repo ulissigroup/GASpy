@@ -341,25 +341,28 @@ def remove_duplicates():
 
     # Find all of the unique slab+adsorbate FW ID's
     uniques, inverse, counts = np.unique([doc['processed_data']['FW_info']['slab+adsorbate']
-                                          for doc in ads_docs], return_counts=True, return_inverse=True)
+                                          for doc in ads_docs],
+                                         return_counts=True, return_inverse=True)
 
     # For each unique FW ID, see if there is more than one entry.
     # If so, remove all but the first instance
     for ind, count in enumerate(counts):
         if count > 1:
             matching = np.where(inverse == ind)[0]
-            print(matching)
             for match in matching[1:]:
-                ads_client.db.adsorption.remove({'_id': ads_docs[match]['_id']})
-
+                mongo_id = ads_docs[match]['_id']
+                fwid = ads_docs[match]['processed_data']['FW_info']['slab+adsorbate']
+                ads_client.db.adsorption.remove({'_id': mongo_id})
+                print('Just removed Mongo item %s (duplicate for FWID %s) from adsorption collection' % (mongo_id, fwid))
 
     # Do it all again, but for the AuxDB (AKA the "atoms" collection)
     atoms_client = get_atoms_client()
-    atoms_docs = list(atoms_client.db.atoms.find({}, {'processed_data.fwid+adsorbate': 1, '_id': 1}))
+    atoms_docs = list(atoms_client.db.atoms.find({}, {'fwid': 1, '_id': 1}))
 
     # Find all of the unique slab+adsorbate FW ID's
-    uniques, inverse, counts = np.unique([doc['processed_data']['FW_info']['slab+adsorbate']
-                                          for doc in atoms_docs], return_counts=True, return_inverse=True)
+    uniques, inverse, counts = np.unique([doc['fwid']
+                                          for doc in atoms_docs],
+                                         return_counts=True, return_inverse=True)
 
     # For each unique FW ID, see if there is more than one entry.
     # If so, remove all but the first instance
@@ -368,7 +371,10 @@ def remove_duplicates():
             matching = np.where(inverse == ind)[0]
             print(matching)
             for match in matching[1:]:
+                mongo_id = atoms_docs[match]['_id']
+                fwid = atoms_docs[match]['fwid']
                 atoms_client.db.atoms.remove({'_id': atoms_docs[match]['_id']})
+                print('Just removed Mongo item %s (duplicate for FWID %s) from atoms collection' % (mongo_id, fwid))
 
 
 # TODO:  Comment and clean up everything below here
