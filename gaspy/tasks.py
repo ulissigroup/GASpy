@@ -390,6 +390,7 @@ class DumpToAdsorptionDB(luigi.Task):
         bare_slab_final = mongo_doc_atoms(best_sys_pkl['slab'])
         max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
 
+
         # Make a dictionary of tags to add to the database
         processed_data = {'fp_final': fp_final,
                           'fp_init': fp_init,
@@ -407,7 +408,8 @@ class DumpToAdsorptionDB(luigi.Task):
                                                'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
                           'FW_info': {'slab+adsorbate': best_sys_pkl['slab+ads']['fwid'],
                                       'slab': best_sys_pkl['slab']['fwid'],
-                                      'bulk': bulk[bulkmin]['fwid']},
+                                      'bulk': bulk[bulkmin]['fwid'],
+                                      'adslab_calculation_date': fw.created_on},
                           'movement_data': {'max_surface_movement': max_surface_movement,
                                             'max_adsorbate_movement': max_adsorbate_movement,
                                             'max_bare_slab_movement': max_bare_slab_movement}}
