@@ -31,6 +31,14 @@
         "database": "database",
         "collection": "collection"
         },
+    "surface_energy_client":{
+        "host": "host.name",
+        "port": "99999",
+        "user": "user",
+        "password": "pw",
+        "database": "database",
+        "collection": "collection"
+        },
     "catalog_client":{
         "host": "host.name",
         "port": "99999",

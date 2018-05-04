@@ -67,7 +67,7 @@ def xc_settings(xc):
     if xc == 'rpbe':
         settings = OrderedDict(gga='RP', pp='PBE')
     # Otherwise, simply listen to Vaspy
-    elif xc  == 'pbesol':
+    elif xc == 'pbesol':
         settings = OrderedDict(gga='PS', pp='PBE')
     else:
         settings = OrderedDict(Vasp.xc_defaults[xc])

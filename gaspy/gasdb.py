@@ -50,15 +50,6 @@ def get_atoms_client():
             kwargs[key] = int(value)
     return MongoDatabase(**kwargs)
 
-def get_surface_energy_client():
-    ''' This is the information for the `atoms` collection in our vasp.mongo database '''
-    # Open the appropriate information from the RC file
-    kwargs = utils.read_rc()['surface_energy_client']
-    # Turn the port number into an integer
-    for key, value in kwargs.iteritems():
-        if key == 'port':
-            kwargs[key] = int(value)
-    return MongoDatabase(**kwargs)
 
 def get_surface_energy_client():
     ''' This is the information for the `atoms` collection in our vasp.mongo database '''
