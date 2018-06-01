@@ -92,6 +92,8 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
                                 fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
                                                 'coordination': '$processed_data.fp_init.coordination'}
                             If `None`, then pull the default set of fingerprints.
+                            If 'simulated', then pull the default set of fingerprints for
+                            simulated documents.
         adsorbates          A list of adsorbates that you want to find matches for
         calc_settings       An optional argument that will only pull out data with these
                             calc settings (e.g., 'beef-vdw' or 'rpbe').
@@ -111,6 +113,8 @@ def get_docs(client=get_adsorption_client(), collection_name='adsorption', finge
     '''
     if not fingerprints:
         fingerprints = defaults.fingerprints()
+    if fingerprints == 'simulated':
+        fingerprints = defaults.fingerprints(simulated=True)
 
     # Put the "fingerprinting" into a `group` dictionary, which we will
     # use to pull out data from the mongo database. Also, initialize
