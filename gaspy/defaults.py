@@ -303,3 +303,13 @@ def adsorption_parameters(adsorbate,
                                                  ediffg=-0.03,
                                                  symprec=1e-10,
                                                  **settings))
+
+
+def doc_filters():
+    filters = dict(energy_min=-4.,
+                   energy_max=4.,
+                   f_max=0.5,
+                   ads_move_max=1.5,
+                   bare_slab_move_max=0.5,
+                   slab_move_max=1.5)
+    return filters
