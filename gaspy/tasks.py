@@ -62,7 +62,7 @@ class UpdateAllDB(luigi.WrapperTask):
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
-        ads_docs = gasdb.get_atoms_client().find({'type': 'slab+adsorbate'})
+        ads_docs = list(gasdb.get_atoms_client().find({'type': 'slab+adsorbate'}))
         surface_energy_docs = list(gasdb.get_surface_energy_client().find({'type': 'slab_surface_energy'}))
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
@@ -106,7 +106,8 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
-        for doc in ads_docs:
+        print('# of outstanding adslab calculations: %d'%len([doc for doc in ads_docs if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
+        for doc in reversed(ads_docs):
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != ''):
@@ -497,13 +498,10 @@ class SubmitToFW(luigi.Task):
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
             search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
-            #search_strings['fwname.shift'] = np.cound(seach_strings['fwname.shift'], 4)
 
         # Grab all of the matching entries in the Auxiliary database
         with gasdb.get_atoms_client() as atoms_client:
             self.matching_doc = list(atoms_client.find(search_strings))
-
-        #print('Search string:  %s', % search_strings)
 
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
@@ -534,10 +532,10 @@ class SubmitToFW(luigi.Task):
                 with gasdb.get_atoms_client() as atoms_client:
                     self.matching_docs_all_calcs = list(atoms_client.find(search_strings))
 
-                #If we don't modify the parameters, the parameters will contain the FP for the request. This will trigger
-                # a FingerprintUnrelaxedAdslabs for each FP, which is entirely unnecessary. The result is the same
-                # regardless of what parameters['adsorption'][0]['fp'] happens to be
-
+                # If we don't modify the parameters, the parameters will contain the FP for the
+                # request. This will trigger a FingerprintUnrelaxedAdslabs for each FP, which
+                # is entirely unnecessary. The result is the same # regardless of what
+                # parameters['adsorption'][0]['fp'] happens to be
                 parameters_copy = copy.deepcopy(self.parameters)
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
@@ -706,7 +704,8 @@ class SubmitToFW(luigi.Task):
                     skeleton for GASpy Issue #14
                     '''
                     # First, let's see if we can find a reasonable guess for the doc:
-                    # guess_docs=[doc2 for doc2 in self.matching_docs_all_calcs if matchFP(fingerprint(doc2['atoms'], ), doc)]
+                    #guess_docs = [doc2 for doc2 in self.matching_docs_all_calcs
+                    #              if matchFP(fingerprint(doc2['atoms'], ), doc)]
                     guess_docs = []
                     # We've found another calculation with exactly the same fingerprint
                     if len(guess_docs) > 0:
@@ -912,6 +911,11 @@ class GenerateSiteMarkers(luigi.Task):
                                                          bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
                     GenerateBulk(parameters={'bulk': self.parameters['bulk']})]
+        elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed']=='relaxed_bulk':
+            return [GenerateSlabs(parameters=OrderedDict(bulk=self.parameters['bulk'],
+                                                         slab=self.parameters['slab'])),
+                    SubmitToFW(calctype='bulk',
+                               parameters={'bulk': self.parameters['bulk']})]
         else:
             return [SubmitToFW(calctype='slab',
                                parameters=OrderedDict(bulk=self.parameters['bulk'],
@@ -1299,6 +1303,7 @@ class EnumerateAlloys(luigi.WrapperTask):
     max_index = luigi.IntParameter(1)
     whitelist = luigi.ListParameter()
     max_to_submit = luigi.IntParameter(1000)
+    dft = luigi.BoolParameter(False)
 
     def requires(self):
         """
@@ -1356,13 +1361,20 @@ class EnumerateAlloys(luigi.WrapperTask):
         tasks_to_submit = []
         for facets in reversed(all_miller):
             for facet in facets:
-                task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
+                if not(self.dft):
+                    task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
                                                                  bulk=defaults.bulk_parameters(facet[0], max_atoms=50),
                                                                  slab=defaults.slab_parameters(facet[1], True, 0),
                                                                  gas=defaults.gas_parameters('CO'),
                                                                  adsorption=defaults.adsorption_parameters('U',
-                                                                                                           '[3.36 1.16 24.52]',
-                                                                                                           '(1, 1)', 24)))
+                                                                                                           '[3.36 1.16 24.52]','(1, 1)', 24)))
+                else:
+                    task = FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed='relaxed_bulk',
+                                                                 bulk=defaults.bulk_parameters(facet[0], max_atoms=50,settings='rpbe'),
+                                                                 slab=defaults.slab_parameters(facet[1], True, 0, settings='rpbe'),
+                                                                 gas=defaults.gas_parameters('CO',settings='rpbe'),
+                                                                 adsorption=defaults.adsorption_parameters('U',
+                                                                                                           '[3.36 1.16 24.52]','(1, 1)', 24, settings='rpbe')))
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
@@ -1373,12 +1385,66 @@ class EnumerateAlloys(luigi.WrapperTask):
 
         return tasks_to_submit
 
-        #    for i in range(self.max_to_submit):
-        #        yield tasks_to_submit
-        #            submitted+=1
-        #            yield t
-        #            if submitted > self.max_to_submit:
-        #                return
+
+class EnumerateAlloyBulks(luigi.WrapperTask):
+    '''
+    This class is meant to be called by Luigi to begin relaxations of a database of alloys
+    '''
+    whitelist = luigi.ListParameter()
+    max_to_submit = luigi.IntParameter(1000)
+
+    def requires(self):
+        """
+        Luigi automatically runs the `requires` method whenever we tell it to execute a
+        class. Since we are not truly setting up a dependency (i.e., setting up `requires`,
+        `run`, and `output` methods), we put all of the "action" into the `requires`
+        method.
+        """
+        # Define some elements that we don't want alloys with (note no oxides for the moment)
+        all_elements = ['H', 'He', 'Li', 'Be', 'B', 'C',
+                        'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S',
+                        'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn',
+                        'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se',
+                        'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc',
+                        'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te',
+                        'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm',
+                        'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+                        'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au',
+                        'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra',
+                        'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk',
+                        'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg',
+                        'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uuq', 'Uuh']
+        whitelist = self.whitelist
+        restricted_elements = [el for el in all_elements if el not in whitelist]
+
+        # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
+        # restricted elements
+        with MPRester("MGOdX3P4nI18eKvE") as m:
+            results = m.query({"elements": {"$nin": restricted_elements},
+                               "e_above_hull": {"$lt": 0.1},
+                               "formation_energy_per_atom": {"$lte": 0.0}},
+                              ['pretty_formula',
+                               'formula',
+                               'spacegroup',
+                               'material id',
+                               'taskid',
+                               'task_id',
+                               'structure'],
+                              mp_decode=True)
+
+        tasks_to_submit = []
+        for result in results:
+            task = SubmitToFW(calctype='bulk', 
+                            parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=50,settings='rpbe')))
+            if not(task.complete()):
+                tasks_to_submit.append(task)
+
+        random.shuffle(tasks_to_submit)
+
+        if len(tasks_to_submit) > self.max_to_submit:
+            tasks_to_submit = tasks_to_submit[0: self.max_to_submit]
+
+        return tasks_to_submit
 
 
 class CalculateSlabSurfaceEnergy(luigi.Task):
@@ -1443,6 +1509,8 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
             if len(slab) > 80:
                 print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'
                       % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller'], self.parameters['slab']['shift']))
+                print('aborting!')
+                return
 
             # Generate the SubmitToFW that will trigger the necessary calculation
             del param_to_submit['slab']['top']

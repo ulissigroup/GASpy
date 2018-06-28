@@ -20,9 +20,8 @@ export OMP_NUM_THREADS=1
 # Tell Luigi to do the enumeration
 
 PYTHONPATH=$PYTHONPATH luigi \
-    --module gaspy.tasks UpdateRelaxedSurfaceCatalog \
+    --module gaspy.tasks UpdateRelaxedBulkCatalog \
     --max-to-submit 3000 \
-    --max-index 2 \
     --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As",  "Ru", "Pb", "Nb", "Ca", "Na"]' \
     --scheduler-host $LUIGI_PORT \
     --workers=32 \
