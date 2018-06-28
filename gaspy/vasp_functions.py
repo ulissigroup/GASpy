@@ -81,7 +81,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     # in GASpy_regression
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'cori':
         # If we're on a Haswell node...
-        if os.environ['CRAY_CPU_TARGET'] == 'haswell':
+        if os.environ['CRAY_CPU_TARGET'] == 'haswell' and 'knl' not in os.environ['PATH']:
             NNODES = int(os.environ['SLURM_NNODES'])
             vaspflags['kpar'] = NNODES
             mpicall = lambda x, y: 'srun -n %d %s' % (x, y)  # noqa: E731
