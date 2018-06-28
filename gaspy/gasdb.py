@@ -3,6 +3,7 @@
 import pdb  # noqa: F401
 import warnings
 from itertools import islice
+import json
 import cPickle as pickle
 from multiprocessing import Pool
 import glob
@@ -10,7 +11,7 @@ import numpy as np
 import tqdm
 from ase.io.png import write_png
 from vasp.mongo import MongoDatabase, mongo_doc_atoms
-from . import defaults, utils
+from . import defaults, utils, vasp_functions
 from bson.objectid import ObjectId
 
 
@@ -370,6 +371,41 @@ def remove_duplicates():
                 fwid = atoms_docs[match]['fwid']
                 atoms_client.db.atoms.remove({'_id': atoms_docs[match]['_id']})
                 print('Just removed Mongo item %s (duplicate for FWID %s) from atoms collection' % (mongo_id, fwid))
+
+
+def dump_adsorption_to_json(fname):
+    '''
+    Dump the adsorption collection to a json file
+
+    Input:
+        fname   A string indicating the file name you want to dump to
+    '''
+    # Define the data that we want to pull out of Mongo.
+    # The defaults gives us miscellaneous useful information.
+    # The 'results' and 'atoms' are necessary to turn the doc into atoms.
+    fingerprints = defaults.fingerprints(simulated=True)
+    fingerprints['results'] = '$results'
+    fingerprints['atoms'] = '$atoms'
+    # Pull out only documents that had "good" relaxations
+    doc_filters = defaults.doc_filters()
+    docs = get_docs(fingerprints=fingerprints, **doc_filters)
+
+    # Preprocess the docs before dumping
+    for doc in docs:
+        # Make the documents json serializable
+        del doc['mongo_id']
+        time_object = doc['adslab_calculation_date']
+        time = time_object.isoformat()
+        doc['adslab_calculation_date'] = time
+
+        # Put the atoms hex in for others to be able to decode it
+        atoms = mongo_doc_atoms(doc)
+        _hex = vasp_functions.atoms_to_hex(atoms)
+        doc['atoms_hex'] = _hex
+
+    # Save
+    with open(fname, 'w') as file_handle:
+        json.dump(docs, file_handle)
 
 
 # TODO:  Comment and clean up everything below here
