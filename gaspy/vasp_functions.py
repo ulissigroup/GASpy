@@ -36,19 +36,18 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     if np.dot(np.cross(atoms.cell[0], atoms.cell[1]), atoms.cell[2]) < 0:
         atoms.set_cell(atoms.cell[[1, 0, 2], :])
 
-    # update vasprc file to set mode to "run" to ensure that this runs immediately
-    #Vasp.vasprc(mode='run')
-
-    # set ppn>1 so that it knows to do an mpi job, the actual ppn will guessed by Vasp module
-    #Vasp.VASPRC['queue.ppn'] = 2
-
     vasp_cmd = 'vasp_std'
     os.environ['PBS_SERVER'] = 'gilgamesh.cheme.cmu.edu'
 
     if 'PBS_NODEFILE' in os.environ:
         NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
     elif 'SLURM_CLUSTER_NAME' in os.environ:
-        NPROCS = int(os.environ['SLURM_NPROCS'])
+        if 'SLURM_NPROCS' in os.environ:
+            # We're on cori haswell
+            NPROCS = int(os.environ['SLURM_NPROCS'])
+        else:
+            # we're on cori KNL, just one processor
+            NPROCS = 1
 
     # If we're on Gilgamesh...
     if 'PBS_NODEFILE' in os.environ and os.environ['PBS_SERVER'] == 'gilgamesh.cheme.cmu.edu':
@@ -56,6 +55,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
         vasp_cmd = '/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel'
         NPROCS = NPROCS = len(open(os.environ['PBS_NODEFILE']).readlines())
         mpicall = lambda x, y: 'mpirun -np %i %s' % (x, y)  # noqa: E731
+
     # If we're on Arjuna...
     elif 'SLURM_CLUSTER_NAME' in os.environ and os.environ['SLURM_CLUSTER_NAME'] == 'arjuna':
         # If this is a GPU job...
@@ -75,6 +75,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
                 vaspflags['kpar'] = 1
                 vaspflags['ncore'] = 4
             mpicall = lambda x, y: 'mpirun -np %i %s' % (x, y)  # noqa: E731
+
     # If we're on Cori, use SLURM. Note that we decrease the priority by 1000
     # in order to prioritize other things higher, such as modeling and prediction
     # in GASpy_regression
@@ -85,7 +86,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
             vaspflags['kpar'] = NNODES
             mpicall = lambda x, y: 'srun -n %d %s' % (x, y)  # noqa: E731
         # If we're on a KNL node...
-        elif os.environ['CRAY_CPU_TARGET'] == 'knl':
+        elif 'knl' in os.environ['PATH']:
             mpicall = lambda x, y: 'srun -n %d -c8 --cpu_bind=cores %s' % (x*32, y)  # noqa: E731
             vaspflags['ncore'] = 1
 
@@ -94,11 +95,6 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
         vaspflags['xc'] = 'lda'
     elif vaspflags['pp'].lower() == 'pbe':
         vaspflags['xc'] = 'PBE'
-
-    #if 'gga' not in vaspflags:
-    #    vaspflags['xc'] = 'lda'
-    #elif vaspflags['gga'] in ['RP','BF','PE']:
-    #    vaspflags['xc'] = 'pbe'
 
     pseudopotential = vaspflags['pp_version']
     os.environ['VASP_PP_PATH'] = os.environ['VASP_PP_BASE'] + '/' + str(pseudopotential) + '/'
@@ -123,8 +119,8 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
         qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj')
         qn.run(fmax=vaspflags['ediffg'] if 'ediffg' in vaspflags else 0.05)
         finalimage = atoms
-    else:
 
+    else:
         # set up the calculation and run
         calc = Vasp(**vaspflags)
         atoms.set_calculator(calc)
