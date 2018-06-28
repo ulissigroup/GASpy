@@ -186,7 +186,7 @@ def remove_adsorbate(adslab):
     return slab, binding_positions
 
 
-def constrain_slab(atoms, z_cutoff=3., symmetric = False):
+def constrain_slab(atoms, z_cutoff=3., symmetric=False):
     '''
     Define a function, "constrain_slab" to impose slab constraints prior to relaxation.
 
@@ -222,8 +222,8 @@ def constrain_slab(atoms, z_cutoff=3., symmetric = False):
     # Use the scaled heights to fix any atoms below the surfaces of the slab
     constraints = atoms.constraints
     if symmetric:
-        constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/np.linalg.norm(atoms.cell[2]))
-                                          and pos[2] > z_min+(z_cutoff/np.linalg.norm(atoms.cell[2]))
+        constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/np.linalg.norm(atoms.cell[2])) and
+                                          pos[2] > z_min+(z_cutoff/np.linalg.norm(atoms.cell[2]))
                                           for pos in scaled_positions]))
     elif atoms.cell[2, 2] > 0:
         constraints.append(FixAtoms(mask=[pos[2] < z_max-(z_cutoff/np.linalg.norm(atoms.cell[2]))
