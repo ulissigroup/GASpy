@@ -92,14 +92,10 @@ def get_docs(client=get_mongo_client(), collection_name='adsorption', fingerprin
 
     # Create `match` filters to search by. Use if/then statements to create the filters
     # only if the user specifies them.
-    if not calc_settings:
-        pass
-    elif calc_settings == 'rpbe':
-        match['$match']['processed_data.vasp_settings.gga'] = 'RP'
-    elif calc_settings == 'beef-vdw':
-        match['$match']['processed_data.vasp_settings.gga'] = 'BF'
-    else:
-        raise Exception('Unknown calc_settings')
+    if calc_settings:
+        xc_settings = defaults.exchange_correlational_settings()
+        gga_method = xc_settings[calc_settings]['gga']
+        match['$match']['processed_data.vasp_settings.gga'] = gga_method
     if vasp_settings:
         for key, value in vasp_settings.items():
             match['$match']['processed_data.vasp_settings.%s' % key] = value

@@ -106,7 +106,9 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
-        print('# of outstanding adslab calculations: %d'%len([doc for doc in ads_docs if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
+        print('# of outstanding adslab calculations: %d'
+              % len([doc for doc in ads_docs
+                     if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
         for doc in reversed(ads_docs):
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
@@ -911,7 +913,7 @@ class GenerateSiteMarkers(luigi.Task):
                                                          bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
                     GenerateBulk(parameters={'bulk': self.parameters['bulk']})]
-        elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed']=='relaxed_bulk':
+        elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == 'relaxed_bulk':
             return [GenerateSlabs(parameters=OrderedDict(bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
                     SubmitToFW(calctype='bulk',
@@ -1363,18 +1365,17 @@ class EnumerateAlloys(luigi.WrapperTask):
             for facet in facets:
                 if not(self.dft):
                     task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                 bulk=defaults.bulk_parameters(facet[0], max_atoms=50),
-                                                                 slab=defaults.slab_parameters(facet[1], True, 0),
-                                                                 gas=defaults.gas_parameters('CO'),
-                                                                 adsorption=defaults.adsorption_parameters('U',
-                                                                                                           '[3.36 1.16 24.52]','(1, 1)', 24)))
+                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=50),
+                                                                     slab=defaults.slab_parameters(facet[1], True, 0),
+                                                                     gas=defaults.gas_parameters('CO'),
+                                                                     adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24)))
                 else:
                     task = FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed='relaxed_bulk',
-                                                                 bulk=defaults.bulk_parameters(facet[0], max_atoms=50,settings='rpbe'),
-                                                                 slab=defaults.slab_parameters(facet[1], True, 0, settings='rpbe'),
-                                                                 gas=defaults.gas_parameters('CO',settings='rpbe'),
-                                                                 adsorption=defaults.adsorption_parameters('U',
-                                                                                                           '[3.36 1.16 24.52]','(1, 1)', 24, settings='rpbe')))
+                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=50, settings='rpbe'),
+                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings='rpbe'),
+                                                                              gas=defaults.gas_parameters('CO', settings='rpbe'),
+                                                                              adsorption=defaults.adsorption_parameters('U',
+                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings='rpbe')))
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
@@ -1434,8 +1435,7 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
 
         tasks_to_submit = []
         for result in results:
-            task = SubmitToFW(calctype='bulk', 
-                            parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=50,settings='rpbe')))
+            task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=50, settings='rpbe')))
             if not(task.complete()):
                 tasks_to_submit.append(task)
 

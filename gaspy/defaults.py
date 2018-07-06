@@ -55,7 +55,7 @@ def fingerprints(simulated=False):
     return fingerprints
 
 
-def exchange_correlationals():
+def exchange_correlational_settings():
     '''
     Yields a dictionary whose keys are some typical sets of exchange correlationals
     and whose values are dictionaries with the corresponding pseudopotential (pp),
@@ -63,43 +63,43 @@ def exchange_correlationals():
 
     Credit goes to John Kitchin who wrote vasp.Vasp.xc_defaults, which we copied and put here.
     '''
-    xc = {'lda': {'pp': 'LDA'},
-          # GGAs
-          'gga': {'pp': 'GGA'},
-          'pbe': {'pp': 'PBE'},
-          'revpbe': {'pp': 'LDA', 'gga': 'RE'},
-          'rpbe': {'pp': 'LDA', 'gga': 'RP'},
-          'am05': {'pp': 'LDA', 'gga': 'AM'},
-          'pbesol': {'pp': 'LDA', 'gga': 'PS'},
-          # Meta-GGAs
-          'tpss': {'pp': 'PBE', 'metagga': 'TPSS'},
-          'revtpss': {'pp': 'PBE', 'metagga': 'RTPSS'},
-          'm06l': {'pp': 'PBE', 'metagga': 'M06L'},
-          # vdW-DFs
-          'optpbe-vdw': {'pp': 'LDA', 'gga': 'OR', 'luse_vdw': True,
-                         'aggac': 0.0},
-          'optb88-vdw': {'pp': 'LDA', 'gga': 'BO', 'luse_vdw': True,
-                         'aggac': 0.0, 'param1': 1.1 / 6.0,
-                         'param2': 0.22},
-          'optb86b-vdw': {'pp': 'LDA', 'gga': 'MK', 'luse_vdw': True,
-                          'aggac': 0.0, 'param1': 0.1234,
-                          'param2': 1.0},
-          'vdw-df2': {'pp': 'LDA', 'gga': 'ML', 'luse_vdw': True,
-                      'aggac': 0.0, 'zab_vdw': -1.8867},
-          'beef-vdw': {'pp': 'PBE', 'gga': 'BF', 'luse_vdw': True,
-                       'zab_vdw': -1.8867, 'lbeefens': True},
-          # hybrids
-          'pbe0': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True},
-          'hse03': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
-                    'hfscreen': 0.3},
-          'hse06': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
-                    'hfscreen': 0.2},
-          'b3lyp': {'pp': 'LDA', 'gga': 'B3', 'lhfcalc': True,
-                    'aexx': 0.2, 'aggax': 0.72,
-                    'aggac': 0.81, 'aldac': 0.19},
-          'hf': {'pp': 'PBE', 'lhfcalc': True, 'aexx': 1.0,
-                 'aldac': 0.0, 'aggac': 0.0}}
-    return xc
+    xc_settings = {'lda': {'pp': 'LDA'},
+                   # GGAs
+                   'gga': {'pp': 'GGA'},
+                   'pbe': {'pp': 'PBE'},
+                   'revpbe': {'pp': 'LDA', 'gga': 'RE'},
+                   'rpbe': {'pp': 'LDA', 'gga': 'RP'},
+                   'am05': {'pp': 'LDA', 'gga': 'AM'},
+                   'pbesol': {'pp': 'LDA', 'gga': 'PS'},
+                   # Meta-GGAs
+                   'tpss': {'pp': 'PBE', 'metagga': 'TPSS'},
+                   'revtpss': {'pp': 'PBE', 'metagga': 'RTPSS'},
+                   'm06l': {'pp': 'PBE', 'metagga': 'M06L'},
+                   # vdW-DFs
+                   'optpbe-vdw': {'pp': 'LDA', 'gga': 'OR', 'luse_vdw': True,
+                                  'aggac': 0.0},
+                   'optb88-vdw': {'pp': 'LDA', 'gga': 'BO', 'luse_vdw': True,
+                                  'aggac': 0.0, 'param1': 1.1 / 6.0,
+                                  'param2': 0.22},
+                   'optb86b-vdw': {'pp': 'LDA', 'gga': 'MK', 'luse_vdw': True,
+                                   'aggac': 0.0, 'param1': 0.1234,
+                                   'param2': 1.0},
+                   'vdw-df2': {'pp': 'LDA', 'gga': 'ML', 'luse_vdw': True,
+                               'aggac': 0.0, 'zab_vdw': -1.8867},
+                   'beef-vdw': {'pp': 'PBE', 'gga': 'BF', 'luse_vdw': True,
+                                'zab_vdw': -1.8867, 'lbeefens': True},
+                   # hybrids
+                   'pbe0': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True},
+                   'hse03': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
+                             'hfscreen': 0.3},
+                   'hse06': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
+                             'hfscreen': 0.2},
+                   'b3lyp': {'pp': 'LDA', 'gga': 'B3', 'lhfcalc': True,
+                             'aexx': 0.2, 'aggax': 0.72,
+                             'aggac': 0.81, 'aldac': 0.19},
+                   'hf': {'pp': 'PBE', 'lhfcalc': True, 'aexx': 1.0,
+                          'aldac': 0.0, 'aggac': 0.0}}
+    return xc_settings
 
 
 def xc_settings(xc):
@@ -115,7 +115,7 @@ def xc_settings(xc):
     elif xc == 'pbesol':
         settings = OrderedDict(gga='PS', pp='PBE')
     else:
-        settings = OrderedDict(exchange_correlationals()[xc])
+        settings = OrderedDict(exchange_correlational_settings()[xc])
 
     return settings
 
