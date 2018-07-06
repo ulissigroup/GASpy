@@ -7,10 +7,9 @@ __email__ = 'ktran@andrew.cmu.edu'
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 
 # Things we need to do the tests
-#import pytest
 import numpy as np
 import numpy.testing as npt
-from ..learning_tests.pymatgen_test import _get_standard_structure
+from ..baselines import get_standard_structure
 
 
 def _get_sites_for_standard_structure():
@@ -26,7 +25,7 @@ def _get_sites_for_standard_structure():
 
 def test_AdsorbateSiteFinder_find_adsorption_site_for_standard_structure_site_types():
     ''' Verify that ASF finds the same exact site types (e.g., ontop, bride, hollow) '''
-    struct = _get_standard_structure()
+    struct = get_standard_structure()
     site_types = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True).keys()
     standard_site_types = _get_sites_for_standard_structure().keys()
     assert site_types == standard_site_types
@@ -34,7 +33,7 @@ def test_AdsorbateSiteFinder_find_adsorption_site_for_standard_structure_site_ty
 
 def test_AdsorbateSiteFinder_find_adsorption_site_for_standard_structure_sites():
     ''' Verify that ASF finds the same cartesion site locations for each site type '''
-    struct = _get_standard_structure()
+    struct = get_standard_structure()
     sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
     standard_sites_dict = _get_sites_for_standard_structure()
     # The output we're checking is a dictionary of lists of numpy arrays.
