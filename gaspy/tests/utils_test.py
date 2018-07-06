@@ -4,7 +4,7 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
-from gaspy.utils import find_adsorption_sites
+from ..utils import find_adsorption_sites
 
 # Things we need to do the tests
 import numpy as np
