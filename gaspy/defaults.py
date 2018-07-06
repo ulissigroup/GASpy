@@ -350,7 +350,12 @@ def adsorption_parameters(adsorbate,
                                                  **settings))
 
 
-def doc_filters():
+def filters_for_adsorption_docs():
+    '''
+    Not all of our adsorption calculations are "good" ones. Some end up in desorptions,
+    dissociations, do not converge, or have ridiculous energies. These are the
+    filters we use to sift out these "bad" documents.
+    '''
     filters = dict(energy_min=-4.,
                    energy_max=4.,
                    f_max=0.5,

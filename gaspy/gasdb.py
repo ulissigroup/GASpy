@@ -354,7 +354,7 @@ def dump_adsorption_to_json(fname):
     fingerprints['results'] = '$results'
     fingerprints['atoms'] = '$atoms'
     # Pull out only documents that had "good" relaxations
-    doc_filters = defaults.doc_filters()
+    doc_filters = defaults.filters_for_adsorption_docs()
     docs = get_docs(fingerprints=fingerprints, **doc_filters)
 
     # Preprocess the docs before dumping
