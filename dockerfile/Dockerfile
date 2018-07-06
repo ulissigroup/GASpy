@@ -56,10 +56,14 @@ RUN source activate GASpy_conda && conda install \
 RUN source activate GASpy_conda && conda install -c matsci \
     fireworks \
     pymatgen
+# CS packages
+RUN source activate GASpy_conda && conda install \
+    multiprocess \
+    luigi
 
 # Install pip packages
-RUN source activate GASpy_conda && pip install git+git://github.com/jkitchin/vasp.git
 RUN source activate GASpy_conda && pip install tpot
+RUN source activate GASpy_conda && pip install pytest
 
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy

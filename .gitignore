@@ -33,6 +33,7 @@
 *.out
 *.error
 *.out
+.pytest_cache/
 
 # OS generated files #
 ######################
@@ -52,3 +53,4 @@ Thumbs.db
 # Config file #
 ###############
 .gaspyrc.json
+open_tunnel.sh
