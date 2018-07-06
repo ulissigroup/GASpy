@@ -5,9 +5,8 @@ import getpass
 import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 import ase.io
-from vasp import Vasp
 from .utils import vasp_settings_to_str, print_dict, read_rc
-from . import vasp_functions
+from . import vasp_functions, defaults
 from .vasp_functions import atoms_to_hex
 
 
@@ -160,7 +159,7 @@ def get_firework_info(fw):
             vasp_settings['pp_version'] = '5.3.5'
         vasp_settings['pp_guessed'] = True
     if 'gga' not in vasp_settings:
-        settings = Vasp.xc_defaults[vasp_settings['xc']]
+        settings = defaults.exchange_correlationals[vasp_settings['xc']]
         for key in settings:
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)

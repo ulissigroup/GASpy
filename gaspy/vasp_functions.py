@@ -5,7 +5,6 @@ from ase.io import read
 from ase.io.trajectory import TrajectoryWriter
 from ase.optimize import BFGS
 from ase.calculators.vasp import Vasp
-from vasp.vasprc import VASPRC
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
 # noqa: E731
 
@@ -100,7 +99,6 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     os.environ['VASP_PP_PATH'] = os.environ['VASP_PP_BASE'] + '/' + str(pseudopotential) + '/'
     del vaspflags['pp_version']
 
-    VASPRC['vasp.executable.parallel'] = vasp_cmd
     os.environ['VASP_COMMAND'] = mpicall(NPROCS, vasp_cmd)
 
     # Detect whether or not there are constraints that cannot be handled by VASP

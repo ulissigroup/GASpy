@@ -15,44 +15,44 @@
         "password": "pw",
         "port": "99999"
         },
-    "atoms_client":{
-        "host": "host.name",
-        "port": "99999",
-        "user": "user",
-        "password": "pw",
-        "database": "database",
-        "collection": "collection"
-        },
-    "adsorption_client":{
-        "host": "host.name",
-        "port": "99999",
-        "user": "user",
-        "password": "pw",
-        "database": "database",
-        "collection": "collection"
-        },
-    "surface_energy_client":{
-        "host": "host.name",
-        "port": "99999",
-        "user": "user",
-        "password": "pw",
-        "database": "database",
-        "collection": "collection"
-        },
-    "catalog_client":{
-        "host": "host.name",
-        "port": "99999",
-        "user": "user",
-        "password": "pw",
-        "database": "database",
-        "collection": "collection"
-        },
-    "catalog_client_readonly":{
-        "host": "host.name",
-        "port": "99999",
-        "user": "user",
-        "password": "pw",
-        "database": "database",
-        "collection": "collection"
+    "mongo_info":{
+        "atoms":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "user": "user",
+            "password": "pw"
+            },
+        "adsorption":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "user": "user",
+            "password": "pw"
+            },
+        "surface_energy":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection": "surface_energy",
+            "user": "user",
+            "password": "pw"
+            },
+        "catalog":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection": "catalog",
+            "user": "user",
+            "password": "pw"
+            },
+        "catalog_readonly":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection": "catalog",
+            "user": "user",
+            "password": "pw"
+            }
         }
 }

@@ -1,5 +1,8 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
+__author__ = 'Kevin Tran'
+__email__ = 'ktran@andrew.cmu.edu'
+
 import pdb  # noqa: F401
 from pprint import pprint
 import dill as pickle
@@ -10,7 +13,7 @@ from ase import Atoms
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
-from pymatgen.analysis.structure_analyzer import VoronoiCoordFinder
+from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 import tqdm
 from . import defaults, readrc
@@ -42,7 +45,7 @@ def print_dict(d, indent=0):
         indent  How many tabs to start the printing at
     '''
     if isinstance(d, dict):
-        for key, value in d.iteritems():
+        for key, value in d.items():
             # If the dictionary key is `spec`, then it's going to print out a bunch of
             # messy looking things we don't care about. So skip it.
             if key != 'spec':
@@ -257,8 +260,9 @@ def fingerprint_atoms(atoms):
     # Turn the atoms into a pymatgen structure object so that we can use the VCF to find
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
-    vcf = VoronoiCoordFinder(struct, allow_pathological=True)
-    coordinated_atoms = vcf.get_coordinated_sites(len(atoms)-1, 0.8)
+    vnn = VoronoiNN(allow_pathological=True, tol=0.8)
+    coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
+    coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
     # then turn the list into a single, human-readable string.
     coordinated_symbols = map(lambda x: x.species_string, coordinated_atoms)
@@ -304,116 +308,17 @@ def fingerprint_atoms(atoms):
             'nextnearestcoordination': coordination_nextnearest}
 
 
-def _label_structure_with_surface(slabAtoms, bulkAtoms, height_threshold=3.):
+def find_adsorption_sites(atoms):
     '''
-    This script/function calculates possible adsorption sites of a slab of atoms. It is
-    used primarily as a helper function for the `find_adsorption_sites` function, thus
-    the leading `_`
+    A wrapper for pymatgen to get all of the adsorption sites of a slab.
 
-    Inputs:
-        slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
-        bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
-    Outputs:
-        slab_struct
+    Arg:
+        atoms   The slab where you are trying to find adsorption sites in ase.Atoms format
+    Output:
+        sites   A list of [array]s, which contain the x-y-z coordinates of the adsorptions sites.
     '''
-    # Convert the slab and bulk from [atoms class]es to a
-    # [structure class]es (i.e., from ASE format to PyMatGen format)
-    slab_struct = AseAtomsAdaptor.get_structure(slabAtoms)
-    bulk_struct = AseAtomsAdaptor.get_structure(bulkAtoms)
-
-    # Create [VCF class]es for the slab and bulk, which are PyMatGen class that may
-    # be used to find adsorption sites
-    vcf_surface = VoronoiCoordFinder(slab_struct, allow_pathological=True)
-    vcf_bulk = VoronoiCoordFinder(bulk_struct, allow_pathological=True)
-
-    # Get the chemical formula
-    formula = np.unique(slabAtoms.get_chemical_symbols())
-    # Initialize the keys for "cn_el" [dict], which will hold the [list of int] coordination
-    # numbers of each of atom in the bulk, with the key being the element. Coordination
-    # numbers of atoms that share an element with another atom in the bulk are appended to
-    # each element's list.
-    cn_el = {}
-    for element in formula:
-        cn_el[element] = []
-    # For each atom in the bulk, calculate the coordination number [int] and store it in "cn_el"
-    # [dict where key=element [str]]
-    for i, atom in enumerate(bulkAtoms):
-        # Fetch the atomic symbol of the element, "el" [str]
-        el = str(bulk_struct[i].specie)
-        # Use PyMatGen to identify the "coordinated_neighbors" [list of classes]
-        # Note that we use a tolerance of 0.1 to be consistent with PyMatGen
-        coordinated_neighbors = vcf_bulk.get_coordinated_sites(i, tol=0.4)
-        # Calculate the number of coordinated neighbors [int]
-        num_neighbors = len(coordinated_neighbors)
-        # Store this number in "cn_el" [dict]. Note that cn_el[el] will return a list of
-        # coordination numbers for each atom whose element matches the "el" key.
-        cn_el[el].append(num_neighbors)
-    # Calculate "mean_cn_el" [dict], which will hold the mean coordination number [float] of
-    # each element in the bulk
-    mean_cn_el = {}
-    min_cn_el = {}
-    for element in formula:
-        mean_cn_el[element] = sum(cn_el[element])/len(cn_el[element])
-        min_cn_el[element] = np.min(cn_el[element])
-
-    # Calculate "average_z" [float], the mean z-level of all the atoms in the slab
-    average_z = np.average(slab_struct.cart_coords[:, -1])
-    max_z = np.max(slab_struct.cart_coords[:, -1])
-
-    # Initialize a couple of [list] objects that we will pass to PyMatGen later
-    cn_surf = []
-    plate_surf = []
-    # For each atom in the slab, we calculate the coordination number and then determine whether
-    # or not the atom is on the surface.
-    for i, atom in enumerate(slab_struct):
-        # "cn_surf" [list of floats] holds the coordination numbers of the atoms in the slab.
-        cn_surf.append(len(vcf_surface.get_coordinated_sites(i, tol=0.4)))
-        # Given this atom's element, we fetch the mean coordination number of the same element,
-        # but in the bulk structure instead of the slab structure. "cn_Bulk" is a [float].
-        element = str(slab_struct[i].specie)
-        # If the coordination number of the atom changes between the slab and bulk structures
-        # AND if the atom is above the centerline of the slab...
-        if (cn_surf[-1] < min_cn_el[element] and
-                atom.coords[-1] > average_z and
-                atom.coords[-1] > max_z-height_threshold) or atom.coords[-1] > max_z-1.:
-            # then the atom is labeled as a "surface" atom...
-            plate_surf.append('surface')
-        else:
-            # else it is a subsurface atom. Note that "plate_surf" is a [list of str].
-            plate_surf.append('subsurface')
-
-    # We add "new_site_properties" to "slab_struct" [PyMatGen structure class]
-    new_site_properties = {'surface_properties': plate_surf, 'coord': cn_surf}
-    slab_struct = slab_struct.copy(site_properties=new_site_properties)
-
-    return slab_struct
-
-
-def find_adsorption_sites(slabAtoms, bulkAtoms):
-    '''
-    This script/function calculates possible adsorption sites of a slab of atoms
-
-    Inputs:
-        slabAtoms   [atoms class]   The slab where you are trying to find adsorption sites
-        bulkAtoms   [atoms class]   The original bulk crystal structure of the slab
-    Outputs:
-        sites       [list]  A list of [array]s, which contain the x-y-z coordinates
-                            [floats] of the adsorptions sites.
-    '''
-    # Create a class instance of `AdsorbateSiteFinder`, which will do the work for us
-    slab_struct = _label_structure_with_surface(slabAtoms, bulkAtoms)
-    asf = AdsorbateSiteFinder(slab_struct)
-    # Calculate "sitedict" [dict of arrays of floats], which holds
-    # the cartesion coordinates for each of the adsorption sites.
-    sitedict = asf.find_adsorption_sites(z_oriented=True, put_inside=True)
-    # Some versions of PyMatGen provide an `all` key. If it's there, then just pull out
-    # all the sites that way. If not, then pull out all the sites manually.
-    try:
-        sites = sitedict['all']
-    except KeyError:
-        sites = []
-        for key, value in sitedict.iteritems():
-            sites += value
+    sites_dict = AdsorbateSiteFinder(atoms).find_adsorption_sites(put_inside=True)
+    sites = sites_dict['all']
     return sites
 
 

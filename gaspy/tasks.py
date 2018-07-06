@@ -11,7 +11,7 @@ from datetime import datetime
 from math import ceil
 from collections import OrderedDict
 import random
-import cPickle as pickle
+import pickle
 import numpy as np
 from numpy.linalg import norm
 from ase import Atoms
@@ -20,13 +20,13 @@ from ase.build import rotate
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from pymatgen.matproj.rest import MPRester
+from pymatgen.ext.matproj import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from fireworks import Workflow
 import luigi
-from vasp.mongo import mongo_doc, mongo_doc_atoms
+from gaspy.mongo import mongo_doc, mongo_doc_atoms
 from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
 import statsmodels.api as sm
