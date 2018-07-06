@@ -3,7 +3,6 @@ This modules contains default settings for various function and queries used in 
 submodules.
 '''
 
-import pdb  # noqa: F401
 import copy
 from collections import OrderedDict
 import pickle
@@ -26,7 +25,7 @@ def fingerprints(simulated=False):
     Note that our code implicitly assumes an identical document structure between all
     of the collections that it looks at.
 
-    Input:
+    Arg:
         simulated   A boolean indicating whether or not you want the fingerprints
                     of a simulated (on non-simulated) datum.
     '''
@@ -136,11 +135,11 @@ def calc_settings(xc):
     return settings
 
 
-def gas_parameters(gasname, settings='beef-vdw'):
+def gas_parameters(gasname, settings='rpbe'):
     '''
     Generate some default parameters for a gas and expected relaxation settings
 
-    Inputs:
+    Args:
         gasname     A string containing the name of the gas
         settings    A string that Vaspy can use to create vasp settings.
                     Or `rpbe` if we want to use that
@@ -160,11 +159,11 @@ def gas_parameters(gasname, settings='beef-vdw'):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings='beef-vdw', encut=500., max_atoms=80):
+def bulk_parameters(mpid, settings='rpbe', encut=500., max_atoms=80):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
-    Inputs:
+    Args:
         gasname     A string containing the name of the gas
         settings    A string that Vaspy can use to create vasp settings.
                     Or `rpbe` if we want to use that
@@ -191,11 +190,11 @@ def bulk_parameters(mpid, settings='beef-vdw', encut=500., max_atoms=80):
                                                  **settings))
 
 
-def slab_parameters(miller, top, shift, settings='beef-vdw'):
+def slab_parameters(miller, top, shift, settings='rpbe'):
     '''
     Generate some default parameters for a slab and expected relaxation settings
 
-    Inputs:
+    Args:
         miller      A list of the three miller indices of the slab
         top         A boolean stating whether or not the "top" of the slab is pointing upwards
         shift       As per PyMatGen, the shift is the distance of the planar translation
@@ -301,12 +300,12 @@ def adsorption_parameters(adsorbate,
                           adsorption_site=None,
                           slabrepeat='(1, 1)',
                           num_slab_atoms=0,
-                          settings='beef-vdw'):
+                          settings='rpbe'):
     '''
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings
 
-    Inputs:
+    Args:
         adsorbate       If this is a string, this function will try to find it in the
                         default dictionary of adsorbates. If it is not in the default
                         dictionary, then this function will assume that you have passed
