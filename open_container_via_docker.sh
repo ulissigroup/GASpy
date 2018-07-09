@@ -5,10 +5,10 @@
 
 # Figure out how to mount GASpy to the container
 gaspy_path=$(pwd)
-mounting_config="$gaspy_path:/root/GASpy"
+mounting_config="$gaspy_path:/home/GASpy"
 
 # Create a container from the image
 #   -it     run interactively
 #   --rm    close the container when we exit
 #   -v      mount GASpy to the container
-docker run -it --rm -v $mounting_config ulissigroup/gaspy:dev
+docker run -it --rm -v $mounting_config -w "/home" ulissigroup/gaspy:dev
