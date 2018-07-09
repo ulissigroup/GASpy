@@ -277,7 +277,7 @@ def fingerprint_atoms(atoms):
         neighborind = [site[0] for site in enumerate(struct) if i.distance(site[1]) < 0.1][0]
         # [list] of PyMatGen [periodic site class]es for each of the atoms that are coordinated
         # with the adsorbate
-        coord = vcf.get_coordinated_sites(neighborind, 0.2)
+        coord = vnn.get_coordinated_sites(neighborind, 0.2)
         # The elemental symbols for all of the 2nd-tier-coordinated atoms in a [list] of
         # [unicode] objects
         coord_symbols = map(lambda x: x.species_string, coord)
@@ -290,7 +290,7 @@ def fingerprint_atoms(atoms):
 
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms_nextnearest = vcf.get_coordinated_sites(0, 0.2)
+    coordinated_atoms_nextnearest = vnn.get_coordinated_sites(0, 0.2)
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string,
                                           coordinated_atoms_nextnearest)

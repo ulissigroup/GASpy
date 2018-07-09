@@ -26,7 +26,7 @@ from pymatgen.core.surface import SlabGenerator
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from fireworks import Workflow
 import luigi
-from gaspy.mongo import mongo_doc, mongo_doc_atoms
+from gaspy.mongo import make_doc_from_atoms, make_atoms_from_doc
 from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
 import statsmodels.api as sm
@@ -175,7 +175,7 @@ class UpdateEnumerations(luigi.Task):
             for i in unq_inds:
                 config = configs[i]
                 atoms = config['atoms']
-                slabadsdoc = mongo_doc(config['atoms'])
+                slabadsdoc = make_doc_from_atoms(config['atoms'])
                 processed_data = {'fp_init': config['fp'],
                                   'calculation_info': {'type': 'slab+adsorbate',
                                                        'formula': atoms.get_chemical_formula('hill'),
@@ -258,8 +258,8 @@ class DumpToAuxDB(luigi.Task):
                         starting_atoms.set_tags(tags)
 
                     # Initialize the mongo document, doc, and the populate it with the fw info
-                    doc = mongo_doc(atoms)
-                    doc['initial_configuration'] = mongo_doc(starting_atoms)
+                    doc = make_doc_from_atoms(atoms)
+                    doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
                     doc['fwname'] = fw.name
                     doc['fwid'] = fwid
                     doc['directory'] = fw.launches[-1].launch_dir
@@ -381,16 +381,16 @@ class DumpToAdsorptionDB(luigi.Task):
             ads_start = None
             ads_end = num_adsorbate_atoms
         # Get just the adslab's slab atoms in their initial and final state
-        slab_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
+        slab_initial = make_atoms_from_doc(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
         slab_final = best_sys[slab_start:slab_end]
         max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
         # Repeat the procedure, but for adsorbates
-        adsorbate_initial = mongo_doc_atoms(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
+        adsorbate_initial = make_atoms_from_doc(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
         adsorbate_final = best_sys[ads_start:ads_end]
         max_adsorbate_movement = utils.find_max_movement(adsorbate_initial, adsorbate_final)
         # Repeat the procedure, but for the relaxed bare slab
-        bare_slab_initial = mongo_doc_atoms(best_sys_pkl['slab']['initial_configuration'])
-        bare_slab_final = mongo_doc_atoms(best_sys_pkl['slab'])
+        bare_slab_initial = make_atoms_from_doc(best_sys_pkl['slab']['initial_configuration'])
+        bare_slab_final = make_atoms_from_doc(best_sys_pkl['slab'])
         max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
 
 
@@ -416,7 +416,7 @@ class DumpToAdsorptionDB(luigi.Task):
                           'movement_data': {'max_surface_movement': max_surface_movement,
                                             'max_adsorbate_movement': max_adsorbate_movement,
                                             'max_bare_slab_movement': max_bare_slab_movement}}
-        best_sys_pkl_slab_ads = mongo_doc(best_sys_pkl['atoms'])
+        best_sys_pkl_slab_ads = make_doc_from_atoms(best_sys_pkl['atoms'])
         best_sys_pkl_slab_ads['initial_configuration'] = best_sys_pkl['slab+ads']['initial_configuration']
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
@@ -568,7 +568,7 @@ class SubmitToFW(luigi.Task):
                         'gasname': self.parameters['gas']['gasname'],
                         'calculation_type': 'gas phase optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
-                    atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
+                    atoms = make_atoms_from_doc(pickle.load(self.input().open())[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        self.parameters['gas']['vasp_settings'],
                                                        max_atoms=self.parameters['bulk']['max_atoms']))
@@ -579,7 +579,7 @@ class SubmitToFW(luigi.Task):
                         'mpid': self.parameters['bulk']['mpid'],
                         'calculation_type': 'unit cell optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
-                    atoms = mongo_doc_atoms(pickle.load(self.input().open())[0])
+                    atoms = make_atoms_from_doc(pickle.load(self.input().open())[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        self.parameters['bulk']['vasp_settings'],
                                                        max_atoms=self.parameters['bulk']['max_atoms']))
@@ -587,7 +587,7 @@ class SubmitToFW(luigi.Task):
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
                 slab_docs = pickle.load(self.input()[0].open())
-                atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
+                atoms_list = [make_atoms_from_doc(slab_doc) for slab_doc in slab_docs
                               if float(np.round(slab_doc['tags']['shift'], 2)) ==
                               float(np.round(self.parameters['slab']['shift'], 2)) and
                               slab_doc['tags']['top'] == self.parameters['slab']['top']]
@@ -619,7 +619,7 @@ class SubmitToFW(luigi.Task):
             # thus not top
             if self.calctype == 'slab_surface_energy':
                 slab_docs = pickle.load(self.input()[0].open())
-                atoms_list = [mongo_doc_atoms(slab_doc) for slab_doc in slab_docs
+                atoms_list = [make_atoms_from_doc(slab_doc) for slab_doc in slab_docs
                               if float(np.round(slab_doc['tags']['shift'], 2)) ==
                               float(np.round(self.parameters['slab']['shift'], 2))]
                 if len(atoms_list) > 0:
@@ -768,7 +768,7 @@ class GenerateBulk(luigi.Task):
             atoms = AseAtomsAdaptor.get_atoms(structure)
             # Dump the atoms object into our pickles
             with self.output().temporary_path() as self.temp_output_path:
-                pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
+                pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
@@ -783,7 +783,7 @@ class GenerateGas(luigi.Task):
         atoms.cell = [20, 20, 20]
         atoms.pbc = [True, True, True]
         with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump([mongo_doc(atoms)], open(self.temp_output_path, 'w'))
+            pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'w'))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
@@ -814,7 +814,7 @@ class GenerateSlabs(luigi.Task):
             bulk_fwid = bulk_doc['fwid']
         else:
             bulk_fwid = None
-        bulk = mongo_doc_atoms(bulk_doc)
+        bulk = make_atoms_from_doc(bulk_doc)
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
@@ -846,7 +846,7 @@ class GenerateSlabs(luigi.Task):
                     'bulk_fwid': bulk_fwid,
                     'slab_generate_settings': self.parameters['slab']['slab_generate_settings'],
                     'get_slab_settings': self.parameters['slab']['get_slab_settings']}
-            slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
+            slabdoc = make_doc_from_atoms(utils.constrain_slab(atoms_slab))
             slabdoc['tags'] = tags
             slabsave.append(slabdoc)
 
@@ -872,7 +872,7 @@ class GenerateSlabs(luigi.Task):
                 atoms_slab.wrap()
 
                 # and if it is not in the database, then save it.
-                slabdoc = mongo_doc(utils.constrain_slab(atoms_slab))
+                slabdoc = make_doc_from_atoms(utils.constrain_slab(atoms_slab))
                 tags = {'type': 'slab',
                         'top': not(top),
                         'mpid': self.parameters['bulk']['mpid'],
@@ -930,7 +930,7 @@ class GenerateSiteMarkers(luigi.Task):
         adsorbate = {'name': 'U', 'atoms': Atoms('U')}
         slab_docs = pickle.load(self.input()[0].open())
         bulk_doc = pickle.load(self.input()[1].open())[0]
-        bulk = mongo_doc_atoms(bulk_doc)
+        bulk = make_atoms_from_doc(bulk_doc)
 
         # Initialize `adslabs_to_save`, which will be a list containing marked slabs (i.e.,
         # adslabs) for us to save
@@ -939,7 +939,7 @@ class GenerateSiteMarkers(luigi.Task):
             # "slab" [atoms class] is the first slab structure in Aux DB that corresponds
             # to the slab that we are looking at. Note that thise any possible repeats of the
             # slab in the database.
-            slab = mongo_doc_atoms(slab_doc)
+            slab = make_atoms_from_doc(slab_doc)
             # Pull out the fwid of the relaxed slab (if there is one)
             if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
                 slab_fwid = slab_doc['fwid']
@@ -1091,8 +1091,8 @@ class MatchCatalogShift(luigi.Task):
         # class to figure out which relaxed structure corresponds to which catalog structure
         else:
             sm = StructureMatcher()
-            cat_structure = AseAtomsAdaptor.get_structure(mongo_doc_atoms(cat_slab_docs[0]))
-            structures = [AseAtomsAdaptor.get_structure(mongo_doc_atoms(doc)) for doc in slab_docs]
+            cat_structure = AseAtomsAdaptor.get_structure(make_atoms_from_doc(cat_slab_docs[0]))
+            structures = [AseAtomsAdaptor.get_structure(make_atoms_from_doc(doc)) for doc in slab_docs]
             scores = [sm.fit(cat_structure, structure) for structure in structures]
             match_index = np.argmin(scores)
             shift = slab_docs[match_index]['tags']['shift']
@@ -1135,7 +1135,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         slab = pickle.load(self.input()[1].open())
 
         # The atoms object for the adslab prior to relaxation
-        adslab0 = mongo_doc_atoms(calc_e_dict['slab+ads']['initial_configuration'])
+        adslab0 = make_atoms_from_doc(calc_e_dict['slab+ads']['initial_configuration'])
         # The number of atoms in the slab also happens to be the index for the first atom
         # of the adsorbate (in the adslab system)
         slab_natoms = slab[0]['atoms']['natoms']
@@ -1242,17 +1242,17 @@ class CalculateEnergy(luigi.Task):
 
         # Load the gas phase energies
         gasEnergies = {}
-        gasEnergies['CO'] = mongo_doc_atoms(pickle.load(inputs[2].open())[0]).get_potential_energy()
-        gasEnergies['H2'] = mongo_doc_atoms(pickle.load(inputs[3].open())[0]).get_potential_energy()
-        gasEnergies['H2O'] = mongo_doc_atoms(pickle.load(inputs[4].open())[0]).get_potential_energy()
+        gasEnergies['CO'] = make_atoms_from_doc(pickle.load(inputs[2].open())[0]).get_potential_energy()
+        gasEnergies['H2'] = make_atoms_from_doc(pickle.load(inputs[3].open())[0]).get_potential_energy()
+        gasEnergies['H2O'] = make_atoms_from_doc(pickle.load(inputs[4].open())[0]).get_potential_energy()
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
         adslab_docs = pickle.load(inputs[0].open())
-        lowest_energy_adslab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), adslab_docs))
-        adslab_energy = mongo_doc_atoms(adslab_docs[lowest_energy_adslab]).get_potential_energy(apply_constraint=False)
+        lowest_energy_adslab = np.argmin(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), adslab_docs))
+        adslab_energy = make_atoms_from_doc(adslab_docs[lowest_energy_adslab]).get_potential_energy(apply_constraint=False)
         # Load the slab relaxed structures, and take the lowest energy one
         slab_docs = pickle.load(inputs[1].open())
-        lowest_energy_slab = np.argmin(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), slab_docs))
-        slab_energy = np.min(map(lambda doc: mongo_doc_atoms(doc).get_potential_energy(apply_constraint=False), slab_docs))
+        lowest_energy_slab = np.argmin(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), slab_docs))
+        slab_energy = np.min(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), slab_docs))
 
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H': gasEnergies['H2']/2.,
@@ -1269,7 +1269,7 @@ class CalculateEnergy(luigi.Task):
         dE = adslab_energy - slab_energy - gas_energy
 
         # Make an atoms object with a single-point calculator that contains the potential energy
-        adjusted_atoms = mongo_doc_atoms(adslab_docs[lowest_energy_adslab])
+        adjusted_atoms = make_atoms_from_doc(adslab_docs[lowest_energy_adslab])
         adjusted_atoms.set_calculator(SinglePointCalculator(adjusted_atoms,
                                                             forces=adjusted_atoms.get_forces(apply_constraint=False),
                                                             energy=dE))
@@ -1475,7 +1475,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
         bulk_doc = pickle.load(bulk_task.output().open())[0]
 
         # Generate the minimum slab depth slab we can
-        bulk = mongo_doc_atoms(bulk_doc)
+        bulk = make_atoms_from_doc(bulk_doc)
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
@@ -1527,9 +1527,9 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
 
         def load_atoms(req):
             doc = pickle.load(req.open())[0]
-            return mongo_doc_atoms(doc)
+            return make_atoms_from_doc(doc)
         doc_list = [pickle.load(req.open())[0] for req in requirements]
-        atoms_list = [mongo_doc_atoms(doc) for doc in doc_list]
+        atoms_list = [make_atoms_from_doc(doc) for doc in doc_list]
 
         # Pull the number of atoms of each slab
         number_atoms = [len(atoms) for atoms in atoms_list]
@@ -1597,7 +1597,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
         bulkmin = np.argmin(map(lambda x: x['results']['energy'], bulk))
 
         # Calculate the movement for each relaxed slab
-        max_surface_movement = [utils.find_max_movement(doc['atoms'], mongo_doc_atoms(doc['initial_configuration']))
+        max_surface_movement = [utils.find_max_movement(doc['atoms'], make_atoms_from_doc(doc['initial_configuration']))
                                 for doc in surface_energy_pkl]
 
         # Make a dictionary of tags to add to the database
@@ -1613,7 +1613,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
                           'surface_energy_info': surface_energy_pkl[0]['processed_data']['surface_energy_info'],
                           'movement_data': {'max_surface_movement': max_surface_movement}}
         processed_data['FW_info']['bulk'] = bulk[bulkmin]['fwid']
-        surface_energy_pkl_slab = mongo_doc(surface_energy_atoms)
+        surface_energy_pkl_slab = make_doc_from_atoms(surface_energy_atoms)
         surface_energy_pkl_slab['initial_configuration'] = surface_energy_pkl[0]['initial_configuration']
         surface_energy_pkl_slab['processed_data'] = processed_data
 

@@ -11,7 +11,7 @@ import tqdm
 from pymongo import MongoClient
 from ase.io.png import write_png
 from . import defaults, utils, vasp_functions
-from .mongo import mongo_doc_atoms
+from .mongo import make_atoms_from_doc
 from bson.objectid import ObjectId
 
 
@@ -35,10 +35,9 @@ def get_mongo_client(collection='adsorption'):
     user = mongo_info['user']
     password = mongo_info['password']
 
-    return None
-    #client = MongoClient(host=host, port=port)
-    #client[database].authenticate(user, password)
-    #return client
+    client = MongoClient(host=host, port=port)
+    client[database].authenticate(user, password)
+    return client
 
 
 def get_docs(client=get_mongo_client(), collection_name='adsorption', fingerprints=None,
@@ -362,7 +361,7 @@ def dump_adsorption_to_json(fname):
         doc['adslab_calculation_date'] = time
 
         # Put the atoms hex in for others to be able to decode it
-        atoms = mongo_doc_atoms(doc)
+        atoms = make_atoms_from_doc(doc)
         _hex = vasp_functions.atoms_to_hex(atoms)
         doc['atoms_hex'] = _hex
 
@@ -384,7 +383,7 @@ databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/c
 
 def writeImages(input):
     doc, adsorbate = input
-    atoms = mongo_doc_atoms(doc)
+    atoms = make_atoms_from_doc(doc)
     slab = atoms.copy()
     ads_pos = slab[0].position
     del slab[0]
@@ -409,7 +408,7 @@ def writeImages(input):
 
 
 def writeAdsorptionImages(doc):
-    atoms = mongo_doc_atoms(doc)
+    atoms = make_atoms_from_doc(doc)
     adslab = atoms.copy()
     size = adslab.positions.ptp(0)
     i = size.argmin()
