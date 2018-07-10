@@ -4,8 +4,6 @@
 # use the enviroment variables as defined by the .gaspyrc.json file.
 
 # Get information from the .gaspyrc.json file
-export GASPY_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gaspy_path"))')"
-export GASDB_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gasdb_path"))')"
 export LUIGI_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("luigi_port"))')"
 export LPAD_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad_path"))')"
 
