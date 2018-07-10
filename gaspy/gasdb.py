@@ -15,32 +15,35 @@ from .mongo import make_atoms_from_doc
 from bson.objectid import ObjectId
 
 
-def get_mongo_client(collection='adsorption'):
+def get_mongo_collection(collection_name='adsorption'):
     '''
     Get a mongo client for a certain collection. This function accesses the client
     using information in the `.gaspyrc.json` file.
 
     Arg:
-        collection  A string indicating the collection you want to access. Currently works
-                    for values such as 'adsorption', 'catalog', 'atoms', 'catalog_readonly',
-                    and 'surface_energy'.
+        collection_name A string indicating the collection you want to access. Currently works
+                        for values such as 'adsorption', 'catalog', 'atoms', 'catalog_readonly',
+                        and 'surface_energy'.
     Returns:
-        client  An instance of `pymongo.MongoClient` that is connected and authenticated
+        collection  An instance of `pymongo.MongoClient` that is connected and authenticated
     '''
     # Fetch the information we need to access the client.
-    mongo_info = utils.read_rc()['mongo_info'][collection]
+    mongo_info = utils.read_rc()['mongo_info'][collection_name]
     host = mongo_info['host']
     port = int(mongo_info['port'])
-    database = mongo_info['database']
+    database_name = mongo_info['database']
     user = mongo_info['user']
     password = mongo_info['password']
 
+    # Access the client and authenticate
     client = MongoClient(host=host, port=port)
-    client[database].authenticate(user, password)
-    return client
+    database = getattr(client, database_name)
+    database.authenticate(user, password)
+    collection = getattr(database, collection_name)
+    return collection
 
 
-def get_docs(client=get_mongo_client(), collection_name='adsorption', fingerprints=None,
+def get_docs(collection_name='adsorption', fingerprints=None,
              adsorbates=None, calc_settings=None, vasp_settings=None,
              energy_min=None, energy_max=None, f_max=None, max_atoms=None,
              ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
@@ -52,8 +55,9 @@ def get_docs(client=get_mongo_client(), collection_name='adsorption', fingerprin
     matching database entry.
 
     Inputs:
-        client              Mongo client object
-        collection_name     The collection name within the client that you want to look at
+        client              String indicating which collection in the database you want to pull from.
+                            A good try would be 'adsorption', 'catalog', 'catalog_readonly',
+                            'atoms', or 'surface_energy'.
         fingerprints        A dictionary of fingerprints and their locations in our
                             mongo documents. For example:
                                 fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
@@ -137,9 +141,9 @@ def get_docs(client=get_mongo_client(), collection_name='adsorption', fingerprin
     # We we're pulling the catalog, then get the read only version of the database
     # so that we pull it even faster.
     if collection_name == 'catalog':
-        collection = getattr(get_mongo_client('catalog_readonly').db, collection_name)
+        collection = get_mongo_collection('catalog_readonly')
     else:
-        collection = getattr(client.db, collection_name)
+        collection = get_mongo_collection(collection_name)
 
     # Create the cursor. We set allowDiskUse=True to allow mongo to write to
     # temporary files, which it needs to do for large databases. We also
@@ -272,13 +276,13 @@ def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
 
     # Fetch mongo docs for our results and catalog databases so that we can
     # start filtering out cataloged sites that we've already simulated.
-    with get_mongo_client('adsorption') as ads_client:
+    with get_mongo_collection('adsorption') as ads_client:
         ads_docs = get_docs(ads_client, 'adsorption',
                             calc_settings=calc_settings,
                             vasp_settings=vasp_settings,
                             fingerprints=fingerprints,
                             adsorbates=adsorbates)
-    with get_mongo_client('catalog_readonly') as cat_client:
+    with get_mongo_collection('catalog_readonly') as cat_client:
         cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
 
     # Use the `split_catalog` function to find the indices in `cat_docs` that correspond
@@ -294,7 +298,7 @@ def remove_duplicates():
     and delete them.
     '''
     # Get the FW info for everything in adsorption DB
-    ads_client = get_mongo_client('adsorption')
+    ads_client = get_mongo_collection('adsorption')
     ads_docs = list(ads_client.db.adsorption.find({}, {'processed_data.FW_info.slab+adsorbate': 1, '_id': 1}))
 
     # Find all of the unique slab+adsorbate FW ID's
@@ -314,7 +318,7 @@ def remove_duplicates():
                 print('Just removed Mongo item %s (duplicate for FWID %s) from adsorption collection' % (mongo_id, fwid))
 
     # Do it all again, but for the AuxDB (AKA the "atoms" collection)
-    atoms_client = get_mongo_client('atoms')
+    atoms_client = get_mongo_collection('atoms')
     atoms_docs = list(atoms_client.db.atoms.find({}, {'fwid': 1, '_id': 1}))
 
     # Find all of the unique slab+adsorbate FW ID's
@@ -475,8 +479,8 @@ def dump_images():
         results = pickle.load(open(databall_template[adsorbate]))
         dft_ids = [a[0]['mongo_id'] for a in results[0]]
         todo = list(set(dft_ids) - set(completed_images))
-        MakeImagesAdsorption(todo, get_mongo_client('adsorption').db.adsorption, completed_images)
+        MakeImagesAdsorption(todo, get_mongo_collection('adsorption').db.adsorption, completed_images)
 
         dft_ids = [(a[0]['mongo_id'], adsorbate) for a in results[1]]
         todo = list(set(dft_ids) - set(completed_images))
-        MakeImages(todo, get_mongo_client('catalog_readonly').db.catalog, completed_images)
+        MakeImages(todo, get_mongo_collection('catalog_readonly').db.catalog, completed_images)
