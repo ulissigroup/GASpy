@@ -14,7 +14,7 @@ RUN chown -R user:group $HOME
 # Install GASpy. Note that we install it by assuming that the user will mount
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
-VOLUME $GASPY_HOME
+#VOLUME $HOME $GASPY_HOME
 ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME:$PYTHONPATH
@@ -81,11 +81,16 @@ RUN source activate GASpy_conda && pip install tpot
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy
 
-# Open up Jupyter during startup.
-# This is optional, and the image should be built as `gaspy_jupyter` instead of `gaspy`
-#COPY open_jupyter.sh $HOME/open_jupyter.sh
-#RUN chown user $HOME/open_jupyter.sh; chgrp group $HOME/open_jupyter.sh
-#CMD ["/home/open_jupyter.sh"]
+# This is floating here for development. Put it up higher when we're done.
+VOLUME $HOME $GASPY_HOME
+
+# Open the tunnel to the Mongo server through a startup script.
+# If the user passes the argument "jupyter" to the script, then Jupyter
+# will be started. The user should connect to the 0.0.0.0:8888 port
+# of the container to access the Jupyter interace.
+COPY --chown=user:group startup.sh /home/startup.sh
+ENTRYPOINT ["/home/startup.sh"]
+CMD ["0"]
 
 # Make the default user `user` instead of `root`
 USER user

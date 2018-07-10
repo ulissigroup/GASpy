@@ -1,8 +1,5 @@
 {
     "luigi_port": "999.99.999.99",
-    "gaspy_path": "/path/to/gaspy",
-    "gasdb_path": "path/to/gasdb",
-    "conda_path": "/path/to/cond",
     "matproj_api_key": "ABC123",
     "gasdb_server":{
         "username": "user",
@@ -16,6 +13,23 @@
         "port": "99999"
         },
     "mongo_info":{
+        "tunneling":{
+            "username": "user",
+            "host": "host.address"},
+        "host_server":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "user": "user",
+            "password": "pw"
+            },
+        "host_server_readonly":{
+            "host": "mongodb02.nersc.gov",
+            "port": "27017",
+            "database": "vasp_zu_vaspsurfaces",
+            "user": "admin_zu_vaspsurfaces",
+            "password": "$TPAHPmj"
+            },
         "atoms":{
             "host": "host.name",
             "port": "99999",
