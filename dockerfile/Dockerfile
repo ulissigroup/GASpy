@@ -34,7 +34,6 @@ ENV PATH /miniconda3/bin:$PATH
 # Install Python
 RUN conda create -n GASpy_conda python
 RUN echo "source activate GASpy_conda" >> /home/.bashrc
-RUN source activate GASpy_conda && pip install pytest
 
 # Install some dependencies for matplotlib that need to be installed via apt-get
 RUN apt-get install -y \
@@ -76,6 +75,7 @@ RUN source activate GASpy_conda && conda install -c matsci \
     pymatgen
 
 # Pip packages
+RUN source activate GASpy_conda && pip install pytest
 RUN source activate GASpy_conda && pip install tpot
 
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
