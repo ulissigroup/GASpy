@@ -166,10 +166,10 @@ class UpdateEnumerations(luigi.Task):
             # Load the configurations
             configs = pickle.load(open(self.input().fn,'rb'))
             # Find the unique configurations based on the fingerprint of each site
-            unq_configs, unq_inds = np.unique(map(lambda x: str([x['shift'],
+            unq_configs, unq_inds = np.unique([str([x['shift'],
                                                                  x['fp']['coordination'],
-                                                                 x['fp']['neighborcoord']]),
-                                                  configs),
+                                                                 x['fp']['neighborcoord']]) for x in
+                                                  configs],
                                               return_index=True)
             # For each configuration, write a doc to the database
             for i in unq_inds:
@@ -331,7 +331,7 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys = best_sys_pkl['atoms']
         # Get the lowest energy bulk structure
         bulk = pickle.load(open(self.input()[2],'rb'))
-        bulkmin = np.argmin(map(lambda x: x['results']['energy'], bulk))
+        bulkmin = np.argmin([x['results']['energy'] for x in bulk])
         # Load the fingerprints of the initial and final state
         fingerprints = pickle.load(open(self.input()[1],'rb'))
         fp_final = fingerprints[0]
@@ -407,7 +407,7 @@ class DumpToAdsorptionDB(luigi.Task):
                                                'slabrepeat': self.parameters['adsorption']['slabrepeat'],
                                                'relaxed': True,
                                                'adsorbates': self.parameters['adsorption']['adsorbates'],
-                                               'adsorbate_names': map(lambda x: str(x['name']), self.parameters['adsorption']['adsorbates']),
+                                               'adsorbate_names': [str(x['name']) for x in self.parameters['adsorption']['adsorbates']],
                                                'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
                           'FW_info': {'slab+adsorbate': best_sys_pkl['slab+ads']['fwid'],
                                       'slab': best_sys_pkl['slab']['fwid'],
@@ -713,7 +713,7 @@ class SubmitToFW(luigi.Task):
                     if len(guess_docs) > 0:
                         guess = guess_docs[0]
                         # Get the initial adsorption site of the identified doc
-                        ads_site = np.array(map(eval, guess['fwname']['adsorption_site'].strip().split()[1:4]))
+                        ads_site = np.array(list(map(eval, guess['fwname']['adsorption_site'].strip().split()[1:4])))
                         atoms = doc['atoms']
                         atomsguess = guess['atoms']
                         # For each adsorbate atom, move it the same relative amount as in the guessed configuration
@@ -861,7 +861,7 @@ class GenerateSlabs(luigi.Task):
             symm_ops = sga_slab.get_symmetry_operations()
             # Create a boolean, "z_invertible", which will be "True" if the top of the slab is
             # the same as the bottom.
-            z_invertible = True in map(lambda x: x.as_dict()['matrix'][2][2] == -1, symm_ops)
+            z_invertible = True in list(map(lambda x: x.as_dict()['matrix'][2][2] == -1, symm_ops))
             # If the bottom is different, then...
             if not z_invertible:
                 # flip the slab upside down...
@@ -1247,12 +1247,12 @@ class CalculateEnergy(luigi.Task):
         gasEnergies['H2O'] = make_atoms_from_doc(pickle.load(open(inputs[4].fn,'rb'))[0]).get_potential_energy()
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
         adslab_docs = pickle.load(open(inputs[0].fn,'rb'))
-        lowest_energy_adslab = np.argmin(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), adslab_docs))
+        lowest_energy_adslab = np.argmin([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in adslab_docs])
         adslab_energy = make_atoms_from_doc(adslab_docs[lowest_energy_adslab]).get_potential_energy(apply_constraint=False)
         # Load the slab relaxed structures, and take the lowest energy one
         slab_docs = pickle.load(open(inputs[1].fn,'rb'))
-        lowest_energy_slab = np.argmin(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), slab_docs))
-        slab_energy = np.min(map(lambda doc: make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False), slab_docs))
+        lowest_energy_slab = np.argmin([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in slab_docs])
+        slab_energy = np.min([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in slab_docs])
 
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H': gasEnergies['H2']/2.,
@@ -1262,8 +1262,8 @@ class CalculateEnergy(luigi.Task):
         # Get the total energy of the stoichiometry amount of gas reference species
         gas_energy = 0
         for ads in self.parameters['adsorption']['adsorbates']:
-            gas_energy += np.sum(map(lambda x: mono_atom_energies[x],
-                                     utils.ads_dict(ads['name']).get_chemical_symbols()))
+            gas_energy += np.sum([mono_atom_energies[x] for x in 
+                                 utils.ads_dict(ads['name']).get_chemical_symbols()])
 
         # Calculate the adsorption energy
         dE = adslab_energy - slab_energy - gas_energy
@@ -1353,7 +1353,7 @@ class EnumerateAlloys(luigi.WrapperTask):
             structure = sga.get_conventional_standard_structure()
             miller_list = get_symmetrically_distinct_miller_indices(structure, self.max_index)
             # pickle.dump(structure,open('./bulks/%s.pkl'%result['task_id'],'w'))
-            return map(lambda x: [result['task_id'], x], miller_list)
+            return [[result['task_id'], x] for x in miller_list]
 
         # Generate all facets for each material in parallel
         all_miller = utils.multimap(processStruc, results)
@@ -1594,7 +1594,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
 
         # Get the lowest energy bulk structure
         bulk = pickle.load(open(self.input()[1].fn,'rb'))
-        bulkmin = np.argmin(map(lambda x: x['results']['energy'], bulk))
+        bulkmin = np.argmin([x['results']['energy'] for x in bulk])
 
         # Calculate the movement for each relaxed slab
         max_surface_movement = [utils.find_max_movement(doc['atoms'], make_atoms_from_doc(doc['initial_configuration']))
