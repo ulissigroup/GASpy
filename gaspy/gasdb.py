@@ -15,11 +15,44 @@ from .mongo import make_atoms_from_doc
 from bson.objectid import ObjectId
 
 
+
+class mongo_collection(object):
+    def __init__(self,collection_name = 'adsorption'):
+        mongo_info = utils.read_rc()['mongo_info'][collection_name]
+        host = mongo_info['host']
+        port = int(mongo_info['port'])
+        database_name = mongo_info['database']
+        user = mongo_info['user']
+        password = mongo_info['password']
+
+        # Access the client and authenticate
+        self.client = MongoClient(host=host, port=port)
+        database = getattr(self.client, database_name)
+        database.authenticate(user, password)
+        self.collection = getattr(database, collection_name)
+        #return collection
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.client.close()
+
+    def find(self, *args, **kwargs):
+        return self.collection.find(*args, **kwargs)
+
+    def count(self, *args, **kwargs):
+        return self.collection.count(*args, **kwargs)
+
+    def insert(self, *args, **kwargs):
+        return self.collection.insert(*args, **kwargs)
+
+
+
 def get_mongo_collection(collection_name='adsorption'):
     '''
     Get a mongo client for a certain collection. This function accesses the client
     using information in the `.gaspyrc.json` file.
-
     Arg:
         collection_name A string indicating the collection you want to access. Currently works
                         for values such as 'adsorption', 'catalog', 'atoms', 'catalog_readonly',
@@ -41,6 +74,7 @@ def get_mongo_collection(collection_name='adsorption'):
     database.authenticate(user, password)
     collection = getattr(database, collection_name)
     return collection
+
 
 
 def get_docs(collection_name='adsorption', fingerprints=None,

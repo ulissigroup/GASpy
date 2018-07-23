@@ -17,7 +17,8 @@ from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 import tqdm
 from . import defaults, readrc
-
+from luigi.parameter import _FrozenOrderedDict
+from collections import OrderedDict
 
 def read_rc(key=None):
     '''
@@ -174,7 +175,7 @@ def remove_adsorbate(adslab):
     del binding_positions[0]
     # `atoms_range` is a list of atom indices for `slab`. We initialize it because
     # we need to reverse it before iterating through (to maintain proper indexing).
-    atoms_range = range(0, len(slab))
+    atoms_range = list(range(0, len(slab)))
     atoms_range.reverse()
 
     # Delete the adsorbates while simultaneously storing the position of the binding atom.
@@ -436,3 +437,10 @@ def map_method(instance, method, inputs, chunked=False, processes=32,
     # Clean up and output
     del globals()['module_instance']
     return outputs
+
+def unfreeze_dict(frozen_dict):
+    frozen_dict = OrderedDict(frozen_dict)
+    for key in frozen_dict:
+        if type(frozen_dict[key])==_FrozenOrderedDict:
+            frozen_dict[key]=unfreeze_dict(frozen_dict[key])
+    return frozen_dict
