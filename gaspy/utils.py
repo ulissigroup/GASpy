@@ -262,6 +262,7 @@ def fingerprint_atoms(atoms):
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
     vnn = VoronoiNN(allow_pathological=True, tol=0.8)
+    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2)
     coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
@@ -278,7 +279,8 @@ def fingerprint_atoms(atoms):
         neighborind = [site[0] for site in enumerate(struct) if i.distance(site[1]) < 0.1][0]
         # [list] of PyMatGen [periodic site class]es for each of the atoms that are coordinated
         # with the adsorbate
-        coord = vnn.get_coordinated_sites(neighborind, 0.2)
+        coord_data = vnn_loose.get_nn_info(struct,neighborind)
+        coord = [atom_data['site'] for atom_data in coord_data]
         # The elemental symbols for all of the 2nd-tier-coordinated atoms in a [list] of
         # [unicode] objects
         coord_symbols = map(lambda x: x.species_string, coord)
@@ -291,7 +293,8 @@ def fingerprint_atoms(atoms):
 
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms_nextnearest = vnn.get_coordinated_sites(0, 0.2)
+    coordinated_atoms_nextnearest_data = vnn_loose.get_nn_info(struct,len(atoms)-1)
+    coordinated_atoms_nextnearest = [atom_data['site'] for atom_data in coordinated_atoms_nextnearest_data]
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string,
                                           coordinated_atoms_nextnearest)
