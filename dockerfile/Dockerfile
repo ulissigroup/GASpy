@@ -35,12 +35,6 @@ ENV PATH /miniconda3/bin:$PATH
 RUN conda create -n GASpy_conda python
 RUN echo "source activate GASpy_conda" >> /home/.bashrc
 
-# Install some dependencies for matplotlib that need to be installed via apt-get
-RUN apt-get install -y \
-    pkg-config \
-    libfreetype6-dev \
-    libpng-dev
-
 # Install conda packages. First we add the matsci and conda-forge channels
 # to the conda, where conda-forge is the default
 RUN source activate GASpy_conda && conda config --prepend channels matsci
@@ -77,6 +71,7 @@ RUN source activate GASpy_conda && conda install -c matsci \
 # Pip packages
 RUN source activate GASpy_conda && pip install pytest
 RUN source activate GASpy_conda && pip install tpot
+RUN source activate GASpy_conda && pip install ipycache
 
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy
