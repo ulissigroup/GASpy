@@ -72,7 +72,7 @@ RUN source activate GASpy_conda && conda install -c matsci \
 # Pip packages
 RUN source activate GASpy_conda && pip install pytest
 RUN source activate GASpy_conda && pip install tpot
-RUN source activate GASpy_conda && pip install ipycache
+RUN source activate GASpy_conda && pip install git+https://github.com/rossant/ipycache.git
 
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy
