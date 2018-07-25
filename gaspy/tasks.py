@@ -304,7 +304,7 @@ class DumpFWToTraj(luigi.Task):
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
-                fhandle.write(atoms_hex.decode('hex'))
+                fhandle.write(utils.decode_hex_to_atoms(atoms_hex))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj' % (self.fwid))
@@ -326,14 +326,14 @@ class DumpToAdsorptionDB(luigi.Task):
 
     def run(self):
         # Load the structure
-        best_sys_pkl = pickle.load(open(self.input()[0],'rb'))
+        best_sys_pkl = pickle.load(open(self.input()[0].fn,'rb'))
         # Extract the atoms object
         best_sys = best_sys_pkl['atoms']
         # Get the lowest energy bulk structure
-        bulk = pickle.load(open(self.input()[2],'rb'))
+        bulk = pickle.load(open(self.input()[2].fn,'rb'))
         bulkmin = np.argmin([x['results']['energy'] for x in bulk])
         # Load the fingerprints of the initial and final state
-        fingerprints = pickle.load(open(self.input()[1],'rb'))
+        fingerprints = pickle.load(open(self.input()[1].fn,'rb'))
         fp_final = fingerprints[0]
         fp_init = fingerprints[1]
 
@@ -362,7 +362,7 @@ class DumpToAdsorptionDB(luigi.Task):
         but for adsorbate atoms.
         '''
         # First, calculate the number of adsorbate atoms
-        num_adsorbate_atoms = len(pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex')))
+        num_adsorbate_atoms = len(utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms']))
 
         # An earlier version of GASpy added the adsorbate to the slab instead of the slab to the
         # adsorbate. Thus, the indexing for the slabs change. Here, we deal with that.
@@ -1023,7 +1023,7 @@ class GenerateAdSlabs(luigi.Task):
         for adsorbate_config in adsorbate_configs:
             # Load the atoms object for the slab and adsorbate
             slab = adsorbate_config['atoms']
-            ads = pickle.loads(self.parameters['adsorption']['adsorbates'][0]['atoms'].decode('hex'))
+            ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
             # Find the position of the marker/adsorbate and the number of slab atoms
             ads_pos = slab[-1].position
             # Delete the marker on the slab, and then put the slab under the adsorbate.
@@ -1122,7 +1122,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         # Here, we take the adsorbate off the slab+ads system
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
-                                                         atoms=str(pickle.dumps(Atoms(''))).encode("utf-8").hex())]
+                                                         atoms=utils.encode_atoms_to_hex(Atoms(''))]
         return [CalculateEnergy(self.parameters),
                 SubmitToFW(parameters=param,
                            calctype='slab+adsorbate')]
@@ -1174,7 +1174,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
         param_slab = copy.deepcopy(self.parameters)
         param_slab['adsorption']['adsorbates'] = \
-            [OrderedDict(name='', atoms=str(pickle.dumps(Atoms(''))).encode("utf-8").hex())]
+            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
         return [GenerateAdSlabs(self.parameters),
                 GenerateAdSlabs(parameters=param_slab)]
 
@@ -1224,7 +1224,7 @@ class CalculateEnergy(luigi.Task):
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
         # calculation because of our code infrastructure.
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=str(pickle.dumps(Atoms(''))).encode("utf-8").hex())]
+        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
 
         # Lastly, we need to relax the base gases.

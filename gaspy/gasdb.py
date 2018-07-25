@@ -24,12 +24,13 @@ class mongo_collection(object):
         database_name = mongo_info['database']
         user = mongo_info['user']
         password = mongo_info['password']
+        real_collection_name = mongo_info['collection']
 
         # Access the client and authenticate
         self.client = MongoClient(host=host, port=port)
         database = getattr(self.client, database_name)
         database.authenticate(user, password)
-        self.collection = getattr(database, collection_name)
+        self.collection = getattr(database, real_collection_name)
         #return collection
 
     def __enter__(self):

@@ -19,6 +19,7 @@ import tqdm
 from . import defaults, readrc
 from luigi.parameter import _FrozenOrderedDict
 from collections import OrderedDict
+import codecs
 
 def read_rc(key=None):
     '''
@@ -263,6 +264,16 @@ def fingerprint_atoms(atoms):
     struct = AseAtomsAdaptor.get_structure(atoms)
     vnn = VoronoiNN(allow_pathological=True, tol=0.8)
     vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2)
+
+    #Test to see if the central atom is entirely on it's own, if so it is not coordinated, so skip the voronoi bit
+    # which would throw a QHULL error
+    num_cutoff_neighbors = [site[0] for site in enumerate(struct) if 0.1<struct[len(atoms)-1].distance(site[1])<7.0]
+    if len(num_cutoff_neighbors)==0:
+        return {'coordination': '',
+            'neighborcoord': '',
+            'natoms': len(atoms),
+            'nextnearestcoordination': ''}
+
     coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
@@ -447,3 +458,9 @@ def unfreeze_dict(frozen_dict):
         if type(frozen_dict[key])==_FrozenOrderedDict:
             frozen_dict[key]=unfreeze_dict(frozen_dict[key])
     return frozen_dict
+
+def encode_atoms_to_hex(atoms):
+    return str(pickle.dumps(atoms)).encode("utf-8").hex()
+
+def decode_hex_to_atoms(hexstr):
+    return pickle.loads(eval(codecs.decode(hexstr,"hex_codec")))
