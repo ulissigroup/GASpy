@@ -14,6 +14,7 @@ RUN chown -R user:group $HOME
 # Install GASpy. Note that we install it by assuming that the user will mount
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
+#RUN mkdir -p $GASPY_HOME
 #VOLUME $HOME $GASPY_HOME
 ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
@@ -34,12 +35,6 @@ ENV PATH /miniconda3/bin:$PATH
 # Install Python
 RUN conda create -n GASpy_conda python
 RUN echo "source activate GASpy_conda" >> /home/.bashrc
-
-# Install some dependencies for matplotlib that need to be installed via apt-get
-RUN apt-get install -y \
-    pkg-config \
-    libfreetype6-dev \
-    libpng-dev
 
 # Install conda packages. First we add the matsci and conda-forge channels
 # to the conda, where conda-forge is the default
@@ -77,11 +72,13 @@ RUN source activate GASpy_conda && conda install -c matsci \
 # Pip packages
 RUN source activate GASpy_conda && pip install pytest
 RUN source activate GASpy_conda && pip install tpot
+RUN source activate GASpy_conda && pip install git+https://github.com/rossant/ipycache.git
 
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy
 
 # This is floating here for development. Put it up higher when we're done.
+RUN mkdir -p $GASPY_HOME
 VOLUME $HOME $GASPY_HOME
 
 # Open the tunnel to the Mongo server through a startup script.
