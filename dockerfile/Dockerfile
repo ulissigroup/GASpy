@@ -14,6 +14,7 @@ RUN chown -R user:group $HOME
 # Install GASpy. Note that we install it by assuming that the user will mount
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
+#RUN mkdir -p $GASPY_HOME
 #VOLUME $HOME $GASPY_HOME
 ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
@@ -77,6 +78,7 @@ RUN source activate GASpy_conda && pip install ipycache
 RUN source activate GASpy_conda && conda update numpy
 
 # This is floating here for development. Put it up higher when we're done.
+RUN mkdir -p $GASPY_HOME
 VOLUME $HOME $GASPY_HOME
 
 # Open the tunnel to the Mongo server through a startup script.
