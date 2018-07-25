@@ -196,7 +196,7 @@ class UpdateEnumerations(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class DumpToAuxDB(luigi.Task):
@@ -430,7 +430,7 @@ class DumpToAdsorptionDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class SubmitToFW(luigi.Task):
@@ -750,7 +750,7 @@ class SubmitToFW(luigi.Task):
                     utils.print_dict(fw.name, indent=1)
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class GenerateBulk(luigi.Task):
@@ -771,7 +771,7 @@ class GenerateBulk(luigi.Task):
                 pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class GenerateGas(luigi.Task):
@@ -786,7 +786,7 @@ class GenerateGas(luigi.Task):
             pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class GenerateSlabs(luigi.Task):
@@ -891,7 +891,7 @@ class GenerateSlabs(luigi.Task):
         return
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class GenerateSiteMarkers(luigi.Task):
@@ -993,7 +993,7 @@ class GenerateSiteMarkers(luigi.Task):
             pickle.dump(adslabs_to_save, open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class GenerateAdSlabs(luigi.Task):
@@ -1059,7 +1059,7 @@ class GenerateAdSlabs(luigi.Task):
             pickle.dump(adsorbate_configs, open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class MatchCatalogShift(luigi.Task):
@@ -1102,7 +1102,7 @@ class MatchCatalogShift(luigi.Task):
             pickle.dump(shift, open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class FingerprintRelaxedAdslab(luigi.Task):
@@ -1154,7 +1154,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
             pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class FingerprintUnrelaxedAdslabs(luigi.Task):
@@ -1198,7 +1198,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
             pickle.dump(adslabs, open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class CalculateEnergy(luigi.Task):
@@ -1295,7 +1295,7 @@ class CalculateEnergy(luigi.Task):
                   dE))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class EnumerateAlloys(luigi.WrapperTask):
@@ -1568,7 +1568,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
             pickle.dump(towrite, open(self.temp_output_path, 'wb'))
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
 
 
 class DumpToSurfaceEnergyDB(luigi.Task):
@@ -1627,4 +1627,4 @@ class DumpToSurfaceEnergyDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s.pkl' % (self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
