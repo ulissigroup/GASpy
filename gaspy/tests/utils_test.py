@@ -5,13 +5,14 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
 from ..utils import find_adsorption_sites
+from ..utils import encode_atoms_to_hex, decode_hex_to_atoms
 
 # Things we need to do the tests
 import numpy as np
 import numpy.testing as npt
 from .baselines import get_standard_structure
 from .regression_tests.pymatgen_regression_test import _get_sites_for_standard_structure
-
+from ase import Atoms
 
 def test_find_adsorption_sites():
     '''
@@ -22,3 +23,12 @@ def test_find_adsorption_sites():
     standard_sites = _get_sites_for_standard_structure()['all']
     sites = find_adsorption_sites(get_standard_structure())
     npt.assert_allclose(np.array(sites), np.array(standard_sites), rtol=1e-5, atol=-1e-7)
+
+
+
+def test_encode_decode():
+    '''
+    Test the encode/decode from atoms to hex and back
+    '''
+    atoms = Atoms('CC')
+    npt.assert_equal(atoms,decode_hex_to_atoms(encode_atoms_to_hex(atoms)))
