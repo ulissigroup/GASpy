@@ -11,11 +11,15 @@ RUN groupadd -r group && \
 RUN cp /root/.bashrc $HOME
 RUN chown -R user:group $HOME
 
+# Add some things to the .bashrc file to make life easier.
+COPY bashrc_additions.sh .
+RUN cat bashrc_additions.sh >> /home/.bashrc
+RUN rm bashrc_additions.sh
+
 # Install GASpy. Note that we install it by assuming that the user will mount
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
-#RUN mkdir -p $GASPY_HOME
-#VOLUME $HOME $GASPY_HOME
+RUN mkdir -p $GASPY_HOME
 ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME:$PYTHONPATH
@@ -34,7 +38,7 @@ RUN rm Miniconda3-4.5.4-Linux-x86_64.sh $HOME/.bashrc-miniconda3.bak
 ENV PATH /miniconda3/bin:$PATH
 # Install Python
 RUN conda create -n GASpy_conda python
-RUN echo "source activate GASpy_conda" >> /home/.bashrc
+RUN echo "source activate GASpy_conda" >> $HOME/.bashrc
 
 # Install conda packages. First we add the matsci and conda-forge channels
 # to the conda, where conda-forge is the default
@@ -77,8 +81,11 @@ RUN source activate GASpy_conda && pip install git+https://github.com/rossant/ip
 # Make sure numpy is up-to-date. This is a hack to fix some building errors.
 RUN source activate GASpy_conda && conda update numpy
 
-# This is floating here for development. Put it up higher when we're done.
-RUN mkdir -p $GASPY_HOME
+# The $HOME mount is so that you can pass your `~/.ssh` folder
+# into the container, which will allow you to ssh wherever.
+# The $GASPY_HOME mount is so that you can use whatever version of GASpy.
+# We do this near the end because we can't modify mounted folders after
+# declaring them as volumes.
 VOLUME $HOME $GASPY_HOME
 
 # Open the tunnel to the Mongo server through a startup script.
