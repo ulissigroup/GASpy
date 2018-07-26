@@ -1,5 +1,6 @@
 {
     "luigi_port": "999.99.999.99",
+    "gasdb_path": "/path/to/gasdb",
     "matproj_api_key": "ABC123",
     "gasdb_server":{
         "username": "user",
@@ -24,16 +25,17 @@
             "password": "pw"
             },
         "host_server_readonly":{
-            "host": "mongodb02.nersc.gov",
-            "port": "27017",
-            "database": "vasp_zu_vaspsurfaces",
-            "user": "admin_zu_vaspsurfaces",
-            "password": "$TPAHPmj"
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "user": "user",
+            "password": "pw"
             },
         "atoms":{
             "host": "host.name",
             "port": "99999",
             "database": "database",
+            "collection_name": "collection_name",
             "user": "user",
             "password": "pw"
             },
@@ -41,6 +43,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
+            "collection_name": "collection_name",
             "user": "user",
             "password": "pw"
             },
@@ -48,7 +51,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection": "surface_energy",
+            "collection_name": "collection_name",
             "user": "user",
             "password": "pw"
             },
@@ -56,7 +59,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection": "catalog",
+            "collection_name": "collection_name",
             "user": "user",
             "password": "pw"
             },
@@ -64,7 +67,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection": "catalog",
+            "collection_name": "collection_name",
             "user": "user",
             "password": "pw"
             }
