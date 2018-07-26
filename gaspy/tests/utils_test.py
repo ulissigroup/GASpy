@@ -15,7 +15,7 @@ from .learning_tests.pymatgen_test import _get_sites_for_standard_structure
 
 def test_find_adsorption_sites():
     '''
-    Check out `.regression_tests.pymatgen_regression_test._get_sites_for_standard_structure`
+    Check out `.learning_tests.pymatgen_test._get_sites_for_standard_structure`
     to see what pymatgen gives us. Our `gaspy.utils.find_adsorption_sites` simply gives us
     the value of that object when the key is 'all'.
     '''
