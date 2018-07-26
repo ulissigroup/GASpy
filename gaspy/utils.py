@@ -19,7 +19,7 @@ import tqdm
 from . import defaults, readrc
 from luigi.parameter import _FrozenOrderedDict
 from collections import OrderedDict
-import codecs
+
 
 def read_rc(key=None):
     '''
@@ -267,12 +267,12 @@ def fingerprint_atoms(atoms):
 
     #Test to see if the central atom is entirely on it's own, if so it is not coordinated, so skip the voronoi bit
     # which would throw a QHULL error
-    num_cutoff_neighbors = [site[0] for site in enumerate(struct) if 0.1<struct[len(atoms)-1].distance(site[1])<7.0]
-    if len(num_cutoff_neighbors)==0:
+    num_cutoff_neighbors = [site[0] for site in enumerate(struct) if 0.1 < struct[len(atoms)-1].distance(site[1]) < 7.0]
+    if len(num_cutoff_neighbors) == 0:
         return {'coordination': '',
-            'neighborcoord': '',
-            'natoms': len(atoms),
-            'nextnearestcoordination': ''}
+                'neighborcoord': '',
+                'natoms': len(atoms),
+                'nextnearestcoordination': ''}
 
     coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
@@ -290,7 +290,7 @@ def fingerprint_atoms(atoms):
         neighborind = [site[0] for site in enumerate(struct) if i.distance(site[1]) < 0.1][0]
         # [list] of PyMatGen [periodic site class]es for each of the atoms that are coordinated
         # with the adsorbate
-        coord_data = vnn_loose.get_nn_info(struct,neighborind)
+        coord_data = vnn_loose.get_nn_info(struct, neighborind)
         coord = [atom_data['site'] for atom_data in coord_data]
         # The elemental symbols for all of the 2nd-tier-coordinated atoms in a [list] of
         # [unicode] objects
@@ -304,7 +304,7 @@ def fingerprint_atoms(atoms):
 
     # [list] of PyMatGen [periodic site class]es for each of the atoms that are
     # coordinated with the adsorbate
-    coordinated_atoms_nextnearest_data = vnn_loose.get_nn_info(struct,len(atoms)-1)
+    coordinated_atoms_nextnearest_data = vnn_loose.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms_nextnearest = [atom_data['site'] for atom_data in coordinated_atoms_nextnearest_data]
     # The elemental symbols for all of the coordinated atoms in a [list] of [unicode] objects
     coordinated_symbols_nextnearest = map(lambda x: x.species_string,
@@ -452,15 +452,30 @@ def map_method(instance, method, inputs, chunked=False, processes=32,
     del globals()['module_instance']
     return outputs
 
+
 def unfreeze_dict(frozen_dict):
     frozen_dict = OrderedDict(frozen_dict)
     for key in frozen_dict:
-        if type(frozen_dict[key])==_FrozenOrderedDict:
-            frozen_dict[key]=unfreeze_dict(frozen_dict[key])
+        if type(frozen_dict[key]) == _FrozenOrderedDict:
+            frozen_dict[key] = unfreeze_dict(frozen_dict[key])
     return frozen_dict
 
-def encode_atoms_to_hex(atoms):
-    return str(pickle.dumps(atoms)).encode("utf-8").hex()
 
-def decode_hex_to_atoms(hexstr):
-    return pickle.loads(eval(codecs.decode(hexstr,"hex_codec")))
+def encode_atoms_to_hex(atoms):
+    '''
+    Encode an atoms object into a hex string. Useful when trying to
+    store atoms objects into jsons.
+    '''
+    atoms_bytes = pickle.dumps(atoms)
+    atoms_hex = atoms_bytes.hex()
+    return atoms_hex
+
+
+def decode_hex_to_atoms(atoms_hex):
+    '''
+    Decode a hex string into an atoms object. Useful when trying to
+    read atoms objects from jsons.
+    '''
+    atoms_bytes = bytes.fromhex(atoms_hex)
+    atoms = pickle.loads(atoms_bytes)
+    return atoms
