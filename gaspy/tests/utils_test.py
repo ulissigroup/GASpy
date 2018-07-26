@@ -10,7 +10,7 @@ from ..utils import find_adsorption_sites, encode_atoms_to_hex, decode_hex_to_at
 import numpy as np
 import numpy.testing as npt
 from .baselines import get_standard_atoms, get_standard_structure
-from .regression_tests.pymatgen_regression_test import _get_sites_for_standard_structure
+from .learning_tests.pymatgen_test import _get_sites_for_standard_structure
 
 
 def test_find_adsorption_sites():
