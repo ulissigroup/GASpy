@@ -8,7 +8,7 @@ from collections import OrderedDict
 import pickle
 from ase import Atoms
 import ase.constraints
-
+from gaspy import utils
 
 def fingerprints(simulated=False):
     '''
@@ -337,7 +337,7 @@ def adsorption_parameters(adsorbate,
                        num_slab_atoms=num_slab_atoms,
                        slabrepeat=slabrepeat,
                        adsorbates=[OrderedDict(name=name,
-                                               atoms=utils.encode_atoms_to_hex(Atoms('')),
+                                               atoms=utils.encode_atoms_to_hex(atoms),
                                                adsorption_site=adsorption_site)],
                        vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=200,

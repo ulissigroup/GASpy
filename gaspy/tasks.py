@@ -188,7 +188,7 @@ class UpdateEnumerations(luigi.Task):
                                                        'adsorbate': config['adsorbate'],
                                                        'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
-                catalog_client.write(slabadsdoc)
+                catalog_client.insert_one(slabadsdoc)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -279,7 +279,7 @@ class DumpToAuxDB(luigi.Task):
                         if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     # Write the doc onto the Auxiliary database
-                    atoms_client.write(doc)
+                    atoms_client.insert_one(doc)
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB: ' % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
                     # And while we're at it, dump the traj files, too
@@ -422,7 +422,7 @@ class DumpToAdsorptionDB(luigi.Task):
         # Write the entry into the database
 
         with gasdb.mongo_collection('adsorption') as adsorption_client:
-            adsorption_client.write(best_sys_pkl_slab_ads)
+            adsorption_client.insert_one(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
@@ -1174,7 +1174,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
         param_slab = copy.deepcopy(self.parameters)
         param_slab['adsorption']['adsorbates'] = \
-            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
+            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [GenerateAdSlabs(self.parameters),
                 GenerateAdSlabs(parameters=param_slab)]
 
@@ -1224,7 +1224,8 @@ class CalculateEnergy(luigi.Task):
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
         # calculation because of our code infrastructure.
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
+        param['adsorption']['adsorbates'] = [OrderedDict(name='', 
+                                                 atoms=utils.encode_atoms_to_hex(Atoms('')))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
 
         # Lastly, we need to relax the base gases.
@@ -1619,7 +1620,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
 
         # Write the entry into the database
         with gasdb.mongo_collection('surface_energy') as surface_energy_client:
-            surface_energy_client.write(surface_energy_pkl_slab)
+            surface_energy_client.insert_one(surface_energy_pkl_slab)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:

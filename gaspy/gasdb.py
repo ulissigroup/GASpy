@@ -48,7 +48,8 @@ class mongo_collection(object):
     def insert(self, *args, **kwargs):
         return self.collection.insert(*args, **kwargs)
 
-
+    def insert_one(self, *args, **kwargs):
+        return self.collection.insert_one(*args, **kwargs)
 
 def get_mongo_collection(collection_name='adsorption'):
     '''
