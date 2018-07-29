@@ -1122,7 +1122,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         # Here, we take the adsorbate off the slab+ads system
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
-                                                         atoms=utils.encode_atoms_to_hex(Atoms(''))]
+                                                         atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [CalculateEnergy(self.parameters),
                 SubmitToFW(parameters=param,
                            calctype='slab+adsorbate')]
