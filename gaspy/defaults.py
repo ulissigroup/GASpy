@@ -5,53 +5,82 @@ submodules.
 
 import copy
 from collections import OrderedDict
-import pickle
 from ase import Atoms
 import ase.constraints
+from . import utils
 
 
-def fingerprints(simulated=False):
+def adsorption_fingerprints():
     '''
-    WARNING:  A lot of code depends on this. Do not add any queries that rely on final
-    fingerprinting information. Do not take anything out without thinking real hard
-    about it. Adding stuff is probably ok, but only if the query works on the catalog,
-    as well.
+    WARNING:  A lot of code depends on this. Do not take anything out without thinking
+    very hard about it.
 
     Returns a dictionary that is meant to be passed to mongo aggregators to create
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
     are where you can find the information from the old mongo docs (in our databases).
-    This function pairs well with the `gaspy.utils.get_cursor` function.
-
-    Note that our code implicitly assumes an identical document structure between all
-    of the collections that it looks at.
-
-    Arg:
-        simulated   A boolean indicating whether or not you want the fingerprints
-                    of a simulated (on non-simulated) datum.
     '''
-    if simulated:
-        fingerprints = {'mongo_id': '$_id',
-                        'mpid': '$processed_data.calculation_info.mpid',
-                        'formula': '$processed_data.calculation_info.formula',
-                        'miller': '$processed_data.calculation_info.miller',
-                        'shift': '$processed_data.calculation_info.shift',
-                        'top': '$processed_data.calculation_info.top',
-                        'coordination': '$processed_data.fp_final.coordination',
-                        'neighborcoord': '$processed_data.fp_final.neighborcoord',
-                        'nextnearestcoordination': '$processed_data.fp_final.nextnearestcoordination',
-                        'energy': '$results.energy',
-                        'adsorbates': '$processed_data.calculation_info.adsorbate_names',
-                        'adslab_calculation_date': '$processed_data.FW_info.adslab_calculation_date'}
-    else:
-        fingerprints = {'mongo_id': '$_id',
-                        'mpid': '$processed_data.calculation_info.mpid',
-                        'formula': '$processed_data.calculation_info.formula',
-                        'miller': '$processed_data.calculation_info.miller',
-                        'shift': '$processed_data.calculation_info.shift',
-                        'top': '$processed_data.calculation_info.top',
-                        'coordination': '$processed_data.fp_init.coordination',
-                        'neighborcoord': '$processed_data.fp_init.neighborcoord',
-                        'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
+    fingerprints = {'mongo_id': '$_id',
+                    'mpid': '$processed_data.calculation_info.mpid',
+                    'formula': '$processed_data.calculation_info.formula',
+                    'miller': '$processed_data.calculation_info.miller',
+                    'shift': '$processed_data.calculation_info.shift',
+                    'top': '$processed_data.calculation_info.top',
+                    'coordination': '$processed_data.fp_final.coordination',
+                    'neighborcoord': '$processed_data.fp_final.neighborcoord',
+                    'nextnearestcoordination': '$processed_data.fp_final.nextnearestcoordination',
+                    'energy': '$results.energy',
+                    'adsorbates': '$processed_data.calculation_info.adsorbate_names',
+                    'adslab_calculation_date': '$processed_data.FW_info.adslab_calculation_date'}
+    return fingerprints
+
+
+def adsorption_filters():
+    '''
+    Not all of our adsorption calculations are "good" ones. Some end up in desorptions,
+    dissociations, do not converge, or have ridiculous energies. These are the
+    filters we use to sift out these "bad" documents.
+    '''
+    filters = {}
+
+    # Easy-to-read (and change) filters before we distribute them
+    # into harder-to-read (but mongo-readable) structures
+    energy_min = -4.            # Minimum adsorption energy [eV]
+    energy_max = 4.             # Maximum adsorption energy [eV]
+    f_max = 0.5                 # Maximum atomic force [eV/Ang]
+    ads_move_max = 1.5          # Maximum distance the adsorbate can move [Ang]
+    bare_slab_move_max = 0.5    # Maximum distance that any atom can move on bare slab [Ang]
+    slab_move_max = 1.5         # Maximum distance that any slab atom can move after adsorption [Ang]
+
+    # Distribute filters into mongo-readable form
+    filters['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
+    filters['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    filters['processed_data.movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
+    filters['processed_data.movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
+    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': slab_move_max}
+    _calc_settings = calc_settings()
+    filters['processed_data.vasp_settings.gga'] = _calc_settings['gga']
+
+    return filters
+
+
+def catalog_fingerprints():
+    '''
+    WARNING:  A lot of code depends on this. Do not take anything out without thinking
+    very hard about it.
+
+    Returns a dictionary that is meant to be passed to mongo aggregators to create
+    new mongo docs. The keys here are the keys for the new mongo doc, and the values
+    are where you can find the information from the old mongo docs (in our databases).
+    '''
+    fingerprints = {'mongo_id': '$_id',
+                    'mpid': '$processed_data.calculation_info.mpid',
+                    'formula': '$processed_data.calculation_info.formula',
+                    'miller': '$processed_data.calculation_info.miller',
+                    'shift': '$processed_data.calculation_info.shift',
+                    'top': '$processed_data.calculation_info.top',
+                    'coordination': '$processed_data.fp_init.coordination',
+                    'neighborcoord': '$processed_data.fp_init.neighborcoord',
+                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
     return fingerprints
 
 
@@ -68,9 +97,9 @@ def exchange_correlational_settings():
                    'gga': {'pp': 'GGA'},
                    'pbe': {'pp': 'PBE'},
                    'revpbe': {'pp': 'LDA', 'gga': 'RE'},
-                   'rpbe': {'pp': 'LDA', 'gga': 'RP'},
+                   'rpbe': OrderedDict(gga='RP', pp='PBE'),
                    'am05': {'pp': 'LDA', 'gga': 'AM'},
-                   'pbesol': {'pp': 'LDA', 'gga': 'PS'},
+                   'pbesol': OrderedDict(gga='PS', pp='PBE'),
                    # Meta-GGAs
                    'tpss': {'pp': 'PBE', 'metagga': 'TPSS'},
                    'revtpss': {'pp': 'PBE', 'metagga': 'RTPSS'},
@@ -102,35 +131,27 @@ def exchange_correlational_settings():
     return xc_settings
 
 
-def xc_settings(xc):
+def calc_settings(xc='rpbe'):
     '''
-    This function is where we populate the default calculation settings we want for each
-    specific xc (exchange correlational)
-    '''
-    # If we choose `rpbe`, then define default calculations that are different from
-    # what Vaspy recommends.
-    if xc == 'rpbe':
-        settings = OrderedDict(gga='RP', pp='PBE')
-    # Otherwise, simply listen to Vaspy
-    elif xc == 'pbesol':
-        settings = OrderedDict(gga='PS', pp='PBE')
-    else:
-        settings = OrderedDict(exchange_correlational_settings()[xc])
+    The default calculational settings for GASpy to use.
 
-    return settings
-
-
-def calc_settings(xc):
+    Arg:
+        xc  A string indicating which exchange correlational to use. This argument
+            is used to pick which settings to use within the
+            `gaspy.defaults.exchange_correlational_settings()` dictionary, so
+            refer to that for valid settings of `xc`.
+    Returns:
+        settings    An OrderedDict containing the default energy cutoff,
+                    VASP pseudo-potential version number (pp_version), and
+                    exchange-correlational settings.
     '''
-    This function defines the default calculational settings for GASpy to use
-    '''
-    # Standard settings to use regardless of xc (exchange correlational)
+    # Standard settings to use regardless of exchange correlational
     settings = OrderedDict({'encut': 350, 'pp_version': '5.4'})
 
     # Call on the xc_settings function to define the rest of the settings
-    default_settings = xc_settings(xc)
-    for key in default_settings:
-        settings[key] = default_settings[key]
+    xc_settings = exchange_correlational_settings()
+    for key, value in xc_settings[xc].items():
+        settings[key] = value
 
     return settings
 
@@ -325,10 +346,8 @@ def adsorption_parameters(adsorbate,
     # Use EAFP to figure out if the adsorbate that the user passed is in the
     # dictionary of default adsorbates, or if the user supplied an atoms object
     try:
-        atoms = adsorbates_dict()[adsorbate]
         name = adsorbate
     except TypeError:
-        atoms = adsorbate
         name = adsorbate.get_chemical_formula()
 
     return OrderedDict(numtosubmit=2,
@@ -348,18 +367,3 @@ def adsorption_parameters(adsorbate,
                                                  ediffg=-0.03,
                                                  symprec=1e-10,
                                                  **settings))
-
-
-def filters_for_adsorption_docs():
-    '''
-    Not all of our adsorption calculations are "good" ones. Some end up in desorptions,
-    dissociations, do not converge, or have ridiculous energies. These are the
-    filters we use to sift out these "bad" documents.
-    '''
-    filters = dict(energy_min=-4.,
-                   energy_max=4.,
-                   f_max=0.5,
-                   ads_move_max=1.5,
-                   bare_slab_move_max=0.5,
-                   slab_move_max=1.5)
-    return filters

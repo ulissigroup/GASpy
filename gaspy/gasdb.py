@@ -1,8 +1,9 @@
-''' Various functions that may be used across GASpy and its submodules '''
+''' These tools form gaspy's API to its databases '''
 
 import warnings
 from itertools import islice
 import json
+from bson.objectid import ObjectId
 import pickle
 from multiprocessing import Pool
 import glob
@@ -12,193 +13,292 @@ from pymongo import MongoClient
 from ase.io.png import write_png
 from . import defaults, utils, vasp_functions
 from .mongo import make_atoms_from_doc
-from bson.objectid import ObjectId
 
 
-
-class mongo_collection(object):
-    def __init__(self,collection_name = 'adsorption'):
-        mongo_info = utils.read_rc()['mongo_info'][collection_name]
-        host = mongo_info['host']
-        port = int(mongo_info['port'])
-        database_name = mongo_info['database']
-        user = mongo_info['user']
-        password = mongo_info['password']
-        real_collection_name = mongo_info['collection']
-
-        # Access the client and authenticate
-        self.client = MongoClient(host=host, port=port)
-        database = getattr(self.client, database_name)
-        database.authenticate(user, password)
-        self.collection = getattr(database, real_collection_name)
-        #return collection
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.client.close()
-
-    def find(self, *args, **kwargs):
-        return self.collection.find(*args, **kwargs)
-
-    def count(self, *args, **kwargs):
-        return self.collection.count(*args, **kwargs)
-
-    def insert(self, *args, **kwargs):
-        return self.collection.insert(*args, **kwargs)
-
-
-
-def get_mongo_collection(collection_name='adsorption'):
+def count_docs(collection_tag, **kwargs):
     '''
-    Get a mongo client for a certain collection. This function accesses the client
-    using information in the `.gaspyrc.json` file.
-    Arg:
-        collection_name A string indicating the collection you want to access. Currently works
-                        for values such as 'adsorption', 'catalog', 'atoms', 'catalog_readonly',
-                        and 'surface_energy'.
+    This is wrapper for pymongo.MongoClient.database.collection.count method.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
+
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        kwargs          All the keyword arguments that you want to pass to the `count` method
     Returns:
-        collection  An instance of `pymongo.MongoClient` that is connected and authenticated
+        docs    An integer corresponding to the number of documents in the collection
+                that match the search criteria you gave via kwargs
     '''
-    # Fetch the information we need to access the client.
-    mongo_info = utils.read_rc()['mongo_info'][collection_name]
+    count = _access_collection_method(collection_tag=collection_tag, method_name='count', **kwargs)
+    return count
+
+
+def insert_one_doc(collection_tag, **kwargs):
+    '''
+    This is wrapper for pymongo.MongoClient.database.collection.insert method.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
+
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        kwargs          All the keyword arguments that you want to pass to the `insert` method
+    '''
+    _access_collection_method(collection_tag=collection_tag, method_name='insert_one', **kwargs)
+
+
+def _access_collection_method(collection_tag, method_name, **kwargs):
+    '''
+    This is wrapper for arbitrary pymongo.MongoClient.database.collection.* methods.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
+
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        method_name     A string corresponding to the name of the method of
+                        `pymongo.Mongoclient.database.collection` that you want to call
+        kwargs          All the keyword arguments that you want to pass to the method you specified
+    Returns:
+        output  The output of whatever method you called according to the args and
+                kwargs you supplied.
+    '''
+
+    # Get the mongo information
+    mongo_info = utils.read_rc()['mongo_info'][collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']
     user = mongo_info['user']
     password = mongo_info['password']
+    collection_name = mongo_info['collection_name']
 
-    # Access the client and authenticate
+    # Access the client, authenticate, and call/return the method
     client = MongoClient(host=host, port=port)
-    database = getattr(client, database_name)
-    database.authenticate(user, password)
-    collection = getattr(database, collection_name)
-    return collection
+    with MongoClient(host=host, port=port) as client:
+        database = getattr(client, database_name)
+        database.authenticate(user, password)
+        collection = getattr(database, collection_name)
+        method = getattr(collection, method_name)
+        output = method(**kwargs)
+    return output
 
 
-
-def get_docs(collection_name='adsorption', fingerprints=None,
-             adsorbates=None, calc_settings=None, vasp_settings=None,
-             energy_min=None, energy_max=None, f_max=None, max_atoms=None,
-             ads_move_max=None, bare_slab_move_max=None, slab_move_max=None):
+def find_docs(collection_tag, **kwargs):
     '''
-    This function uses a mongo aggregator to find unique mongo docs and then returns them
-    in two different forms:  a "raw" form (list of dicts) and a "parsed" form (dict of lists).
-    Note that since we use a mongo aggregator, this function will return only unique mongo
-    docs (as per the fingerprints supplied by the user); do not expect a mongo doc per
-    matching database entry.
+    This is wrapper for pymongo.MongoClient.database.collection.find method.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
 
-    Inputs:
-        client              String indicating which collection in the database you want to pull from.
-                            A good try would be 'adsorption', 'catalog', 'catalog_readonly',
-                            'atoms', or 'surface_energy'.
-        fingerprints        A dictionary of fingerprints and their locations in our
-                            mongo documents. For example:
-                                fingerprints = {'mpid': '$processed_data.calculation_info.mpid',
-                                                'coordination': '$processed_data.fp_init.coordination'}
-                            If `None`, then pull the default set of fingerprints.
-                            If 'simulated', then pull the default set of fingerprints for
-                            simulated documents.
-        adsorbates          A list of adsorbates that you want to find matches for
-        calc_settings       An optional argument that will only pull out data with these
-                            calc settings (e.g., 'beef-vdw' or 'rpbe').
-        vasp_settings       An optional argument that will only pull out data with these
-                            vasp settings. Any assignments to `gga` here will overwrite
-                            `calc_settings`.
-        energy_min          The minimum adsorption energy to pull from the Local DB (eV)
-        energy_max          The maximum adsorption energy to pull from the Local DB (eV)
-        f_max               The upper limit on the maximum force on an atom in the system
-        max_atoms           The maximum number of atoms in the system that you want to pull
-        ads_move_max        The maximum distance that an adsorbate atom may move (angstrom)
-        bare_slab_move_max  The maxmimum distance that a slab atom may move when it is relaxed
-                            without an adsorbate (angstrom)
-        slab_move_max       The maximum distance that a slab atom may move (angstrom)
-    Output:
-        docs    Mongo docs; a list of dictionaries for each database entry
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        kwargs          All the keyword arguments that you want to pass to the `find` method
+    Returns:
+        docs    A list of full Mongo documents within the specified collection
+                that match the constraints of the `kwargs` argument(s).
     '''
-    if not fingerprints:
-        fingerprints = defaults.fingerprints()
-    if fingerprints == 'simulated':
-        fingerprints = defaults.fingerprints(simulated=True)
+    docs = _access_collection_method_with_cursor(collection_tag=collection_tag,
+                                                 method_name='find', **kwargs)
+    return docs
 
-    # Put the "fingerprinting" into a `group` dictionary, which we will
-    # use to pull out data from the mongo database. Also, initialize
-    # a `match` dictionary, which we will use to filter results.
+
+def aggregate_docs(collection_tag, **kwargs):
+    '''
+    This is wrapper for pymongo.MongoClient.database.collection.aggregate method.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
+
+    This function also comes with some pre-set options that we'll want to keep using
+    for our application. Specifically, we set `allowDiskUse=True` to allow mongo to
+    write to temporary files, which it needs to do for large databases. We also
+    set `useCursor=True` so that `aggregate` returns a cursor object.
+
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        kwargs          All the keyword arguments that you want to pass to the `aggregate` method
+    '''
+    # We'll be overriding the user's setting of some options. Warn them here.
+    if 'allowDiskUse' in kwargs:
+        del kwargs['allowDiskUse']
+        warnings.warn('No matter what you supply for `allowDiskUse`, GASpy will setting it to `True`.',
+                      RuntimeWarning)
+    if 'useCursor' in kwargs:
+        del kwargs['useCursor']
+        warnings.warn('No matter what you supply for `useCursor`, GASpy will setting it to `True`.',
+                      RuntimeWarning)
+
+    docs = _access_collection_method_with_cursor(collection_tag=collection_tag,
+                                                 method_name='aggregate',
+                                                 allowDiskUse=True, useCursor=True,
+                                                 **kwargs)
+    return docs
+
+
+def _access_collection_method_with_cursor(collection_tag, method_name, **kwargs):
+    '''
+    This is wrapper for arbitrary pymongo.MongoClient.database.collection.* methods.
+    The wrapping takes care of all of the connection, authentication, and client
+    closing/opening for you.
+
+    This is different from the `_access_collection_method` function because
+    this function expects the method you're calling to return a cursor object.
+    It then unpacks whatever your cursor returns.
+
+    Args:
+        collection_tag  All of the information needed to access a specific
+                        Mongo collection is stored in the .gaspyrc.json file.
+                        This argument specifices which branch within that json
+                        to parse for the Mongo information needed to access
+                        the data. Examples may include (but may not be limited to):
+                            'catalog'
+                            'atoms'
+                            'adsorption'
+                            'surface_energy'
+        method_name     A string corresponding to the name of the method of
+                        `pymongo.Mongoclient.database.collection` that you want to call
+        kwargs          All the keyword arguments that you want to pass to the method you specified
+    Returns:
+        output_list     A list of whatever the method's cursor returns.
+    '''
+
+    # Get the mongo information
+    mongo_info = utils.read_rc()['mongo_info'][collection_tag]
+    host = mongo_info['host']
+    port = int(mongo_info['port'])
+    database_name = mongo_info['database']
+    user = mongo_info['user']
+    password = mongo_info['password']
+    collection_name = mongo_info['collection_name']
+
+    # Access the client, authenticate, and call/return the method
+    client = MongoClient(host=host, port=port)
+    with MongoClient(host=host, port=port) as client:
+        database = getattr(client, database_name)
+        database.authenticate(user, password)
+        collection = getattr(database, collection_name)
+        method = getattr(collection, method_name)
+        cursor = method(**kwargs)
+        print('Going through Mongo cursor...')
+        output_list = [obj for obj in tqdm.tqdm(cursor)]
+    return output_list
+
+
+def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
+    '''
+    A wrapper for `aggregate_docs` that is tailored specifically for the
+    collection that's tagged `adsorption`. If you don't like the way that
+    this function gets documents, you can do it yourself by using
+    `find_docs` or `aggregate_docs` and any of the fingerprints/filters
+    in the `gaspy.defaults` submodule.
+
+    Args:
+        adsorbates      [optional] A list of the adsorbates that you need to
+                        be present in each document's corresponding atomic
+                        structure. Note that if you pass a list with two adsorbates,
+                        then you will only get matches for structures with *both*
+                        of those adsorbates; you will *not* get structures
+                        with only one of the adsorbates. If you pass nothing, then we
+                        get all documents regardless of adsorbates.
+        collection_tag  *For unit testing only.* Do not change this.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.adsorption_fingerprints`
+                and who meet the filtering criteria of
+                `gaspy.defaults.adsorption_filters`
+    '''
+    # Establish the information that'll be contained in the documents we'll be getting
+    fingerprints = defaults.adsorption_fingerprints()
     group = {'$group': {'_id': fingerprints}}
-    match = {'$match': {}}
 
-    # Create `match` filters to search by. Use if/then statements to create the filters
-    # only if the user specifies them.
-    if calc_settings:
-        xc_settings = defaults.exchange_correlational_settings()
-        gga_method = xc_settings[calc_settings]['gga']
-        match['$match']['processed_data.vasp_settings.gga'] = gga_method
-    if vasp_settings:
-        for key, value in vasp_settings.items():
-            match['$match']['processed_data.vasp_settings.%s' % key] = value
-        # Alert the user that they tried to specify the gga twice.
-        if ('gga' in vasp_settings and calc_settings):
-            warnings.warn('User specified both calc_settings and vasp_settings.gga. GASpy will default to the given vasp_settings.gga', SyntaxWarning)
+    # Set the filtering criteria of the documents we'll be getting
+    filters = defaults.adsorption_filters()
     if adsorbates:
-        match['$match']['processed_data.calculation_info.adsorbate_names'] = adsorbates
-    # Multi-conditional for the energy for the different ways a user can define
-    # energy constraints
-    if (energy_max and energy_min):
-        match['$match']['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
-    elif (energy_max and not energy_min):
-        match['$match']['results.energy'] = {'$lt': energy_max}
-    elif (not energy_max and energy_min):
-        match['$match']['results.energy'] = {'$gt': energy_min}
-    # We do a doubly-nested element match because `results.forces` is a doubly-nested
-    # list of forces (1st layer is atoms, 2nd layer is cartesian directions, final
-    # layer is the forces on that atom in that direction).
-    if f_max:
-        match['$match']['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
-    if max_atoms:
-        match['$match']['atoms.natoms'] = {'$lt': max_atoms}
-    if ads_move_max:
-        match['$match']['processed_data.movement_data.max_adsorbate_movement'] = \
-            {'$lt': ads_move_max}
-    if bare_slab_move_max:
-        match['$match']['processed_data.movement_data.max_bare_slab_movement'] = \
-            {'$lt': bare_slab_move_max}
-    if slab_move_max:
-        match['$match']['processed_data.movement_data.max_surface_movement'] = \
-            {'$lt': slab_move_max}
+        filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
+    match = {'$match': filters}
 
-    # Compile the pipeline; add matches only if any matches are specified
-    if match['$match']:
-        pipeline = [match, group]
-    else:
-        pipeline = [group]
-    # Get the particular collection from the mongo client's database.
-    # We we're pulling the catalog, then get the read only version of the database
-    # so that we pull it even faster.
-    if collection_name == 'catalog':
-        collection = get_mongo_collection('catalog_readonly')
-    else:
-        collection = get_mongo_collection(collection_name)
+    # Get the documents and clean them up
+    pipeline = [match, group]
+    docs = aggregate_docs(collection_tag=_collection_tag, pipeline=pipeline)
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
-    # Create the cursor. We set allowDiskUse=True to allow mongo to write to
-    # temporary files, which it needs to do for large databases. We also
-    # set useCursor=True so that `aggregate` returns a cursor object
-    # (otherwise we run into memory issues).
-    print('Starting to pull documents...')
-    cursor = collection.aggregate(pipeline, allowDiskUse=True, useCursor=True)
-    # Use the cursor to pull all of the information we want out of the database.
-    docs = [doc['_id'] for doc in tqdm.tqdm(cursor)]
-    if not docs:
+    return cleaned_docs
+
+
+def _clean_up_aggregated_docs(docs, expected_keys):
+    '''
+    Some of the Mongo documents we get are just plain dirty and end up mucking up
+    downstream pipelines. This function cleans them up so that they're less
+    likely to break something.
+
+    Arg:
+        docs            A list of mongo documents, AKA a list of dicts, AKA a list of JSONs
+        expected_keys   The dict keys that that you expect to be in every document.
+                        If a document doesn't have the right keys or has `None` for one of them,
+                        then it is deleted.
+    Returns:
+        clean_docs  A subset of the `docs` argument with
+    '''
+    # Get rid of one of the useless JSON branch-points that `aggregate` forces on us
+    docs = [doc['_id'] for doc in docs]
+
+    cleaned_docs = []
+    for doc in docs:
+        is_clean = True
+
+        # Clean up documents that don't have the right keys
+        if doc.keys() != expected_keys:
+            break
+        # Clean up documents that have `None` as values
+        for key, value in doc.items():
+            if value is None:
+                is_clean = False
+                break
+
+        if is_clean:
+            cleaned_docs.append(doc)
+
+    # Warn the user if we did not actually get any documents out the end.
+    if not cleaned_docs:
         warnings.warn('We did not find any matching documents', RuntimeWarning)
 
-    # If any document is missing fingerprints or has any empty keys, then delete it.
-    for doc in docs:
-        if set(fingerprints.keys()).issubset(doc.keys()) and all(doc.values()):
-            pass
-        else:
-            del doc
-
-    return docs
+    return cleaned_docs
 
 
 def hash_docs(docs, ignore_keys=None):

@@ -62,8 +62,10 @@ class UpdateAllDB(luigi.WrapperTask):
         list(DumpToAuxDB().run())
 
         # Get every doc in the Aux database
-        ads_docs = list(gasdb.mongo_collection('atoms').find({'type': 'slab+adsorbate'}))
-        surface_energy_docs = list(gasdb.mongo_collection('surface_energy').find({'type': 'slab_surface_energy'}))
+        ads_docs = find_docs(collection_tag='adsorption',
+                             kwargs={'type': 'slab+adsorbate'})
+        surface_energy_docs = find_docs(collection_tag='surface_energy',
+                                        kwargs={'type': 'slab_surface_energy'})
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.mongo_collection('adsorption') as adsorption_client:
@@ -164,12 +166,12 @@ class UpdateEnumerations(luigi.Task):
     def run(self):
         with gasdb.mongo_collection('catalog') as catalog_client:
             # Load the configurations
-            configs = pickle.load(open(self.input().fn,'rb'))
+            configs = pickle.load(open(self.input().fn, 'rb'))
             # Find the unique configurations based on the fingerprint of each site
             unq_configs, unq_inds = np.unique([str([x['shift'],
-                                                                 x['fp']['coordination'],
-                                                                 x['fp']['neighborcoord']]) for x in
-                                                  configs],
+                                                    x['fp']['coordination'],
+                                                    x['fp']['neighborcoord']]) for x in
+                                               configs],
                                               return_index=True)
             # For each configuration, write a doc to the database
             for i in unq_inds:
@@ -196,7 +198,7 @@ class UpdateEnumerations(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
 
 
 class DumpToAuxDB(luigi.Task):
@@ -430,7 +432,7 @@ class DumpToAdsorptionDB(luigi.Task):
                 fhandle.write(' ')
 
     def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__,self.task_id))
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
 
 
 class SubmitToFW(luigi.Task):

@@ -31,6 +31,14 @@
             "user": "user",
             "password": "pw"
             },
+        "for_unit_testing":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
         "atoms":{
             "host": "host.name",
             "port": "99999",
