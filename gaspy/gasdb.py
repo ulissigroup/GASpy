@@ -304,50 +304,55 @@ def _clean_up_aggregated_docs(docs, expected_keys):
 def hash_docs(docs, ignore_keys=None):
     '''
     This function helps convert the important characteristics of our systems into hashes
-    so that we may sort through them more quickly. This is important to do when trying to
-    compare entries in our two databases; it helps speed things up.
+    so that we may sort through them more quickly. This is useful when trying to
+    quickly compare entries in two databases.
 
-    Input:
-        docs            Mongo docs (list of dictionaries) that have been created using the
-                        gaspy.gasdb.get_docs function. Note that this is the unparsed version
-                        of mongo documents.
+    Arg:
+        docs            Sequence of single-layered dictionary/json/Mongo
+                        document/whatever you call it.
         ignore_keys     A list of strings indicating the keys that you want to ignore
-                        when hashing.
-    Output:
-        systems     An ordered dictionary whose keys are hashes of the each doc in
-                    `docs` and whose values are empty. This dictionary is intended
-                    to be parsed alongside another `docs` object, which is why
-                    it's ordered.
+                        when hashing each document.
+    Returns:
+        hashes     A set containing the hashes of the each doc in `docs`.
     '''
-    # Python doesn't do well with mutable default arguments. We define defaults like this
-    # to address that issue.
+    # Python doesn't do well with mutable default arguments
     if not ignore_keys:
         ignore_keys = []
+
     # Add the mongo ID to the list of ignored keys, because that'll always yield a different
     # hash. Then turn it into a set to speed up searching.
     ignore_keys.append('mongo_id')
-    ignore_keys = set(ignore_keys)
-
-    def hash_doc(doc):
-        ''' Make a function that hashes one document so that we can monitor progress '''
-        # `system` will be one long string of the fingerprints
-        system = ''
-        for key in sorted(doc.keys()):
-            # Skip this key if we want to ignore it
-            if key not in ignore_keys:
-                # Round floats to increase chances of matching
-                value = doc[key]
-                if isinstance(value, float):
-                    value = round(value, 2)
-
-                # Note that we turn the values into strings explicitly, because some
-                # fingerprint features may not be strings (e.g., list of miller indices).
-                system += str(key + '=' + str(value) + '; ')
-        return hash(system)
 
     # Hash with a progress bar
-    systems = [hash_doc(doc) for doc in tqdm.tqdm(docs)]
-    return systems
+    print('Now hashing documents...')
+    hashes = [hash_doc(doc=doc, ignore_keys=ignore_keys) for doc in tqdm.tqdm(docs)]
+    return hashes
+
+
+def hash_doc(doc, ignore_keys):
+    '''
+    Hash a single Mongo document (AKA dictionary). This function currently assumes
+    that the document is flat---i.e., not nested.
+
+    Args:
+        doc             A single-layered dictionary/json/Mongo document/whatever you call it.
+        ignore_keys     A sequence of strings indicating the keys that you want to ignore
+                        when hashing the document.
+    Returns:
+        hash_   A hashed version of the document
+    '''
+    # `system` will be one long string of the fingerprints.
+    # After we populate it with non-ignored key/value pairs, we'll hash it and return it.
+    system = ''
+    for key in sorted(doc.keys()):
+        if key not in set(ignore_keys):
+            value = doc[key]
+            # Clean up the values so they hash consistently
+            if isinstance(value, float):
+                value = round(value, 2)
+            system += str(key + '=' + str(value) + '; ')
+    hash_ = hash(system)
+    return hash_
 
 
 def split_catalog(ads_docs, cat_docs):
@@ -368,14 +373,11 @@ def split_catalog(ads_docs, cat_docs):
     # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
     # Note that we ignore any energy values in the adsorbate collection, because there are no
     # energy values in the catalog.
-    print('Hashing adsorbates...')
     ads_hashes = hash_docs(ads_docs, ignore_keys=['energy', 'formula', 'shift', 'top'])
-    print('Hashing catalog...')
     cat_hashes = hash_docs(cat_docs, ignore_keys=['formula', 'shift', 'top'])
     unsim_hashes = set(cat_hashes)-set(ads_hashes)
 
     # Perform the filtering while simultaneously populating the `docs` output.
-    print('Filtering by the hashes...')
     unsim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
                   if cat_hash in unsim_hashes]
     sim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))

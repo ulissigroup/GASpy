@@ -935,3 +935,11 @@ def __make_documents_dirty(docs):
     dirty_docs = copy.deepcopy(docs) + [doc_partial] + [doc_empty]
     dirty_docs = [{'_id': doc} for doc in dirty_docs]   # because mongo is stupid
     return dirty_docs
+
+
+def test_hash_docs():
+    assert 1 == 0
+
+
+def test_hash_doc():
+    assert 1 == 0
