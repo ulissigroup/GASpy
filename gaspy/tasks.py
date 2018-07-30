@@ -538,7 +538,7 @@ class SubmitToFW(luigi.Task):
                 # request. This will trigger a FingerprintUnrelaxedAdslabs for each FP, which
                 # is entirely unnecessary. The result is the same # regardless of what
                 # parameters['adsorption'][0]['fp'] happens to be
-                parameters_copy = copy.deepcopy(self.parameters)
+                parameters_copy = utils.unfreeze_dict(copy.deepcopy(self.parameters))
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
 
@@ -956,7 +956,7 @@ class GenerateSiteMarkers(luigi.Task):
 
             # Find the adsorption sites. Then for each site we find, we create a dictionary
             # of tags to describe the site. Then we save the tags to our pickles.
-            sites = utils.find_adsorption_sites(slab, bulk)
+            sites = utils.find_adsorption_sites(slab)
             for site in sites:
                 # Populate the `tags` dictionary with various information
                 if 'unrelaxed' in self.parameters:
@@ -1011,7 +1011,7 @@ class GenerateAdSlabs(luigi.Task):
         parameters['adsorption']['adsorbates'] so that every generate_adsorbates_marker call
         looks the same, even with different adsorbates requested in this task
         '''
-        parameters_no_adsorbate = copy.deepcopy(self.parameters)
+        parameters_no_adsorbate = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         del parameters_no_adsorbate['adsorption']['adsorbates']
         return GenerateSiteMarkers(parameters_no_adsorbate)
 
@@ -1141,7 +1141,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         slab_natoms = slab[0]['atoms']['natoms']
 
         # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
-        if slab_natoms == len(calc_e_dict['atoms']):
+        if slab_natoms == len(calc_e_dict['atoms']) or np.max(np.abs(calc_e_dict['atoms'].positions-adslab0.positions))>10.0:
             fp_final = {}
             fp_init = {}
         else:
@@ -1172,7 +1172,7 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
         '''
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
-        param_slab = copy.deepcopy(self.parameters)
+        param_slab = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         param_slab['adsorption']['adsorbates'] = \
             [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [GenerateAdSlabs(self.parameters),
@@ -1480,7 +1480,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
-        slab_generate_settings = copy.deepcopy(self.parameters['slab']['slab_generate_settings'])
+        slab_generate_settings = utils.unfreeze_dict(copy.deepcopy(self.parameters['slab']['slab_generate_settings']))
         del slab_generate_settings['min_vacuum_size']
         del slab_generate_settings['min_slab_size']
         gen = SlabGenerator(structure,
@@ -1502,7 +1502,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
                                 min_slab_size=cur_min_slab_size, **slab_generate_settings)
             gen.min_slab_size = cur_min_slab_size
             slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
-            param_to_submit = copy.deepcopy(dict(self.parameters))
+            param_to_submit = utils.unfreeze_dict(copy.deepcopy(dict(self.parameters)))
             param_to_submit['type'] = 'slab_surface_energy'
             param_to_submit['slab']['natoms'] = len(slab)
 

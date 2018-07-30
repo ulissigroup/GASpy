@@ -13,6 +13,7 @@ import numpy.testing as npt
 from .baselines import get_standard_structure
 from .regression_tests.pymatgen_regression_test import _get_sites_for_standard_structure
 from ase import Atoms
+from pymatgen.io.ase import AseAtomsAdaptor
 
 def test_find_adsorption_sites():
     '''
@@ -21,7 +22,8 @@ def test_find_adsorption_sites():
     the value of that object when the key is 'all'.
     '''
     standard_sites = _get_sites_for_standard_structure()['all']
-    sites = find_adsorption_sites(get_standard_structure())
+    atoms = AseAtomsAdaptor.get_atoms(get_standard_structure())
+    sites = find_adsorption_sites(atoms)
     npt.assert_allclose(np.array(sites), np.array(standard_sites), rtol=1e-5, atol=-1e-7)
 
 

@@ -332,7 +332,8 @@ def find_adsorption_sites(atoms):
     Output:
         sites   A list of [array]s, which contain the x-y-z coordinates of the adsorptions sites.
     '''
-    sites_dict = AdsorbateSiteFinder(atoms).find_adsorption_sites(put_inside=True)
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
     sites = sites_dict['all']
     return sites
 
