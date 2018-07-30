@@ -121,7 +121,7 @@ def get_firework_info(fw):
     # we use uuid to create unique file names to write to/read from.
     fname = str(uuid.uuid4()) + '.traj'
     with open(fname, 'w') as fhandle:
-        fhandle.write(atoms_hex.decode('hex'))
+        fhandle.write(utils.decode_hex_to_atoms(atoms_hex))
     atoms = ase.io.read(fname)
     starting_atoms = ase.io.read(fname, index=0)
     os.remove(fname)    # Clean up

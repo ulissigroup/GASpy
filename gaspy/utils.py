@@ -18,6 +18,8 @@ from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 import tqdm
 from . import defaults, readrc
 from luigi.parameter import _FrozenOrderedDict
+from luigi.target import FileAlreadyExists
+import collections
 from collections import OrderedDict
 
 
@@ -262,8 +264,6 @@ def fingerprint_atoms(atoms):
     # Turn the atoms into a pymatgen structure object so that we can use the VCF to find
     # the coordinated sites.
     struct = AseAtomsAdaptor.get_structure(atoms)
-    vnn = VoronoiNN(allow_pathological=True, tol=0.8)
-    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2)
 
     #Test to see if the central atom is entirely on it's own, if so it is not coordinated, so skip the voronoi bit
     # which would throw a QHULL error
@@ -274,7 +274,14 @@ def fingerprint_atoms(atoms):
                 'natoms': len(atoms),
                 'nextnearestcoordination': ''}
 
-    coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
+    vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 10)
+    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 10)
+    try:
+        coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
+    except ValueError:
+        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 40)
+        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 40)
+        coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
     # then turn the list into a single, human-readable string.
@@ -332,7 +339,8 @@ def find_adsorption_sites(atoms):
     Output:
         sites   A list of [array]s, which contain the x-y-z coordinates of the adsorptions sites.
     '''
-    sites_dict = AdsorbateSiteFinder(atoms).find_adsorption_sites(put_inside=True)
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
     sites = sites_dict['all']
     return sites
 
@@ -479,3 +487,30 @@ def decode_hex_to_atoms(atoms_hex):
     atoms_bytes = bytes.fromhex(atoms_hex)
     atoms = pickle.loads(atoms_bytes)
     return atoms
+
+
+def luigi_task_eval(task):
+    '''
+    This follow luigi logic to evaluate a task by recursively evaluating all requirements.
+    This is useful for executing tasks that are typically independennt of other tasks,
+    e.g., populating a catalog of sites.
+
+    Arg:
+        task    Class instance of a luigi task
+    '''
+    if task.complete():
+        return
+    else:
+        task_req = task.requires()
+        if task_req:
+            if isinstance(task_req, collections.Iterable):
+                for req in task.requires():
+                    if not(req.complete()):
+                        luigi_task_eval(req)
+            else:
+                if not(task_req.complete()):
+                    luigi_task_eval(task_req)
+        try:
+            task.run()
+        except FileAlreadyExists:
+            return

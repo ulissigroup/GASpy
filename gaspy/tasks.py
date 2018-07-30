@@ -190,7 +190,7 @@ class UpdateEnumerations(luigi.Task):
                                                        'adsorbate': config['adsorbate'],
                                                        'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
-                catalog_client.write(slabadsdoc)
+                catalog_client.insert_one(slabadsdoc)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -281,7 +281,7 @@ class DumpToAuxDB(luigi.Task):
                         if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
                     # Write the doc onto the Auxiliary database
-                    atoms_client.write(doc)
+                    atoms_client.insert_one(doc)
                     print('Dumped a %s firework (FW ID %s) into the Auxiliary DB: ' % (doc['type'], fwid))
                     utils.print_dict(fw.name, indent=1)
                     # And while we're at it, dump the traj files, too
@@ -424,7 +424,7 @@ class DumpToAdsorptionDB(luigi.Task):
         # Write the entry into the database
 
         with gasdb.mongo_collection('adsorption') as adsorption_client:
-            adsorption_client.write(best_sys_pkl_slab_ads)
+            adsorption_client.insert_one(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
@@ -540,7 +540,7 @@ class SubmitToFW(luigi.Task):
                 # request. This will trigger a FingerprintUnrelaxedAdslabs for each FP, which
                 # is entirely unnecessary. The result is the same # regardless of what
                 # parameters['adsorption'][0]['fp'] happens to be
-                parameters_copy = copy.deepcopy(self.parameters)
+                parameters_copy = utils.unfreeze_dict(copy.deepcopy(self.parameters))
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
 
@@ -958,7 +958,7 @@ class GenerateSiteMarkers(luigi.Task):
 
             # Find the adsorption sites. Then for each site we find, we create a dictionary
             # of tags to describe the site. Then we save the tags to our pickles.
-            sites = utils.find_adsorption_sites(slab, bulk)
+            sites = utils.find_adsorption_sites(slab)
             for site in sites:
                 # Populate the `tags` dictionary with various information
                 if 'unrelaxed' in self.parameters:
@@ -1013,7 +1013,7 @@ class GenerateAdSlabs(luigi.Task):
         parameters['adsorption']['adsorbates'] so that every generate_adsorbates_marker call
         looks the same, even with different adsorbates requested in this task
         '''
-        parameters_no_adsorbate = copy.deepcopy(self.parameters)
+        parameters_no_adsorbate = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         del parameters_no_adsorbate['adsorption']['adsorbates']
         return GenerateSiteMarkers(parameters_no_adsorbate)
 
@@ -1124,7 +1124,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         # Here, we take the adsorbate off the slab+ads system
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         param['adsorption']['adsorbates'] = [OrderedDict(name='',
-                                                         atoms=utils.encode_atoms_to_hex(Atoms(''))]
+                                                         atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [CalculateEnergy(self.parameters),
                 SubmitToFW(parameters=param,
                            calctype='slab+adsorbate')]
@@ -1143,7 +1143,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         slab_natoms = slab[0]['atoms']['natoms']
 
         # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
-        if slab_natoms == len(calc_e_dict['atoms']):
+        if slab_natoms == len(calc_e_dict['atoms']) or np.max(np.abs(calc_e_dict['atoms'].positions-adslab0.positions))>10.0:
             fp_final = {}
             fp_init = {}
         else:
@@ -1174,9 +1174,9 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
         '''
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
-        param_slab = copy.deepcopy(self.parameters)
+        param_slab = utils.unfreeze_dict(copy.deepcopy(self.parameters))
         param_slab['adsorption']['adsorbates'] = \
-            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
+            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [GenerateAdSlabs(self.parameters),
                 GenerateAdSlabs(parameters=param_slab)]
 
@@ -1226,7 +1226,8 @@ class CalculateEnergy(luigi.Task):
         # replacing it with '', i.e., nothing. It's still labeled as a 'slab+adsorbate'
         # calculation because of our code infrastructure.
         param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-        param['adsorption']['adsorbates'] = [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms(''))]
+        param['adsorption']['adsorbates'] = [OrderedDict(name='', 
+                                                 atoms=utils.encode_atoms_to_hex(Atoms('')))]
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
 
         # Lastly, we need to relax the base gases.
@@ -1481,7 +1482,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
         structure = AseAtomsAdaptor.get_structure(bulk)
         sga = SpacegroupAnalyzer(structure, symprec=0.1)
         structure = sga.get_conventional_standard_structure()
-        slab_generate_settings = copy.deepcopy(self.parameters['slab']['slab_generate_settings'])
+        slab_generate_settings = utils.unfreeze_dict(copy.deepcopy(self.parameters['slab']['slab_generate_settings']))
         del slab_generate_settings['min_vacuum_size']
         del slab_generate_settings['min_slab_size']
         gen = SlabGenerator(structure,
@@ -1503,7 +1504,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
                                 min_slab_size=cur_min_slab_size, **slab_generate_settings)
             gen.min_slab_size = cur_min_slab_size
             slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
-            param_to_submit = copy.deepcopy(dict(self.parameters))
+            param_to_submit = utils.unfreeze_dict(copy.deepcopy(dict(self.parameters)))
             param_to_submit['type'] = 'slab_surface_energy'
             param_to_submit['slab']['natoms'] = len(slab)
 
@@ -1621,7 +1622,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
 
         # Write the entry into the database
         with gasdb.mongo_collection('surface_energy') as surface_energy_client:
-            surface_energy_client.write(surface_energy_pkl_slab)
+            surface_energy_client.insert_one(surface_energy_pkl_slab)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
