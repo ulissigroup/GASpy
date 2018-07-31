@@ -10,7 +10,10 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
-from ..gasdb import get_adsorption_docs, _clean_up_aggregated_docs
+from ..gasdb import get_adsorption_docs, \
+    _clean_up_aggregated_docs, \
+    hash_docs, \
+    hash_doc
 
 # Things we need to do the tests
 import copy
@@ -810,21 +813,6 @@ def test__clean_up_aggregated_docs():
     assert _compare_unordered_sequences(clean_docs, expected_docs)
 
 
-def _compare_unordered_sequences(seq0, seq1):
-    '''
-    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
-    (3) the items are not hashable, and (4) items are not orderable, then use this
-    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
-    '''
-    seq0 = list(seq0)   # make a mutable copy
-    try:
-        for element in seq1:
-            seq0.remove(element)
-    except ValueError:
-        return False
-    return not seq0
-
-
 def __make_documents_dirty(docs):
     ''' Helper function for `test__clean_up_docs`  '''
     # Make a document with a missing key/value item
@@ -843,9 +831,73 @@ def __make_documents_dirty(docs):
     return dirty_docs
 
 
+def _compare_unordered_sequences(seq0, seq1):
+    '''
+    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
+    (3) the items are not hashable, and (4) items are not orderable, then use this
+    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
+    '''
+    seq0 = list(seq0)   # make a mutable copy
+    try:
+        for element in seq1:
+            seq0.remove(element)
+    except ValueError:
+        return False
+    return not seq0
+
+
 def test_hash_docs():
-    assert 1 == 0
+    '''
+    Note that since Python 3's `hash` returns a different hash for
+    each instance of Python, we actually perform regression testing
+    ond the pre-hashed strings, not the hash itself.
+    '''
+    docs = get_expected_aggregated_adsorption_documents()
+
+    # Ignore no keys
+    strings = hash_docs(docs=docs, _return_hashes=False)
+    expected_strings = [("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                         'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                         "mpid=mp-16514; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
+                         "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                         'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                         'top=True; ')]
+    assert strings == expected_strings
+
+    # Ignore a key
+    strings = hash_docs(docs=docs, ignore_keys=['mpid'], _return_hashes=False)
+    expected_strings = ["adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                        'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                        "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                        'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                        'top=True; ']
+    assert strings == expected_strings
 
 
 def test_hash_doc():
-    assert 1 == 0
+    '''
+    Note that since Python 3's `hash` returns a different hash for
+    each instance of Python, we actually perform regression testing
+    ond the pre-hashed string, not the hash itself.
+    '''
+    doc = get_expected_aggregated_adsorption_documents()[0]
+
+    # Ignore no keys
+    string = hash_doc(doc=doc, _return_hash=False)
+    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                       'mongo_id=59a015cbd3952577173b122d; mpid=mp-16514; '
+                       "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                       'top=True; ')
+    assert string == expected_string
+
+    # Ignore a key
+    string = hash_doc(doc=doc, ignore_keys=['mpid'], _return_hash=False)
+    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                       "mongo_id=59a015cbd3952577173b122d; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
+                       "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                       'top=True; ')
+    assert string == expected_string
