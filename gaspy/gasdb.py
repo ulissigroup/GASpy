@@ -1,25 +1,25 @@
 ''' These tools form gaspy's API to its databases '''
 
 import warnings
-from itertools import islice
 import json
-from bson.objectid import ObjectId
 import pickle
-from multiprocessing import Pool
 import glob
+from itertools import islice
+from bson.objectid import ObjectId
+from multiprocessing import Pool
 import numpy as np
 import tqdm
 from pymongo import MongoClient
+from pymongo.collection import Collection
 from ase.io.png import write_png
 from . import defaults, utils, vasp_functions
 from .mongo import make_atoms_from_doc
 
 
-def count_docs(collection_tag, **kwargs):
+def get_mongo_collection(collection_tag):
     '''
-    This is wrapper for pymongo.MongoClient.database.collection.count method.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
+    Get a mongo collection, but with `__enter__` and `__exit__` methods
+    that will allow you to establish and close connections with `with` statements.
 
     Args:
         collection_tag  All of the information needed to access a specific
@@ -31,61 +31,11 @@ def count_docs(collection_tag, **kwargs):
                             'atoms'
                             'adsorption'
                             'surface_energy'
-        kwargs          All the keyword arguments that you want to pass to the `count` method
     Returns:
-        docs    An integer corresponding to the number of documents in the collection
-                that match the search criteria you gave via kwargs
+        collection  A mongo collection object corresponding to the collection
+                    tag you specified, but with `__enter__` and `__exit__` methods.
     '''
-    count = _access_collection_method(collection_tag=collection_tag, method_name='count', **kwargs)
-    return count
-
-
-def insert_one_doc(collection_tag, **kwargs):
-    '''
-    This is wrapper for pymongo.MongoClient.database.collection.insert method.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
-
-    Args:
-        collection_tag  All of the information needed to access a specific
-                        Mongo collection is stored in the .gaspyrc.json file.
-                        This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
-                            'catalog'
-                            'atoms'
-                            'adsorption'
-                            'surface_energy'
-        kwargs          All the keyword arguments that you want to pass to the `insert` method
-    '''
-    _access_collection_method(collection_tag=collection_tag, method_name='insert_one', **kwargs)
-
-
-def _access_collection_method(collection_tag, method_name, **kwargs):
-    '''
-    This is wrapper for arbitrary pymongo.MongoClient.database.collection.* methods.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
-
-    Args:
-        collection_tag  All of the information needed to access a specific
-                        Mongo collection is stored in the .gaspyrc.json file.
-                        This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
-                            'catalog'
-                            'atoms'
-                            'adsorption'
-                            'surface_energy'
-        method_name     A string corresponding to the name of the method of
-                        `pymongo.Mongoclient.database.collection` that you want to call
-        kwargs          All the keyword arguments that you want to pass to the method you specified
-    Returns:
-        output  The output of whatever method you called according to the args and
-                kwargs you supplied.
-    '''
-
-    # Get the mongo information
+    # Add the enter and exit methods to pymongo.collection
     mongo_info = utils.read_rc()['mongo_info'][collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
@@ -94,130 +44,21 @@ def _access_collection_method(collection_tag, method_name, **kwargs):
     password = mongo_info['password']
     collection_name = mongo_info['collection_name']
 
-    # Access the client, authenticate, and call/return the method
+    # Access the client and authenticate
     client = MongoClient(host=host, port=port)
-    with MongoClient(host=host, port=port) as client:
-        database = getattr(client, database_name)
-        database.authenticate(user, password)
-        collection = getattr(database, collection_name)
-        method = getattr(collection, method_name)
-        output = method(**kwargs)
-    return output
+    database = getattr(client, database_name)
+    database.authenticate(user, password)
+    collection = ConnectableCollection(database=database, name=collection_name)
+
+    return collection
 
 
-def find_docs(collection_tag, **kwargs):
-    '''
-    This is wrapper for pymongo.MongoClient.database.collection.find method.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
-
-    Args:
-        collection_tag  All of the information needed to access a specific
-                        Mongo collection is stored in the .gaspyrc.json file.
-                        This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
-                            'catalog'
-                            'atoms'
-                            'adsorption'
-                            'surface_energy'
-        kwargs          All the keyword arguments that you want to pass to the `find` method
-    Returns:
-        docs    A list of full Mongo documents within the specified collection
-                that match the constraints of the `kwargs` argument(s).
-    '''
-    docs = _access_collection_method_with_cursor(collection_tag=collection_tag,
-                                                 method_name='find', **kwargs)
-    return docs
-
-
-def aggregate_docs(collection_tag, **kwargs):
-    '''
-    This is wrapper for pymongo.MongoClient.database.collection.aggregate method.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
-
-    This function also comes with some pre-set options that we'll want to keep using
-    for our application. Specifically, we set `allowDiskUse=True` to allow mongo to
-    write to temporary files, which it needs to do for large databases. We also
-    set `useCursor=True` so that `aggregate` returns a cursor object.
-
-    Args:
-        collection_tag  All of the information needed to access a specific
-                        Mongo collection is stored in the .gaspyrc.json file.
-                        This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
-                            'catalog'
-                            'atoms'
-                            'adsorption'
-                            'surface_energy'
-        kwargs          All the keyword arguments that you want to pass to the `aggregate` method
-    '''
-    # We'll be overriding the user's setting of some options. Warn them here.
-    if 'allowDiskUse' in kwargs:
-        del kwargs['allowDiskUse']
-        warnings.warn('No matter what you supply for `allowDiskUse`, GASpy will setting it to `True`.',
-                      RuntimeWarning)
-    if 'useCursor' in kwargs:
-        del kwargs['useCursor']
-        warnings.warn('No matter what you supply for `useCursor`, GASpy will setting it to `True`.',
-                      RuntimeWarning)
-
-    docs = _access_collection_method_with_cursor(collection_tag=collection_tag,
-                                                 method_name='aggregate',
-                                                 allowDiskUse=True, useCursor=True,
-                                                 **kwargs)
-    return docs
-
-
-def _access_collection_method_with_cursor(collection_tag, method_name, **kwargs):
-    '''
-    This is wrapper for arbitrary pymongo.MongoClient.database.collection.* methods.
-    The wrapping takes care of all of the connection, authentication, and client
-    closing/opening for you.
-
-    This is different from the `_access_collection_method` function because
-    this function expects the method you're calling to return a cursor object.
-    It then unpacks whatever your cursor returns.
-
-    Args:
-        collection_tag  All of the information needed to access a specific
-                        Mongo collection is stored in the .gaspyrc.json file.
-                        This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
-                            'catalog'
-                            'atoms'
-                            'adsorption'
-                            'surface_energy'
-        method_name     A string corresponding to the name of the method of
-                        `pymongo.Mongoclient.database.collection` that you want to call
-        kwargs          All the keyword arguments that you want to pass to the method you specified
-    Returns:
-        output_list     A list of whatever the method's cursor returns.
-    '''
-
-    # Get the mongo information
-    mongo_info = utils.read_rc()['mongo_info'][collection_tag]
-    host = mongo_info['host']
-    port = int(mongo_info['port'])
-    database_name = mongo_info['database']
-    user = mongo_info['user']
-    password = mongo_info['password']
-    collection_name = mongo_info['collection_name']
-
-    # Access the client, authenticate, and call/return the method
-    client = MongoClient(host=host, port=port)
-    with MongoClient(host=host, port=port) as client:
-        database = getattr(client, database_name)
-        database.authenticate(user, password)
-        collection = getattr(database, collection_name)
-        method = getattr(collection, method_name)
-        cursor = method(**kwargs)
-        print('Going through Mongo cursor...')
-        output_list = [obj for obj in tqdm.tqdm(cursor)]
-    return output_list
+# Make an extendeded version of the pymongo.collection.Collection class that can be open and closed
+class ConnectableCollection(Collection):
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, exception_traceback):   # noqa: E301
+        self.database.client.close()
 
 
 def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
@@ -236,7 +77,7 @@ def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
                         of those adsorbates; you will *not* get structures
                         with only one of the adsorbates. If you pass nothing, then we
                         get all documents regardless of adsorbates.
-        collection_tag  *For unit testing only.* Do not change this.
+        _collection_tag *For unit testing only.* Do not change this.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -255,7 +96,10 @@ def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
 
     # Get the documents and clean them up
     pipeline = [match, group]
-    docs = aggregate_docs(collection_tag=_collection_tag, pipeline=pipeline)
+    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        print('Now pulling adsorption documents...')
+        docs = [doc for doc in tqdm.tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
     return cleaned_docs

@@ -10,35 +10,13 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
-from ..gasdb import find_docs, \
-    count_docs, \
-    insert_one_doc, \
-    aggregate_docs, \
-    get_adsorption_docs, \
-    _clean_up_aggregated_docs
+from ..gasdb import get_adsorption_docs, _clean_up_aggregated_docs
 
 # Things we need to do the tests
-import pytest
 import copy
 import datetime
 from bson.objectid import ObjectId
 import random
-from ..gasdb import _access_collection_method
-
-
-def test_count_docs():
-    expected_docs = get_expected_collection_documents()
-
-    # Without filtering
-    count = count_docs(collection_tag='for_unit_testing')
-    expected_count = len(expected_docs)
-    assert count == expected_count
-
-    # With filtering
-    _, filter_ = get_a_doc_and_its_filter()
-    count = count_docs(collection_tag='for_unit_testing', filter=filter_)
-    expected_count = 1
-    assert count == expected_count
 
 
 def get_expected_collection_documents():
@@ -800,93 +778,6 @@ def get_expected_collection_documents():
     return docs
 
 
-def get_a_doc_and_its_filter():
-    '''
-    Sometimes we want to use filters when searching for documents or something.
-    Let's make one consistent filter here.
-    '''
-    docs = get_expected_collection_documents()
-    doc = docs[0]
-    key = '_id'
-    value = doc[key]
-    filter_ = {key: value}
-    return doc, filter_
-
-
-def test_insert_one_doc():
-    ''' Insert a document with a randomly generated number, then check if it's there. '''
-    # Insert one document
-    rng = random.randint(-1e16, 1e16)
-    expected_doc = {'Delete this if found': rng}
-    insert_one_doc(collection_tag='for_unit_testing', document=expected_doc)
-
-    # See if it's there
-    doc = find_docs(collection_tag='for_unit_testing', filter=expected_doc)[0]
-    assert doc == expected_doc
-
-    # Clean up (delete the doc)
-    _access_collection_method(collection_tag='for_unit_testing',
-                              method_name='delete_one',
-                              filter=expected_doc)
-
-
-def test_find_docs():
-    ''' Technically two tests:  one with filtering and one without '''
-    # Without filtering
-    expected_docs = get_expected_collection_documents()
-    docs = find_docs(collection_tag='for_unit_testing')
-    assert docs == expected_docs
-
-    # With filtering
-    expected_doc, filter_ = get_a_doc_and_its_filter()
-    docs = find_docs(collection_tag='for_unit_testing', filter=filter_)
-    assert docs[0] == expected_doc
-
-
-def test_aggregate_docs():
-    ''' Technically two tests:  one with filtering and one without '''
-    # Test grouping
-    pipeline = [{'$group': {'_id': {'mongo_id': '$_id'}}}]
-    agg_docs = aggregate_docs(collection_tag='for_unit_testing', pipeline=pipeline)
-    expected_docs = get_expected_collection_documents()
-    expected_agg_docs = [{'_id': {'mongo_id': doc['_id']}} for doc in expected_docs]
-    assert _compare_unordered_sequences(agg_docs, expected_agg_docs)
-
-    # Test matching + grouping
-    doc, filter_ = get_a_doc_and_its_filter()
-    pipeline = [{'$match': filter_},
-                {'$group': {'_id': {'mongo_id': '$_id'}}}]
-    agg_docs = aggregate_docs(collection_tag='for_unit_testing', pipeline=pipeline)
-    expected_agg_docs = [{'_id': {'mongo_id': doc['_id']}}]
-    assert _compare_unordered_sequences(agg_docs, expected_agg_docs)
-
-    # Test the warnings about supplying bad arguments
-    with pytest.warns(RuntimeWarning):
-        _ = aggregate_docs(collection_tag='for_unit_testing', pipeline=pipeline,
-                           allowDiskUse=False)
-    with pytest.warns(RuntimeWarning):
-        _ = aggregate_docs(collection_tag='for_unit_testing', pipeline=pipeline,
-                           useCursor=False)
-    with pytest.warns(RuntimeWarning):
-        _ = aggregate_docs(collection_tag='for_unit_testing', pipeline=pipeline,  # noqa: F841
-                           allowDiskUse=False, useCursor=False)
-
-
-def _compare_unordered_sequences(seq0, seq1):
-    '''
-    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
-    (3) the items are not hashable, and (4) items are not orderable, then use this
-    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
-    '''
-    seq0 = list(seq0)   # make a mutable copy
-    try:
-        for element in seq1:
-            seq0.remove(element)
-    except ValueError:
-        return False
-    return not seq0
-
-
 def test_get_adsorption_docs():
     expected_docs = get_expected_aggregated_adsorption_documents()
     docs = get_adsorption_docs(_collection_tag='for_unit_testing')
@@ -917,6 +808,21 @@ def test__clean_up_aggregated_docs():
     dirty_docs = __make_documents_dirty(expected_docs)
     clean_docs = _clean_up_aggregated_docs(dirty_docs, expected_keys=expected_docs[0].keys())
     assert _compare_unordered_sequences(clean_docs, expected_docs)
+
+
+def _compare_unordered_sequences(seq0, seq1):
+    '''
+    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
+    (3) the items are not hashable, and (4) items are not orderable, then use this
+    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
+    '''
+    seq0 = list(seq0)   # make a mutable copy
+    try:
+        for element in seq1:
+            seq0.remove(element)
+    except ValueError:
+        return False
+    return not seq0
 
 
 def __make_documents_dirty(docs):
