@@ -145,7 +145,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
-def hash_docs(docs, ignore_keys=None):
+def hash_docs(docs, ignore_keys=None, _return_hashes=True):
     '''
     This function helps convert the important characteristics of our systems into hashes
     so that we may sort through them more quickly. This is useful when trying to
@@ -156,6 +156,7 @@ def hash_docs(docs, ignore_keys=None):
                         document/whatever you call it.
         ignore_keys     A list of strings indicating the keys that you want to ignore
                         when hashing each document.
+        _return_hashes  *For unit testing only!* If `False`, returns the pre-hash objects
     Returns:
         hashes     A set containing the hashes of the each doc in `docs`.
     '''
@@ -169,11 +170,12 @@ def hash_docs(docs, ignore_keys=None):
 
     # Hash with a progress bar
     print('Now hashing documents...')
-    hashes = [hash_doc(doc=doc, ignore_keys=ignore_keys) for doc in tqdm.tqdm(docs)]
+    hashes = [hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
+              for doc in tqdm.tqdm(docs)]
     return hashes
 
 
-def hash_doc(doc, ignore_keys):
+def hash_doc(doc, ignore_keys=None, _return_hash=True):
     '''
     Hash a single Mongo document (AKA dictionary). This function currently assumes
     that the document is flat---i.e., not nested.
@@ -182,9 +184,14 @@ def hash_doc(doc, ignore_keys):
         doc             A single-layered dictionary/json/Mongo document/whatever you call it.
         ignore_keys     A sequence of strings indicating the keys that you want to ignore
                         when hashing the document.
+        _return_hashe   *For unit testing only!* If `False`, returns the pre-hash object
     Returns:
         hash_   A hashed version of the document
     '''
+    # Python doesn't do well with mutable default arguments
+    if not ignore_keys:
+        ignore_keys = []
+
     # `system` will be one long string of the fingerprints.
     # After we populate it with non-ignored key/value pairs, we'll hash it and return it.
     system = ''
@@ -195,8 +202,13 @@ def hash_doc(doc, ignore_keys):
             if isinstance(value, float):
                 value = round(value, 2)
             system += str(key + '=' + str(value) + '; ')
-    hash_ = hash(system)
-    return hash_
+
+    if _return_hash:
+        hash_ = hash(system)
+        return hash_
+    # For unit testing, because hashes change between instances of Python
+    else:
+        return system
 
 
 def split_catalog(ads_docs, cat_docs):
