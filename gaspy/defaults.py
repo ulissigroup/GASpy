@@ -84,6 +84,49 @@ def catalog_fingerprints():
     return fingerprints
 
 
+def surface_fingerprints():
+    '''
+    WARNING:  A lot of code depends on this. Do not take anything out without thinking
+    very hard about it.
+
+    Returns a dictionary that is meant to be passed to mongo aggregators to create
+    new mongo docs. The keys here are the keys for the new mongo doc, and the values
+    are where you can find the information from the old mongo docs (in our databases).
+    '''
+    fingerprints = {'mongo_id': '$_id',
+                    'mpid': '$processed_data.calculation_info.mpid',
+                    'formula': '$processed_data.calculation_info.formula',
+                    'miller': '$processed_data.calculation_info.miller',
+                    'intercept': '$processed_data.surface_energy_info.intercept',
+                    'intercept_uncertainty': '$processed_data.surface_energy_info.intercept_uncertainty',
+                    'initial_configuration': '$initial_configuration',
+                    'FW_info': '$processed_data.FW_info'
+                    }
+    return fingerprints
+
+
+def surface_filters():
+    '''
+    Not all of our surface calculations are "good" ones. Some do not converge
+    or have end up having a lot of movement. These are the filters we use to sift
+    out these "bad" documents.
+    '''
+    filters = {}
+
+    # Easy-to-read (and change) filters before we distribute them
+    # into harder-to-read (but mongo-readable) structures
+    f_max = 0.5                 # Maximum atomic force [eV/Ang]
+    max_surface_movement = 0.5  # Maximum distance that any atom can move [Ang]
+
+    # Distribute filters into mongo-readable form
+    filters['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
+    _calc_settings = calc_settings()
+    filters['processed_data.vasp_settings.gga'] = _calc_settings['gga']
+
+    return filters
+
+
 def exchange_correlational_settings():
     '''
     Yields a dictionary whose keys are some typical sets of exchange correlationals
