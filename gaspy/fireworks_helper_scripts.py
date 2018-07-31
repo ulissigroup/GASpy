@@ -147,7 +147,7 @@ def get_firework_info(fw):
             vasp_settings['pp_version'] = '5.3.5'
         vasp_settings['pp_guessed'] = True
     if 'gga' not in vasp_settings:
-        settings = defaults.exchange_correlationals[vasp_settings['xc']]
+        settings = defaults.exchange_correlational_settings()[vasp_settings['xc']]
         for key in settings:
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
