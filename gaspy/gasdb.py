@@ -12,7 +12,7 @@ import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from ase.io.png import write_png
-from . import defaults, utils, vasp_functions
+from . import defaults, utils
 from .mongo import make_atoms_from_doc
 
 
@@ -347,7 +347,7 @@ def dump_adsorption_to_json(fname):
 
         # Put the atoms hex in for others to be able to decode it
         atoms = make_atoms_from_doc(doc)
-        _hex = vasp_functions.atoms_to_hex(atoms)
+        _hex = utils.encode_atoms_to_trajhex(atoms)
         doc['atoms_hex'] = _hex
 
     # Save
