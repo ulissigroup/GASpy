@@ -21,7 +21,9 @@ from luigi.parameter import _FrozenOrderedDict
 from luigi.target import FileAlreadyExists
 import collections
 from collections import OrderedDict
-
+import uuid
+import ase.io
+import os
 
 def read_rc(key=None):
     '''
@@ -488,6 +490,21 @@ def decode_hex_to_atoms(atoms_hex):
     atoms = pickle.loads(atoms_bytes)
     return atoms
 
+def decode_trajhex_to_atoms(trajhex,index=-1):
+    fname = str(uuid.uuid4()) + '.traj'
+    with open(fname, 'wb') as fhandle:
+        fhandle.write(bytes.fromhex(trajhex))
+    atoms = ase.io.read(fname,index = index) 
+    os.remove(fname)           
+    return atoms
+
+def encode_atoms_to_trajhex(atoms):
+    fname = str(uuid.uuid4()) + '.traj'
+    atoms.write(fname)
+    with open(fname, 'rb') as fhandle:
+        hexstr = fhandle.read().hex()
+    os.remove(fname)
+    return hexstr
 
 def luigi_task_eval(task):
     '''

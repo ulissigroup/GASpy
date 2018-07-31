@@ -301,12 +301,12 @@ class DumpFWToTraj(luigi.Task):
     def run(self):
         lpad = fwhs.get_launchpad()
         fw = lpad.get_fw_by_id(self.fwid)
-        atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+        atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
-                fhandle.write(utils.decode_hex_to_atoms(atoms_hex))
+                fhandle.write(utils.decode_trajhex_to_atoms(atoms_trajhex))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj' % (self.fwid))
