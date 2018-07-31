@@ -63,11 +63,8 @@ class ConnectableCollection(Collection):
 
 def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
     '''
-    A wrapper for `aggregate_docs` that is tailored specifically for the
-    collection that's tagged `adsorption`. If you don't like the way that
-    this function gets documents, you can do it yourself by using
-    `find_docs` or `aggregate_docs` and any of the fingerprints/filters
-    in the `gaspy.defaults` submodule.
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `adsorption`.
 
     Args:
         adsorbates      [optional] A list of the adsorbates that you need to
@@ -145,6 +142,138 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
+def get_catalog_docs(_collection_tag='catalog'):
+    '''
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `catalog`.
+
+    Args:
+        _collection_tag *For unit testing only.* Do not change this.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.catalog_fingerprints`
+    '''
+    # Establish the information that'll be contained in the documents we'll be getting
+    fingerprints = defaults.catalog_fingerprints()
+    group = {'$group': {'_id': fingerprints}}
+
+    # Get the documents and clean them up
+    pipeline = [group]
+    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        print('Now pulling catalog documents...')
+        docs = [doc for doc in tqdm.tqdm(cursor)]
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+
+    return cleaned_docs
+
+
+def get_surface_docs(_collection_tag='surface_energy'):
+    '''
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `surface_energy`.
+
+    Args:
+        _collection_tag *For unit testing only.* Do not change this.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.adsorption_fingerprints`
+                and who meet the filtering criteria of
+                `gaspy.defaults.adsorption_filters`
+    '''
+    # Establish the information that'll be contained in the documents we'll be getting
+    fingerprints = defaults.surface_fingerprints()
+    group = {'$group': {'_id': fingerprints}}
+
+    # Set the filtering criteria of the documents we'll be getting
+    filters = defaults.surface_filters()
+    match = {'$match': filters}
+
+    # Get the documents and clean them up
+    pipeline = [match, group]
+    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        print('Now pulling surface documents...')
+        docs = [doc for doc in tqdm.tqdm(cursor)]
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+
+    return cleaned_docs
+
+
+def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
+                        fingerprints=None, max_atoms=None):
+    '''
+    The same as `get_docs`, but with already-simulated entries filtered out
+
+    Inputs:
+        adsorbates      A list of strings indicating the adsorbates that you want to make a
+                        prediction for.
+        calc_settings   The calculation settings that we want to filter by. If we are using
+                        something other than beef-vdw or rpbe, then we need to do some
+                        more hard-coding here so that we know what in the catalog
+                        can work as a flag for this new calculation method.
+        vasp_settings   The vasp settings that we want to filter by.
+        fingerprints    A dictionary of fingerprints and their locations in our
+                        mongo documents. This is how we can pull out more (or less)
+                        information from our database.
+        max_atoms       The maximum number of atoms in the system that you want to pull
+    Output:
+        docs    A list of dictionaries for various fingerprints. Useful for
+                creating lists of GASpy `parameters` dictionaries.
+    '''
+    # Default value for fingerprints. Since it's a mutable dictionary, we define it
+    # down here instead of in the __init__ line.
+    if not fingerprints:
+        fingerprints = defaults.fingerprints()
+
+    # Fetch mongo docs for our results and catalog databases so that we can
+    # start filtering out cataloged sites that we've already simulated.
+    with get_mongo_collection('adsorption') as ads_client:
+        ads_docs = get_docs(ads_client, 'adsorption',
+                            calc_settings=calc_settings,
+                            vasp_settings=vasp_settings,
+                            fingerprints=fingerprints,
+                            adsorbates=adsorbates)
+    with get_mongo_collection('catalog_readonly') as cat_client:
+        cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
+
+    # Use the `split_catalog` function to find the indices in `cat_docs` that correspond
+    # with item that we have not yet simulated. Then use that list to build the documents.
+    _, unsim_inds = split_catalog(ads_docs, cat_docs)
+    docs = [cat_docs[i] for i in unsim_inds]
+    return docs
+
+
+def split_catalog(ads_docs, cat_docs):
+    '''
+    The same as `get_docs`, but with already-simulated entries filtered out.
+    This is best done right after you pull the docs; don't modify them too much
+    unless you know what you're doing.
+
+    Inputs:
+        ads_docs    A list of docs coming from get_docs that correspond to the adsorption database
+        cat_docs    A list of docs coming from get_docs that correspond to the catalog database
+    Output:
+        sim_inds    A list of indices in cat_docs that have been simulation (match sites
+                    in ads_docs)
+        unsim_inds  A list of indices in cat_docs that have not been simulated (do not
+                    match sites in ads_docs)
+    '''
+    # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
+    # Note that we ignore any energy values in the adsorbate collection, because there are no
+    # energy values in the catalog.
+    ads_hashes = hash_docs(ads_docs, ignore_keys=['energy', 'formula', 'shift', 'top'])
+    cat_hashes = hash_docs(cat_docs, ignore_keys=['formula', 'shift', 'top'])
+    unsim_hashes = set(cat_hashes)-set(ads_hashes)
+
+    # Perform the filtering while simultaneously populating the `docs` output.
+    unsim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
+                  if cat_hash in unsim_hashes]
+    sim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
+                if cat_hash not in unsim_hashes]
+    return set(sim_inds), set(unsim_inds)
+
+
 def hash_docs(docs, ignore_keys=None, _return_hashes=True):
     '''
     This function helps convert the important characteristics of our systems into hashes
@@ -209,80 +338,6 @@ def hash_doc(doc, ignore_keys=None, _return_hash=True):
     # For unit testing, because hashes change between instances of Python
     else:
         return system
-
-
-def split_catalog(ads_docs, cat_docs):
-    '''
-    The same as `get_docs`, but with already-simulated entries filtered out.
-    This is best done right after you pull the docs; don't modify them too much
-    unless you know what you're doing.
-
-    Inputs:
-        ads_docs    A list of docs coming from get_docs that correspond to the adsorption database
-        cat_docs    A list of docs coming from get_docs that correspond to the catalog database
-    Output:
-        sim_inds    A list of indices in cat_docs that have been simulation (match sites
-                    in ads_docs)
-        unsim_inds  A list of indices in cat_docs that have not been simulated (do not
-                    match sites in ads_docs)
-    '''
-    # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
-    # Note that we ignore any energy values in the adsorbate collection, because there are no
-    # energy values in the catalog.
-    ads_hashes = hash_docs(ads_docs, ignore_keys=['energy', 'formula', 'shift', 'top'])
-    cat_hashes = hash_docs(cat_docs, ignore_keys=['formula', 'shift', 'top'])
-    unsim_hashes = set(cat_hashes)-set(ads_hashes)
-
-    # Perform the filtering while simultaneously populating the `docs` output.
-    unsim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
-                  if cat_hash in unsim_hashes]
-    sim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
-                if cat_hash not in unsim_hashes]
-    return set(sim_inds), set(unsim_inds)
-
-
-def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
-                        fingerprints=None, max_atoms=None):
-    '''
-    The same as `get_docs`, but with already-simulated entries filtered out
-
-    Inputs:
-        adsorbates      A list of strings indicating the adsorbates that you want to make a
-                        prediction for.
-        calc_settings   The calculation settings that we want to filter by. If we are using
-                        something other than beef-vdw or rpbe, then we need to do some
-                        more hard-coding here so that we know what in the catalog
-                        can work as a flag for this new calculation method.
-        vasp_settings   The vasp settings that we want to filter by.
-        fingerprints    A dictionary of fingerprints and their locations in our
-                        mongo documents. This is how we can pull out more (or less)
-                        information from our database.
-        max_atoms       The maximum number of atoms in the system that you want to pull
-    Output:
-        docs    A list of dictionaries for various fingerprints. Useful for
-                creating lists of GASpy `parameters` dictionaries.
-    '''
-    # Default value for fingerprints. Since it's a mutable dictionary, we define it
-    # down here instead of in the __init__ line.
-    if not fingerprints:
-        fingerprints = defaults.fingerprints()
-
-    # Fetch mongo docs for our results and catalog databases so that we can
-    # start filtering out cataloged sites that we've already simulated.
-    with get_mongo_collection('adsorption') as ads_client:
-        ads_docs = get_docs(ads_client, 'adsorption',
-                            calc_settings=calc_settings,
-                            vasp_settings=vasp_settings,
-                            fingerprints=fingerprints,
-                            adsorbates=adsorbates)
-    with get_mongo_collection('catalog_readonly') as cat_client:
-        cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
-
-    # Use the `split_catalog` function to find the indices in `cat_docs` that correspond
-    # with item that we have not yet simulated. Then use that list to build the documents.
-    _, unsim_inds = split_catalog(ads_docs, cat_docs)
-    docs = [cat_docs[i] for i in unsim_inds]
-    return docs
 
 
 def remove_duplicates():
