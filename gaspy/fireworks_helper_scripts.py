@@ -5,9 +5,8 @@ import getpass
 import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 import ase.io
-from .utils import vasp_settings_to_str, print_dict, read_rc
+from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
 from . import vasp_functions, defaults
-from .vasp_functions import atoms_to_hex
 
 
 def running_fireworks(name_dict, launchpad):
@@ -68,7 +67,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=80, max_miller=2):
         return
 
     # Generate a string representation that we can pass to the job as input
-    atom_hex = atoms_to_hex(atoms)
+    atom_trajhex = encode_atoms_to_trajhex(atoms)
     # Two steps - write the input file and python script to local directory,
     # then relax that traj file
     vasp_filename = vasp_functions.__file__
@@ -82,7 +81,7 @@ def make_firework(atoms, fw_name, vasp_setngs, max_atoms=80, max_miller=2):
                                                        'contents': vasp_functions_contents}])
 
     write_atoms_file = PyTask(func='vasp_functions.hex_to_file',
-                              args=['slab_in.traj', atom_hex])
+                              args=['slab_in.traj', atom_trajhex])
 
     opt_bulk = PyTask(func='vasp_functions.runVasp',
                       args=['slab_in.traj', 'slab_relaxed.traj', vasp_setngs],
@@ -112,19 +111,12 @@ def get_firework_info(fw):
     "vasp_settings" [str] used to perform the relaxation
     '''
     # Pull the atoms objects from the firework. They are encoded, though
-    atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+    atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
     #find the vasp_functions.hex_to_file task atoms object
     vasp_settings = fw.name['vasp_settings']
 
-    # To decode the atoms objects, we need to write them into files and then load
-    # them again. To prevent multiple tasks from writing/reading to the same file,
-    # we use uuid to create unique file names to write to/read from.
-    fname = str(uuid.uuid4()) + '.traj'
-    with open(fname, 'w') as fhandle:
-        fhandle.write(utils.decode_hex_to_atoms(atoms_hex))
-    atoms = ase.io.read(fname)
-    starting_atoms = ase.io.read(fname, index=0)
-    os.remove(fname)    # Clean up
+    atoms = decode_trajhex_to_atoms(atoms_trajhex)
+    starting_atoms = decode_trajhex_to_atoms(atoms_trajhex, index=0)
 
     hex_to_file_tasks = [a for a in fw.spec['_tasks']
                          if a['_fw_name'] == 'PyTask' and
@@ -135,11 +127,7 @@ def get_firework_info(fw):
         # To decode the atoms objects, we need to write them into files and then load
         # them again. To prevent multiple tasks from writing/reading to the same file,
         # we use uuid to create unique file names to write to/read from.
-        fname = str(uuid.uuid4()) + '.traj'
-        with open(fname, 'w') as fhandle:
-            fhandle.write(spec_atoms_hex.decode('hex'))
-        spec_atoms = ase.io.read(fname)
-        os.remove(fname)    # Clean up
+        spec_atoms = decode_trajhex_to_atoms(spec_atoms_hex)
 
         if len(spec_atoms) != len(starting_atoms):
             raise RuntimeError('Spec atoms does not match starting atoms, investigate FW %d' % fw.fw_id)
@@ -159,12 +147,12 @@ def get_firework_info(fw):
             vasp_settings['pp_version'] = '5.3.5'
         vasp_settings['pp_guessed'] = True
     if 'gga' not in vasp_settings:
-        settings = defaults.exchange_correlationals[vasp_settings['xc']]
+        settings = defaults.exchange_correlational_settings()[vasp_settings['xc']]
         for key in settings:
             vasp_settings[key] = settings[key]
     vasp_settings = vasp_settings_to_str(vasp_settings)
 
-    return atoms, starting_atoms, atoms_hex, vasp_settings
+    return atoms, starting_atoms, atoms_trajhex, vasp_settings
 
 
 def defuse_lost_runs():

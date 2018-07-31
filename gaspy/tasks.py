@@ -68,11 +68,11 @@ class UpdateAllDB(luigi.WrapperTask):
                                         kwargs={'type': 'slab_surface_energy'})
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
-        with gasdb.mongo_collection('adsorption') as adsorption_client:
+        with gasdb.get_mongo_collection('adsorption') as adsorption_client:
             fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
         fwids = dict.fromkeys(fwids)
 
-        with gasdb.mongo_collection('surface_energy') as surface_energy_client:
+        with gasdb.get_mongo_collection('surface_energy') as surface_energy_client:
             surface_fwids = [doc['processed_data']['FW_info'].values() for doc in surface_energy_client.find()]
         surface_fwids = dict.fromkeys([item for sublist in surface_fwids for item in sublist])
 
@@ -164,7 +164,7 @@ class UpdateEnumerations(luigi.Task):
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
     def run(self):
-        with gasdb.mongo_collection('catalog') as catalog_client:
+        with gasdb.get_mongo_collection('catalog') as catalog_client:
             # Load the configurations
             configs = pickle.load(open(self.input().fn, 'rb'))
             # Find the unique configurations based on the fingerprint of each site
@@ -212,7 +212,7 @@ class DumpToAuxDB(luigi.Task):
 
         # Get all of the FW numbers that have been loaded into the atoms collection already.
         # We turn the list into a dictionary so that we can parse through it more quickly.
-        with gasdb.mongo_collection('atoms') as atoms_client:
+        with gasdb.get_mongo_collection('atoms') as atoms_client:
             atoms_fws = [a['fwid'] for a in atoms_client.find({'fwid': {'$exists': True}})]
             atoms_fws = dict.fromkeys(atoms_fws)
 
@@ -301,12 +301,12 @@ class DumpFWToTraj(luigi.Task):
     def run(self):
         lpad = fwhs.get_launchpad()
         fw = lpad.get_fw_by_id(self.fwid)
-        atoms_hex = fw.launches[-1].action.stored_data['opt_results'][1]
+        atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
             with open(self.temp_output_path, 'w') as fhandle:
-                fhandle.write(utils.decode_hex_to_atoms(atoms_hex))
+                fhandle.write(utils.decode_trajhex_to_atoms(atoms_trajhex))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/FW_structures/%s.traj' % (self.fwid))
@@ -423,7 +423,7 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
-        with gasdb.mongo_collection('adsorption') as adsorption_client:
+        with gasdb.get_mongo_collection('adsorption') as adsorption_client:
             adsorption_client.insert_one(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
@@ -504,7 +504,7 @@ class SubmitToFW(luigi.Task):
             search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
 
         # Grab all of the matching entries in the Auxiliary database
-        with gasdb.mongo_collection('atoms') as atoms_client:
+        with gasdb.get_mongo_collection('atoms') as atoms_client:
             self.matching_doc = list(atoms_client.find(search_strings))
 
         # If there are no matching entries, we need to yield a requirement that will
@@ -533,7 +533,7 @@ class SubmitToFW(luigi.Task):
                                   'fwname.top': self.parameters['slab']['top'],
                                   'fwname.mpid': self.parameters['bulk']['mpid'],
                                   'fwname.adsorbate': self.parameters['adsorption']['adsorbates'][0]['name']}
-                with gasdb.mongo_collection('atoms') as atoms_client:
+                with gasdb.get_mongo_collection('atoms') as atoms_client:
                     self.matching_docs_all_calcs = list(atoms_client.find(search_strings))
 
                 # If we don't modify the parameters, the parameters will contain the FP for the
@@ -1621,7 +1621,7 @@ class DumpToSurfaceEnergyDB(luigi.Task):
         surface_energy_pkl_slab['processed_data'] = processed_data
 
         # Write the entry into the database
-        with gasdb.mongo_collection('surface_energy') as surface_energy_client:
+        with gasdb.get_mongo_collection('surface_energy') as surface_energy_client:
             surface_energy_client.insert_one(surface_energy_pkl_slab)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
