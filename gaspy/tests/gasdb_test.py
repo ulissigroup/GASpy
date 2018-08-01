@@ -10,10 +10,14 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
-from ..gasdb import get_adsorption_docs, \
+from ..gasdb import get_mongo_collection, \
+    ConnectableCollection, \
+    get_adsorption_docs, \
     _clean_up_aggregated_docs, \
     get_catalog_docs, \
     get_surface_docs, \
+    get_unsimulated_catalog_docs, \
+    get_attempted_adsorption_docs, \
     hash_docs, \
     hash_doc
 
@@ -22,7 +26,52 @@ import copy
 import datetime
 from bson.objectid import ObjectId
 import random
+from pymongo import MongoClient
+from pymongo.collection import Collection
+from pymongo.errors import OperationFailure
 from .baselines import get_expected_adsorption_documents
+from ..utils import read_rc
+
+
+def test_get_mongo_collection():
+    collection = get_mongo_collection(collection_tag='unit_testing_adsorption')
+
+    # Make sure it's the correct class type
+    assert isinstance(collection, ConnectableCollection)
+
+    # Make sure it's connected and authenticated by counting the documents
+    try:
+        _ = collection.count()  # noqa: F841
+    except OperationFailure:
+        assert False
+
+
+def test_ConnectableCollection():
+    '''
+    Verify that the extended `ConnectableCollection` class
+    is still a Collection class and has the appropriate methods
+    '''
+    # Login info
+    mongo_info = read_rc()['mongo_info']['unit_testing_adsorption']
+    host = mongo_info['host']
+    port = int(mongo_info['port'])
+    database_name = mongo_info['database']
+    user = mongo_info['user']
+    password = mongo_info['password']
+    collection_name = mongo_info['collection_name']
+
+    # Connect to the database/collection
+    client = MongoClient(host=host, port=port)
+    database = getattr(client, database_name)
+    database.authenticate(user, password)
+    collection = ConnectableCollection(database=database, name=collection_name)
+
+    # Verify that the extended class is still a Connection class
+    assert isinstance(collection, Collection)
+
+    # Verify that the methods necessary for connection are present
+    assert '__enter__' in dir(collection)
+    assert '__exit__' in dir(collection)
 
 
 def test_get_adsorption_docs():
@@ -33,9 +82,22 @@ def test_get_adsorption_docs():
 
 def get_expected_aggregated_adsorption_documents():
     '''
-    Note that we have only one document because the other one should have been filtered out.
+    Note that we have only two of three documents in the colection
+    because the other one should have been filtered out.
     '''
-    docs = [{'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
+    docs = [{'adslab_calculation_date': datetime.datetime(2017, 11, 2, 14, 9, 5, 689000),
+             'adsorbates': ['CO'],
+             'coordination': 'Pd-Pd',
+             'energy': -1.5959449799999899,
+             'formula': 'COPd16',
+             'miller': [1, 0, 0],
+             'mongo_id': ObjectId('5b17f58a75298d709bcf7e2e'),
+             'mpid': 'mp-2',
+             'neighborcoord': ['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd'],
+             'nextnearestcoordination': 'Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd',
+             'shift': 0.24999999999999997,
+             'top': True},
+            {'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
              'adsorbates': ['H'],
              'coordination': 'Al-Ni',
              'energy': -0.16585670499999816,
@@ -365,6 +427,77 @@ def get_expected_aggregated_surface_documents():
     return docs
 
 
+def test_get_unsimulated_catalog_docs():
+    expected_docs = get_expected_aggregated_catalog_documents()
+
+    # Configured so that nothing in the catalog is already simulated
+    docs = get_unsimulated_catalog_docs(adsorbates=['H'],
+                                        _catalog_collection_tag='unit_testing_catalog',
+                                        _adsorption_collection_tag='unit_testing_adsorption')
+    assert docs == expected_docs
+
+    # Configured so that one item in the catalog is already simulated
+    docs = get_unsimulated_catalog_docs(adsorbates=['CO'],
+                                        _catalog_collection_tag='unit_testing_catalog',
+                                        _adsorption_collection_tag='unit_testing_adsorption')
+    assert docs == expected_docs[1:]
+
+
+def test_get_attempted_adsorption_docs():
+    '''
+    The expected documents in here should differ from the ones in
+    `get_expected_aggregated_adsorption_documents` because these ones
+    use initial fingerprints, not final fingerprints.
+    '''
+    expected_docs = [{'adslab_calculation_date': datetime.datetime(2017, 11, 2, 14, 9, 5, 689000),
+                      'adsorbates': ['CO'],
+                      'coordination': 'Pd-Pd',
+                      'energy': -1.5959449799999899,
+                      'formula': 'COPd16',
+                      'miller': [1, 0, 0],
+                      'mongo_id': ObjectId('5b17f58a75298d709bcf7e2e'),
+                      'mpid': 'mp-2',
+                      'neighborcoord': ['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd'],
+                      'nextnearestcoordination': 'Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd',
+                      'shift': 0.24999999999999997,
+                      'top': True},
+                     {'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
+                      'adsorbates': ['H'],
+                      'coordination': 'Al-Al-Ni',
+                      'energy': -0.16585670499999816,
+                      'formula': 'HAl6Ni10',
+                      'miller': [0, 0, 1],
+                      'mongo_id': ObjectId('59a015cbd3952577173b122d'),
+                      'mpid': 'mp-16514',
+                      'neighborcoord': ['Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
+                                        'Ni:Al-Al-Al-Al-Al-Ni-Ni-Ni-Ni',
+                                        'Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni'],
+                      'nextnearestcoordination': 'Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
+                      'shift': 0,
+                      'top': True},
+                     {'adslab_calculation_date': 'ISODate("2017-05-16T08:56:53.388Z")',
+                      'adsorbates': ['CO'],
+                      'coordination': 'Al-Al',
+                      'energy': 11.503626990000003,
+                      'formula': 'HAl4Au8',
+                      'miller': [1, 1, 2],
+                      'mongo_id': ObjectId('59a015cbd39525770b3b122d'),
+                      'mpid': 'mp-1018179',
+                      'neighborcoord': ['Al:Al-Al-Au-Au-Au', 'Al:Al-Al-Au-Au-Au'],
+                      'nextnearestcoordination': 'Au-Au-Au-Au-Au-Au-Au-Au-Au-Au',
+                      'shift': 0.07726067999999997,
+                      'top': False}]
+
+    # Without adsorbate filter
+    docs = get_attempted_adsorption_docs(_collection_tag='unit_testing_adsorption')
+    assert docs == expected_docs
+
+    # With adsorbate filter
+    docs = get_attempted_adsorption_docs(adsorbates=['H'],
+                                         _collection_tag='unit_testing_adsorption')
+    assert docs == expected_docs[1:2]
+
+
 def test_hash_docs():
     '''
     Note that since Python 3's `hash` returns a different hash for
@@ -375,17 +508,28 @@ def test_hash_docs():
 
     # Ignore no keys
     strings = hash_docs(docs=docs, _return_hashes=False)
-    expected_strings = [("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
-                         'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
-                         "mpid=mp-16514; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
-                         "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
-                         'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
-                         'top=True; ')]
+    expected_strings = ["adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                        "mpid=mp-2; neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', "
+                        "'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
+                        'top=True; ',
+                        "adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                        'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                        "mpid=mp-16514; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
+                        "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                        'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                        'top=True; ']
     assert strings == expected_strings
 
     # Ignore a key
     strings = hash_docs(docs=docs, ignore_keys=['mpid'], _return_hashes=False)
-    expected_strings = ["adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+    expected_strings = ["adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                        "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
+                        'top=True; ',
+                        "adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
                         'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
                         "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
                         'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
@@ -403,20 +547,24 @@ def test_hash_doc():
 
     # Ignore no keys
     string = hash_doc(doc=doc, _return_hash=False)
-    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
-                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
-                       'mongo_id=59a015cbd3952577173b122d; mpid=mp-16514; '
-                       "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
-                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+    expected_string = ("adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                       'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                       'mongo_id=5b17f58a75298d709bcf7e2e; mpid=mp-2; '
+                       "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                       'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
                        'top=True; ')
     assert string == expected_string
 
     # Ignore a key
     string = hash_doc(doc=doc, ignore_keys=['mpid'], _return_hash=False)
-    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
-                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
-                       "mongo_id=59a015cbd3952577173b122d; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
-                       "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
-                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+    expected_string = ("adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                       'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                       'mongo_id=5b17f58a75298d709bcf7e2e; '
+                       "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                       'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
                        'top=True; ')
     assert string == expected_string
+
+
+def test_remove_duplicates():
+    assert False

@@ -35,7 +35,7 @@ def get_mongo_collection(collection_tag):
         collection  A mongo collection object corresponding to the collection
                     tag you specified, but with `__enter__` and `__exit__` methods.
     '''
-    # Add the enter and exit methods to pymongo.collection
+    # Login info
     mongo_info = utils.read_rc()['mongo_info'][collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
@@ -44,7 +44,7 @@ def get_mongo_collection(collection_tag):
     password = mongo_info['password']
     collection_name = mongo_info['collection_name']
 
-    # Access the client and authenticate
+    # Connect to the database/collection
     client = MongoClient(host=host, port=port)
     database = getattr(client, database_name)
     database.authenticate(user, password)
@@ -53,7 +53,8 @@ def get_mongo_collection(collection_tag):
     return collection
 
 
-# Make an extendeded version of the pymongo.collection.Collection class that can be open and closed
+# An extendeded version of the pymongo.collection.Collection class
+# that can be open and closed via a `with` statement
 class ConnectableCollection(Collection):
     def __enter__(self):
         return self
@@ -94,19 +95,19 @@ def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
     # Get the documents and clean them up
     pipeline = [match, group]
     with get_mongo_collection(collection_tag=_collection_tag) as collection:
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         print('Now pulling adsorption documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+    docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
-    return cleaned_docs
+    return docs
 
 
 def _clean_up_aggregated_docs(docs, expected_keys):
     '''
-    Some of the Mongo documents we get are just plain dirty and end up mucking up
-    downstream pipelines. This function cleans them up so that they're less
-    likely to break something.
+    This function takes a list of dictionaries and returns a new instance
+    of the list without dictionaries that have missing keys or `None` as values.
+    It assumes that dictionaries are flat, thus the `aggregated` part in the name.
 
     Arg:
         docs            A list of mongo documents, AKA a list of dicts, AKA a list of JSONs
@@ -142,7 +143,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
-def get_catalog_docs(_collection_tag='catalog'):
+def get_catalog_docs(_collection_tag='catalog_readonly'):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `catalog`.
@@ -160,8 +161,8 @@ def get_catalog_docs(_collection_tag='catalog'):
     # Get the documents and clean them up
     pipeline = [group]
     with get_mongo_collection(collection_tag=_collection_tag) as collection:
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         print('Now pulling catalog documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
@@ -192,86 +193,103 @@ def get_surface_docs(_collection_tag='surface_energy'):
     # Get the documents and clean them up
     pipeline = [match, group]
     with get_mongo_collection(collection_tag=_collection_tag) as collection:
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         print('Now pulling surface documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
     return cleaned_docs
 
 
-def unsimulated_catalog(adsorbates, calc_settings=None, vasp_settings=None,
-                        fingerprints=None, max_atoms=None):
+def get_unsimulated_catalog_docs(adsorbates,
+                                 _catalog_collection_tag='catalog_readonly',
+                                 _adsorption_collection_tag='adsorption'):
     '''
-    The same as `get_docs`, but with already-simulated entries filtered out
+    Gets the same documents from `get_catalog_docs`, but then filters out
+    all items that also show up in `get_adsorption_docs`, i.e., gets the
+    catalog items that have not yet been simulated using our default
+    settings.
 
-    Inputs:
-        adsorbates      A list of strings indicating the adsorbates that you want to make a
-                        prediction for.
-        calc_settings   The calculation settings that we want to filter by. If we are using
-                        something other than beef-vdw or rpbe, then we need to do some
-                        more hard-coding here so that we know what in the catalog
-                        can work as a flag for this new calculation method.
-        vasp_settings   The vasp settings that we want to filter by.
-        fingerprints    A dictionary of fingerprints and their locations in our
-                        mongo documents. This is how we can pull out more (or less)
-                        information from our database.
-        max_atoms       The maximum number of atoms in the system that you want to pull
+    Args:
+        adsorbates  Every site in the catalog can be simulated with sets of
+                    different adsorbates. Here, you specify a sequence of
+                    strings indicating which set of adsorbates you are
+                    checking for simulation. For example:  using
+                    ['OH', 'H'] will look for simulations where OH and H
+                    are co-adsorbed. It will *not* look for simulations
+                    with either OH or H.
+        _catalog_collection_tag     *For unit testing only!* Do not modify.
+        _adsorption_collection_tag  *For unit testing only!* Do not modify.
     Output:
-        docs    A list of dictionaries for various fingerprints. Useful for
-                creating lists of GASpy `parameters` dictionaries.
+        docs    A list of dictionaries for various fingerprints.
     '''
-    # Default value for fingerprints. Since it's a mutable dictionary, we define it
-    # down here instead of in the __init__ line.
-    if not fingerprints:
-        fingerprints = defaults.fingerprints()
+    docs_simulated = get_attempted_adsorption_docs(adsorbates=adsorbates,
+                                                   _collection_tag=_adsorption_collection_tag)
+    docs_catalog = get_catalog_docs(_collection_tag=_catalog_collection_tag)
 
-    # Fetch mongo docs for our results and catalog databases so that we can
-    # start filtering out cataloged sites that we've already simulated.
-    with get_mongo_collection('adsorption') as ads_client:
-        ads_docs = get_docs(ads_client, 'adsorption',
-                            calc_settings=calc_settings,
-                            vasp_settings=vasp_settings,
-                            fingerprints=fingerprints,
-                            adsorbates=adsorbates)
-    with get_mongo_collection('catalog_readonly') as cat_client:
-        cat_docs = get_docs(cat_client, 'catalog', fingerprints=fingerprints, max_atoms=max_atoms)
+    # Identify unsimulated documents by comparing hashes
+    # of catalog docs vs. simulated adsorption docs
+    hashes_simulated = hash_docs(docs_simulated, ignore_keys=['mongo_id',
+                                                              'formula',
+                                                              'energy',
+                                                              'adsorbates',
+                                                              'adslab_calculation_date'])
+    hashes_catalog = hash_docs(docs_catalog, ignore_keys=['mongo_id', 'formula'])
+    hashes_unsimulated = set(hashes_catalog) - set(hashes_simulated)
 
-    # Use the `split_catalog` function to find the indices in `cat_docs` that correspond
-    # with item that we have not yet simulated. Then use that list to build the documents.
-    _, unsim_inds = split_catalog(ads_docs, cat_docs)
-    docs = [cat_docs[i] for i in unsim_inds]
+    docs = []
+    for doc, hash_ in zip(docs_catalog, hashes_catalog):
+        if hash_ in hashes_unsimulated:
+            docs.append(doc)
+
     return docs
 
 
-def split_catalog(ads_docs, cat_docs):
+def get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
     '''
-    The same as `get_docs`, but with already-simulated entries filtered out.
-    This is best done right after you pull the docs; don't modify them too much
-    unless you know what you're doing.
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `adsorption`. This differs from `get_adsorption_docs`
+    in two ways:  1) it does not filter out "bad adsorptions" and 2) it takes
+    fingerprints based on initial configurations, not final, post-relaxation
+    cofigurations.
 
-    Inputs:
-        ads_docs    A list of docs coming from get_docs that correspond to the adsorption database
-        cat_docs    A list of docs coming from get_docs that correspond to the catalog database
-    Output:
-        sim_inds    A list of indices in cat_docs that have been simulation (match sites
-                    in ads_docs)
-        unsim_inds  A list of indices in cat_docs that have not been simulated (do not
-                    match sites in ads_docs)
+    Args:
+        adsorbates      [optional] A list of the adsorbates that you need to
+                        be present in each document's corresponding atomic
+                        structure. Note that if you pass a list with two adsorbates,
+                        then you will only get matches for structures with *both*
+                        of those adsorbates; you will *not* get structures
+                        with only one of the adsorbates. If you pass nothing, then we
+                        get all documents regardless of adsorbates.
+        _collection_tag *For unit testing only.* Do not change this.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.adsorption_fingerprints`
+                and who meet the filtering criteria of
+                `gaspy.defaults.adsorption_filters`
     '''
-    # Hash the docs so that we can filter out any items in the catalog that we have already relaxed.
-    # Note that we ignore any energy values in the adsorbate collection, because there are no
-    # energy values in the catalog.
-    ads_hashes = hash_docs(ads_docs, ignore_keys=['energy', 'formula', 'shift', 'top'])
-    cat_hashes = hash_docs(cat_docs, ignore_keys=['formula', 'shift', 'top'])
-    unsim_hashes = set(cat_hashes)-set(ads_hashes)
+    # Establish the information that'll be contained in the documents we'll be getting
+    fingerprints = defaults.adsorption_fingerprints()
+    fingerprints['coordination'] = '$processed_data.fp_init.coordination'
+    fingerprints['neighborcoord'] = '$processed_data.fp_init.neighborcoord'
+    fingerprints['nextnearestcoordination'] = '$processed_data.fp_init.nextnearestcoordination'
+    group = {'$group': {'_id': fingerprints}}
 
-    # Perform the filtering while simultaneously populating the `docs` output.
-    unsim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
-                  if cat_hash in unsim_hashes]
-    sim_inds = [ind for ind, cat_hash in tqdm.tqdm(enumerate(cat_hashes))
-                if cat_hash not in unsim_hashes]
-    return set(sim_inds), set(unsim_inds)
+    # Get only the documents that have the specified adsorbates
+    filters = {}
+    if adsorbates:
+        filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
+    match = {'$match': filters}
+
+    # Get the documents and clean them up
+    pipeline = [match, group]
+    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+        print('Now pulling adsorption documents for sites we have attepmted...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        docs = [doc for doc in tqdm.tqdm(cursor)]
+    docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+
+    return docs
 
 
 def hash_docs(docs, ignore_keys=None, _return_hashes=True):
@@ -298,9 +316,8 @@ def hash_docs(docs, ignore_keys=None, _return_hashes=True):
     ignore_keys.append('mongo_id')
 
     # Hash with a progress bar
-    print('Now hashing documents...')
     hashes = [hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
-              for doc in tqdm.tqdm(docs)]
+              for doc in docs]
     return hashes
 
 
