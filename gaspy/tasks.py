@@ -59,8 +59,9 @@ class UpdateAllDB(luigi.WrapperTask):
         DumpToAuxDB().run()
 
         # Get every doc in the Aux database
-        ads_docs = find_docs(collection_tag='adsorption', kwargs={'type': 'slab+adsorbate'})
-        surface_energy_docs = find_docs(collection_tag='surface_energy', kwargs={'type': 'slab_surface_energy'})
+        with gasdb.get_mongo_collection(collection_tag='atoms') as collection:
+            ads_docs = list(collection.find({'type': 'slab+adsorbate'}))
+            surface_energy_docs = list(collection.find({'type': 'slab_surface_energy'}))
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.get_mongo_collection('adsorption') as adsorption_client:
