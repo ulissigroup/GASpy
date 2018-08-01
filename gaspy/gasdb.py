@@ -223,29 +223,28 @@ def get_unsimulated_catalog_docs(adsorbates,
     Output:
         docs    A list of dictionaries for various fingerprints.
     '''
-    docs_simulated = get_attempted_adsorption_docs(adsorbates=adsorbates,
-                                                   _collection_tag=_adsorption_collection_tag)
+    docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates,
+                                                    _collection_tag=_adsorption_collection_tag)
     docs_catalog = get_catalog_docs(_collection_tag=_catalog_collection_tag)
 
     # Identify unsimulated documents by comparing hashes
     # of catalog docs vs. simulated adsorption docs
-    hashes_simulated = hash_docs(docs_simulated, ignore_keys=['mongo_id',
+    hashes_simulated = _hash_docs(docs_simulated, ignore_keys=['mongo_id',
                                                               'formula',
                                                               'energy',
                                                               'adsorbates',
                                                               'adslab_calculation_date'])
-    hashes_catalog = hash_docs(docs_catalog, ignore_keys=['mongo_id', 'formula'])
+    hashes_catalog = _hash_docs(docs_catalog, ignore_keys=['mongo_id', 'formula'])
     hashes_unsimulated = set(hashes_catalog) - set(hashes_simulated)
 
     docs = []
     for doc, hash_ in zip(docs_catalog, hashes_catalog):
         if hash_ in hashes_unsimulated:
             docs.append(doc)
-
     return docs
 
 
-def get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
+def _get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`. This differs from `get_adsorption_docs`
@@ -284,7 +283,7 @@ def get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption')
     # Get the documents and clean them up
     pipeline = [match, group]
     with get_mongo_collection(collection_tag=_collection_tag) as collection:
-        print('Now pulling adsorption documents for sites we have attepmted...')
+        print('Now pulling adsorption documents for sites we have attempted...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
@@ -292,7 +291,7 @@ def get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption')
     return docs
 
 
-def hash_docs(docs, ignore_keys=None, _return_hashes=True):
+def _hash_docs(docs, ignore_keys=None, _return_hashes=True):
     '''
     This function helps convert the important characteristics of our systems into hashes
     so that we may sort through them more quickly. This is useful when trying to
@@ -316,12 +315,12 @@ def hash_docs(docs, ignore_keys=None, _return_hashes=True):
     ignore_keys.append('mongo_id')
 
     # Hash with a progress bar
-    hashes = [hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
+    hashes = [_hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
               for doc in docs]
     return hashes
 
 
-def hash_doc(doc, ignore_keys=None, _return_hash=True):
+def _hash_doc(doc, ignore_keys=None, _return_hash=True):
     '''
     Hash a single Mongo document (AKA dictionary). This function currently assumes
     that the document is flat---i.e., not nested.
@@ -357,51 +356,53 @@ def hash_doc(doc, ignore_keys=None, _return_hash=True):
         return system
 
 
-def remove_duplicates():
+def remove_duplicates_in_adsorption_collection(_collection_tag='adsorption'):
+    ''' Things that share FireWorks IDs for slab+adsorbate structures are duplicates '''
+    identifying_query = {'adslab_fwid': '$processed_data.FW_info.slab+adsorbate'}
+    _remove_duplicates_in_a_collection(collection_tag=_collection_tag,
+                                       identifying_query=identifying_query)
+
+
+def remove_duplicates_in_atoms_collection(_collection_tag='atoms'):
+    ''' Things that share FireWorks IDs are duplicates '''
+    identifying_query = {'fwid': '$fwid'}
+    _remove_duplicates_in_a_collection(collection_tag=_collection_tag,
+                                       identifying_query=identifying_query)
+
+
+def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
     '''
-    This function will find duplicate entries in the adsorption and atoms collections
-    and delete them.
+    This function removes duplicate entries in a collection. "What constitutes
+    a 'duplicate'", you ask? You do, of course, via the `identifying_query`
+    argument!
+
+    Args:
+        collection_tag      A string indicating which collection you want to parse
+        identifying_query   A mongo-style query (i.e., a dictionary) with a
+                            virtually arbitrary key and a value corresponding
+                            to the location of the Mongo document information
+                            that should be unique among all documents.
     '''
-    # Get the FW info for everything in adsorption DB
-    ads_client = get_mongo_collection('adsorption')
-    ads_docs = list(ads_client.db.adsorption.find({}, {'processed_data.FW_info.slab+adsorbate': 1, '_id': 1}))
+    group = {'_id': identifying_query}
 
-    # Find all of the unique slab+adsorbate FW ID's
-    uniques, inverse, counts = np.unique([doc['processed_data']['FW_info']['slab+adsorbate']
-                                          for doc in ads_docs],
-                                         return_counts=True, return_inverse=True)
+    # Reference <https://www.compose.com/articles/finding-duplicate-documents-in-mongodb/>
+    # for details on how this works
+    group['mongo_ids'] = {'$addToSet': '$_id'}
+    group['count'] = {'$sum': 1}
+    match = {'count': {'$gt': 1}}
 
-    # For each unique FW ID, see if there is more than one entry.
-    # If so, remove all but the first instance
-    for ind, count in enumerate(counts):
-        if count > 1:
-            matching = np.where(inverse == ind)[0]
-            for match in matching[1:]:
-                mongo_id = ads_docs[match]['_id']
-                fwid = ads_docs[match]['processed_data']['FW_info']['slab+adsorbate']
-                ads_client.db.adsorption.remove({'_id': mongo_id})
-                print('Just removed Mongo item %s (duplicate for FWID %s) from adsorption collection' % (mongo_id, fwid))
+    # `docs` will have one entry per FWID that happens to have multiple documents
+    pipeline = [{'$group': group}, {'$match': match}]
+    with get_mongo_collection(collection_tag=collection_tag) as collection:
+        docs = list(collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True))
 
-    # Do it all again, but for the AuxDB (AKA the "atoms" collection)
-    atoms_client = get_mongo_collection('atoms')
-    atoms_docs = list(atoms_client.db.atoms.find({}, {'fwid': 1, '_id': 1}))
-
-    # Find all of the unique slab+adsorbate FW ID's
-    uniques, inverse, counts = np.unique([doc['fwid']
-                                          for doc in atoms_docs],
-                                         return_counts=True, return_inverse=True)
-
-    # For each unique FW ID, see if there is more than one entry.
-    # If so, remove all but the first instance
-    for ind, count in enumerate(counts):
-        if count > 1:
-            matching = np.where(inverse == ind)[0]
-            print(matching)
-            for match in matching[1:]:
-                mongo_id = atoms_docs[match]['_id']
-                fwid = atoms_docs[match]['fwid']
-                atoms_client.db.atoms.remove({'_id': atoms_docs[match]['_id']})
-                print('Just removed Mongo item %s (duplicate for FWID %s) from atoms collection' % (mongo_id, fwid))
+        # For each FWID that has duplicates, keep only the first document.
+        # Delete the rest.
+        for doc in docs:
+            extra_mongo_ids = doc['mongo_ids'][1:]
+            for id_ in extra_mongo_ids:
+                collection.delete_one({'_id': id_})
+                print('Just deleted %s in the %s collection' % (id_, collection_tag))
 
 
 def dump_adsorption_to_json(fname):

@@ -17,9 +17,10 @@ from ..gasdb import get_mongo_collection, \
     get_catalog_docs, \
     get_surface_docs, \
     get_unsimulated_catalog_docs, \
-    get_attempted_adsorption_docs, \
-    hash_docs, \
-    hash_doc
+    _get_attempted_adsorption_docs, \
+    _hash_docs, \
+    _hash_doc, \
+    remove_duplicates_in_adsorption_collection
 
 # Things we need to do the tests
 import copy
@@ -77,7 +78,37 @@ def test_ConnectableCollection():
 def test_get_adsorption_docs():
     expected_docs = get_expected_aggregated_adsorption_documents()
     docs = get_adsorption_docs(_collection_tag='unit_testing_adsorption')
-    assert docs == expected_docs
+    assert _compare_unordered_sequences(docs, expected_docs)
+
+
+def _compare_unordered_sequences(seq0, seq1):
+    '''
+    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
+    (3) the items are not hashable, and (4) items are not orderable, then use this
+    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
+    '''
+    # A hack to ignore mongo IDs, which we don't _really_ care about...
+    seq0 = __remove_mongo_ids_from_docs(seq0)
+    seq1 = __remove_mongo_ids_from_docs(seq1)
+
+    try:
+        for element in seq1:
+            seq0.remove(element)
+    except ValueError:
+        return False
+    return not seq0
+
+
+def __remove_mongo_ids_from_docs(docs):
+    ''' Helper function to remove the 'mongo_id' key:value pairing from a list of dictionaries '''
+    new_docs = []
+    for doc in docs:
+        try:
+            del doc['mongo_id']
+        except KeyError:
+            pass
+        new_docs.append(doc)
+    return new_docs
 
 
 def get_expected_aggregated_adsorption_documents():
@@ -85,19 +116,7 @@ def get_expected_aggregated_adsorption_documents():
     Note that we have only two of three documents in the colection
     because the other one should have been filtered out.
     '''
-    docs = [{'adslab_calculation_date': datetime.datetime(2017, 11, 2, 14, 9, 5, 689000),
-             'adsorbates': ['CO'],
-             'coordination': 'Pd-Pd',
-             'energy': -1.5959449799999899,
-             'formula': 'COPd16',
-             'miller': [1, 0, 0],
-             'mongo_id': ObjectId('5b17f58a75298d709bcf7e2e'),
-             'mpid': 'mp-2',
-             'neighborcoord': ['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd'],
-             'nextnearestcoordination': 'Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd',
-             'shift': 0.24999999999999997,
-             'top': True},
-            {'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
+    docs = [{'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
              'adsorbates': ['H'],
              'coordination': 'Al-Ni',
              'energy': -0.16585670499999816,
@@ -108,6 +127,18 @@ def get_expected_aggregated_adsorption_documents():
              'neighborcoord': ['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni'],
              'nextnearestcoordination': 'Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
              'shift': 0,
+             'top': True},
+            {'adslab_calculation_date': datetime.datetime(2017, 11, 2, 14, 9, 5, 689000),
+             'adsorbates': ['CO'],
+             'coordination': 'Pd-Pd',
+             'energy': -1.5959449799999899,
+             'formula': 'COPd16',
+             'miller': [1, 0, 0],
+             'mongo_id': ObjectId('59a015cbd3952577173b122d'),
+             'mpid': 'mp-2',
+             'neighborcoord': ['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd'],
+             'nextnearestcoordination': 'Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd',
+             'shift': 0.24999999999999997,
              'top': True}]
     return docs
 
@@ -135,21 +166,6 @@ def __make_documents_dirty(docs):
     dirty_docs = copy.deepcopy(docs) + [doc_partial] + [doc_empty]
     dirty_docs = [{'_id': doc} for doc in dirty_docs]   # because mongo is stupid
     return dirty_docs
-
-
-def _compare_unordered_sequences(seq0, seq1):
-    '''
-    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
-    (3) the items are not hashable, and (4) items are not orderable, then use this
-    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
-    '''
-    seq0 = list(seq0)   # make a mutable copy
-    try:
-        for element in seq1:
-            seq0.remove(element)
-    except ValueError:
-        return False
-    return not seq0
 
 
 def test_get_catalog_docs():
@@ -443,7 +459,7 @@ def test_get_unsimulated_catalog_docs():
     assert docs == expected_docs[1:]
 
 
-def test_get_attempted_adsorption_docs():
+def test__get_attempted_adsorption_docs():
     '''
     The expected documents in here should differ from the ones in
     `get_expected_aggregated_adsorption_documents` because these ones
@@ -461,20 +477,6 @@ def test_get_attempted_adsorption_docs():
                       'nextnearestcoordination': 'Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd',
                       'shift': 0.24999999999999997,
                       'top': True},
-                     {'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
-                      'adsorbates': ['H'],
-                      'coordination': 'Al-Al-Ni',
-                      'energy': -0.16585670499999816,
-                      'formula': 'HAl6Ni10',
-                      'miller': [0, 0, 1],
-                      'mongo_id': ObjectId('59a015cbd3952577173b122d'),
-                      'mpid': 'mp-16514',
-                      'neighborcoord': ['Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
-                                        'Ni:Al-Al-Al-Al-Al-Ni-Ni-Ni-Ni',
-                                        'Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni'],
-                      'nextnearestcoordination': 'Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
-                      'shift': 0,
-                      'top': True},
                      {'adslab_calculation_date': 'ISODate("2017-05-16T08:56:53.388Z")',
                       'adsorbates': ['CO'],
                       'coordination': 'Al-Al',
@@ -486,19 +488,33 @@ def test_get_attempted_adsorption_docs():
                       'neighborcoord': ['Al:Al-Al-Au-Au-Au', 'Al:Al-Al-Au-Au-Au'],
                       'nextnearestcoordination': 'Au-Au-Au-Au-Au-Au-Au-Au-Au-Au',
                       'shift': 0.07726067999999997,
-                      'top': False}]
+                      'top': False},
+                     {'adslab_calculation_date': datetime.datetime(2017, 5, 16, 8, 56, 29, 993000),
+                      'adsorbates': ['H'],
+                      'coordination': 'Al-Al-Ni',
+                      'energy': -0.16585670499999816,
+                      'formula': 'HAl6Ni10',
+                      'miller': [0, 0, 1],
+                      'mongo_id': ObjectId('5b620d3a38bc9bc4448e4985'),
+                      'mpid': 'mp-16514',
+                      'neighborcoord': ['Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
+                                        'Ni:Al-Al-Al-Al-Al-Ni-Ni-Ni-Ni',
+                                        'Al:Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni'],
+                      'nextnearestcoordination': 'Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni',
+                      'shift': 0,
+                      'top': True}]
 
     # Without adsorbate filter
-    docs = get_attempted_adsorption_docs(_collection_tag='unit_testing_adsorption')
-    assert docs == expected_docs
+    docs = _get_attempted_adsorption_docs(_collection_tag='unit_testing_adsorption')
+    assert _compare_unordered_sequences(docs, expected_docs)
 
     # With adsorbate filter
-    docs = get_attempted_adsorption_docs(adsorbates=['H'],
-                                         _collection_tag='unit_testing_adsorption')
-    assert docs == expected_docs[1:2]
+    docs = _get_attempted_adsorption_docs(adsorbates=['H'],
+                                          _collection_tag='unit_testing_adsorption')
+    assert _compare_unordered_sequences(docs, expected_docs[2:])
 
 
-def test_hash_docs():
+def test__hash_docs():
     '''
     Note that since Python 3's `hash` returns a different hash for
     each instance of Python, we actually perform regression testing
@@ -507,37 +523,37 @@ def test_hash_docs():
     docs = get_expected_aggregated_adsorption_documents()
 
     # Ignore no keys
-    strings = hash_docs(docs=docs, _return_hashes=False)
-    expected_strings = ["adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
-                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
-                        "mpid=mp-2; neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', "
-                        "'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
-                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
-                        'top=True; ',
-                        "adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+    strings = _hash_docs(docs=docs, _return_hashes=False)
+    expected_strings = ["adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
                         'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
                         "mpid=mp-16514; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
                         "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
                         'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                        'top=True; ',
+                        "adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                        "mpid=mp-2; neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', "
+                        "'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
                         'top=True; ']
     assert strings == expected_strings
 
     # Ignore a key
-    strings = hash_docs(docs=docs, ignore_keys=['mpid'], _return_hashes=False)
-    expected_strings = ["adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
-                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
-                        "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
-                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
-                        'top=True; ',
-                        "adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+    strings = _hash_docs(docs=docs, ignore_keys=['mpid'], _return_hashes=False)
+    expected_strings = ["adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
                         'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
                         "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
                         'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
+                        'top=True; ',
+                        "adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
+                        'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
+                        "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
+                        'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
                         'top=True; ']
     assert strings == expected_strings
 
 
-def test_hash_doc():
+def test__hash_doc():
     '''
     Note that since Python 3's `hash` returns a different hash for
     each instance of Python, we actually perform regression testing
@@ -546,25 +562,63 @@ def test_hash_doc():
     doc = get_expected_aggregated_adsorption_documents()[0]
 
     # Ignore no keys
-    string = hash_doc(doc=doc, _return_hash=False)
-    expected_string = ("adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
-                       'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
-                       'mongo_id=5b17f58a75298d709bcf7e2e; mpid=mp-2; '
-                       "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
-                       'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
+    string = _hash_doc(doc=doc, _return_hash=False)
+    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                       'mongo_id=59a015cbd3952577173b122d; mpid=mp-16514; '
+                       "neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', 'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
                        'top=True; ')
     assert string == expected_string
 
     # Ignore a key
-    string = hash_doc(doc=doc, ignore_keys=['mpid'], _return_hash=False)
-    expected_string = ("adslab_calculation_date=2017-11-02 14:09:05.689000; adsorbates=['CO']; "
-                       'coordination=Pd-Pd; energy=-1.6; formula=COPd16; miller=[1, 0, 0]; '
-                       'mongo_id=5b17f58a75298d709bcf7e2e; '
-                       "neighborcoord=['Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd', 'Pd:Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd']; "
-                       'nextnearestcoordination=Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd-Pd; shift=0.25; '
+    string = _hash_doc(doc=doc, ignore_keys=['mpid'], _return_hash=False)
+    expected_string = ("adslab_calculation_date=2017-05-16 08:56:29.993000; adsorbates=['H']; "
+                       'coordination=Al-Ni; energy=-0.17; formula=HAl6Ni10; miller=[0, 0, 1]; '
+                       "mongo_id=59a015cbd3952577173b122d; neighborcoord=['Al:Ni-Ni-Ni-Ni-Ni-Ni-Ni', "
+                       "'Ni:Al-Al-Al-Al-Al-Ni-Ni']; "
+                       'nextnearestcoordination=Al-Al-Al-Al-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni; shift=0; '
                        'top=True; ')
     assert string == expected_string
 
 
-def test_remove_duplicates():
-    assert False
+def test_remove_duplicates_in_adsorption_collection():
+    collection_tag = 'unit_testing_adsorption'
+    starting_doc_count, id_of_duplicate_doc = add_duplicate_document_to_collection(collection_tag)
+
+    try:
+        remove_duplicates_in_adsorption_collection(_collection_tag=collection_tag)
+
+        # Verify that removal worked
+        with get_mongo_collection(collection_tag=collection_tag) as collection:
+            current_doc_count = collection.count()
+        assert current_doc_count == starting_doc_count
+
+    # Clean up the extra document if the function failed to delete it
+    except:     # noqa: E722
+        with get_mongo_collection(collection_tag=collection_tag) as collection:
+            collection.delete_one({'_id': {'$eq': id_of_duplicate_doc}})
+        raise
+
+
+def add_duplicate_document_to_collection(collection_tag):
+    '''
+    Pick a random document in the collection, add a tag to let us know that it should not
+    be there, then add it to the collection
+
+    Arg:
+        collection_tag  String indicating which collection you'll be adding a duplicate to
+    Output:
+        starting_count  How many documents the collection starts with before the duplicate is added
+        id_             Mongo's ID tag of the duplicate document that you just added
+    '''
+    with get_mongo_collection(collection_tag=collection_tag) as collection:
+        docs = list(collection.find({}))
+        starting_count = len(docs)
+
+        doc_duplicate = random.choice(docs)
+        del doc_duplicate['_id']
+
+        insertion_result = collection.insert_one(doc_duplicate)
+        id_ = insertion_result.inserted_id
+    return starting_count, id_
