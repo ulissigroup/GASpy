@@ -1,10 +1,7 @@
-import os
 from collections import OrderedDict
-import uuid
 import getpass
 import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
-import ase.io
 from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
 from . import vasp_functions, defaults
 

@@ -1,7 +1,6 @@
 ''' These tools form gaspy's API to its databases '''
 
 import warnings
-import json
 import pickle
 import glob
 from itertools import islice

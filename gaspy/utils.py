@@ -25,6 +25,7 @@ import uuid
 import ase.io
 import os
 
+
 def read_rc(key=None):
     '''
     This function will pull out keys from the .gaspyrc file for you.
@@ -276,13 +277,13 @@ def fingerprint_atoms(atoms):
                 'natoms': len(atoms),
                 'nextnearestcoordination': ''}
 
-    vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 10)
-    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 10)
+    vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff=10)
+    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff=10)
     try:
         coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     except ValueError:
-        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 40)
-        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 40)
+        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff=40)
+        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff=40)
         coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
@@ -490,13 +491,15 @@ def decode_hex_to_atoms(atoms_hex):
     atoms = pickle.loads(atoms_bytes)
     return atoms
 
-def decode_trajhex_to_atoms(trajhex,index=-1):
+
+def decode_trajhex_to_atoms(trajhex, index=-1):
     fname = str(uuid.uuid4()) + '.traj'
     with open(fname, 'wb') as fhandle:
         fhandle.write(bytes.fromhex(trajhex))
-    atoms = ase.io.read(fname,index = index) 
-    os.remove(fname)           
+    atoms = ase.io.read(fname, index=index)
+    os.remove(fname)
     return atoms
+
 
 def encode_atoms_to_trajhex(atoms):
     fname = str(uuid.uuid4()) + '.traj'
@@ -505,6 +508,7 @@ def encode_atoms_to_trajhex(atoms):
         hexstr = fhandle.read().hex()
     os.remove(fname)
     return hexstr
+
 
 def luigi_task_eval(task):
     '''

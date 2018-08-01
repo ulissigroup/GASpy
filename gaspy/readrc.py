@@ -48,7 +48,7 @@ def read_rc(query=None):
     with open(rc_file, 'r') as rc:
         configs = json.load(rc)
 
-    # Return out the keys you asked for. If the user did not specif the key, then return it all
+    # Return out the keys you asked for. If the user did not specify the key, then return it all
     if query:
         keys = query.split('.')
         for key in keys:
