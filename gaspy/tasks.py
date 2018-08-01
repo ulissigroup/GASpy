@@ -30,7 +30,8 @@ from gaspy.mongo import make_doc_from_atoms, make_atoms_from_doc
 from gaspy import defaults, utils, gasdb
 from gaspy import fireworks_helper_scripts as fwhs
 import statsmodels.api as sm
-
+import tqdm
+import multiprocess as mp
 # Get the path for the GASdb folder location from the gaspy config file
 GASdb_path = utils.read_rc()['gasdb_path']
 
@@ -59,7 +60,7 @@ class UpdateAllDB(luigi.WrapperTask):
         method.
         '''
         # Dump from the Primary DB to the Aux DB
-        list(DumpToAuxDB().run())
+        DumpToAuxDB().run()
 
         # Get every doc in the Aux database
         ads_docs = find_docs(collection_tag='adsorption',
@@ -174,6 +175,7 @@ class UpdateEnumerations(luigi.Task):
                                                configs],
                                               return_index=True)
             # For each configuration, write a doc to the database
+            doclist=[]
             for i in unq_inds:
                 config = configs[i]
                 atoms = config['atoms']
@@ -190,7 +192,8 @@ class UpdateEnumerations(luigi.Task):
                                                        'adsorbate': config['adsorbate'],
                                                        'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
-                catalog_client.insert_one(slabadsdoc)
+                doclist.append(slabadsdoc)
+            catalog_client.insert_many(doclist)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -206,7 +209,7 @@ class DumpToAuxDB(luigi.Task):
     This class will load the results for the relaxations from the Primary FireWorks
     database into the Auxiliary vasp.mongo database.
     '''
-
+    num_procs = luigi.IntParameter(10)
     def run(self):
         lpad = fwhs.get_launchpad()
 
@@ -233,7 +236,8 @@ class DumpToAuxDB(luigi.Task):
 
             # For each fireworks object, turn the results into a mongo doc so that we can
             # dump the mongo doc into the Aux DB.
-            for fwid in fws_cmpltd:
+            
+            def process_fwid(fwid):
                 if fwid not in atoms_fws:
                     # Get the information from the class we just pulled from the launchpad.
                     # Move on if we fail to get the info.
@@ -241,7 +245,7 @@ class DumpToAuxDB(luigi.Task):
                     try:
                         atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
                     except RuntimeError:
-                        continue
+                        return
 
                     # In an older version of GASpy, we did not use tags to identify
                     # whether an atom was part of the slab or an adsorbate. Here, we
@@ -278,14 +282,23 @@ class DumpToAuxDB(luigi.Task):
 
                     # Convert the miller indices from strings to integers
                     if 'miller' in fw.name:
-                        if isinstance(fw.name['miller'], str) or isinstance(fw.name['miller'], unicode):
+                        if isinstance(fw.name['miller'], str):
                             doc['fwname']['miller'] = eval(doc['fwname']['miller'])
+
+                    return doc
                     # Write the doc onto the Auxiliary database
-                    atoms_client.insert_one(doc)
-                    print('Dumped a %s firework (FW ID %s) into the Auxiliary DB: ' % (doc['type'], fwid))
-                    utils.print_dict(fw.name, indent=1)
-                    # And while we're at it, dump the traj files, too
-                    yield DumpFWToTraj(fwid=fwid)
+                    #with get_mongo_collection('atoms') as atoms_client_insert:
+                    #    atoms_client_insert.insert_one(doc)
+                    #print('Dumped a %s firework (FW ID %s) into the Auxiliary DB: ' % (doc['type'], fwid))
+                    #utils.print_dict(fw.name, indent=1)
+                    ## And while we're at it, dump the traj files, too
+                    #yield DumpFWToTraj(fwid=fwid)
+
+            with mp.Pool(self.num_procs) as pool:
+                fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
+                docs = list(tqdm.tqdm(pool.imap(process_fwid,fwids_to_process,chunksize=100),total=len(fwids_to_process)))
+
+            atoms_client.insert_many([doc for doc in docs if doc is not None])
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
