@@ -405,41 +405,6 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
                 print('Just deleted %s in the %s collection' % (id_, collection_tag))
 
 
-def dump_adsorption_to_json(fname):
-    '''
-    Dump the adsorption collection to a json file
-
-    Input:
-        fname   A string indicating the file name you want to dump to
-    '''
-    # Define the data that we want to pull out of Mongo.
-    # The defaults gives us miscellaneous useful information.
-    # The 'results' and 'atoms' are necessary to turn the doc into atoms.
-    fingerprints = defaults.fingerprints(simulated=True)
-    fingerprints['results'] = '$results'
-    fingerprints['atoms'] = '$atoms'
-    # Pull out only documents that had "good" relaxations
-    doc_filters = defaults.filters_for_adsorption_docs()
-    docs = get_docs(fingerprints=fingerprints, **doc_filters)
-
-    # Preprocess the docs before dumping
-    for doc in docs:
-        # Make the documents json serializable
-        del doc['mongo_id']
-        time_object = doc['adslab_calculation_date']
-        time = time_object.isoformat()
-        doc['adslab_calculation_date'] = time
-
-        # Put the atoms hex in for others to be able to decode it
-        atoms = make_atoms_from_doc(doc)
-        _hex = utils.encode_atoms_to_trajhex(atoms)
-        doc['atoms_hex'] = _hex
-
-    # Save
-    with open(fname, 'w') as file_handle:
-        json.dump(docs, file_handle)
-
-
 # TODO:  Comment and clean up everything below here
 ads_dict = defaults.adsorbates_dict()
 del ads_dict['']
