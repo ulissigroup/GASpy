@@ -60,7 +60,7 @@ class UpdateAllDB(luigi.WrapperTask):
         method.
         '''
         # Dump from the Primary DB to the Aux DB
-        list(DumpToAuxDB().run())
+        DumpToAuxDB().run()
 
         # Get every doc in the Aux database
         ads_docs = find_docs(collection_tag='adsorption',
@@ -175,6 +175,7 @@ class UpdateEnumerations(luigi.Task):
                                                configs],
                                               return_index=True)
             # For each configuration, write a doc to the database
+            doclist=[]
             for i in unq_inds:
                 config = configs[i]
                 atoms = config['atoms']
@@ -191,7 +192,8 @@ class UpdateEnumerations(luigi.Task):
                                                        'adsorbate': config['adsorbate'],
                                                        'shift': config['shift']}}
                 slabadsdoc['processed_data'] = processed_data
-                catalog_client.insert_one(slabadsdoc)
+                doclist.append(slabadsdoc)
+            catalog_client.insert_many(doclist)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -295,7 +297,8 @@ class DumpToAuxDB(luigi.Task):
             with mp.Pool(self.num_procs) as pool:
                 fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
                 docs = list(tqdm.tqdm(pool.imap(process_fwid,fwids_to_process,chunksize=100),total=len(fwids_to_process)))
-            atoms_client.insert_many(docs)
+
+            atoms_client.insert_many([doc for doc in docs if doc is not None])
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
