@@ -468,28 +468,59 @@ def decode_hex_to_atoms(atoms_hex):
     return atoms
 
 
-def decode_trajhex_to_atoms(trajhex, index=-1):
-    fname = str(uuid.uuid4()) + '.traj'
-    with open(fname, 'wb') as fhandle:
-        fhandle.write(bytes.fromhex(trajhex))
-    atoms = ase.io.read(fname, index=index)
-    os.remove(fname)
-    return atoms
-
-
 def encode_atoms_to_trajhex(atoms):
+    '''
+    Encode a trajectory-formatted atoms object into a hex string.
+    Differs from `encode_atoms_to_hex` since this method is hex-encoding
+    the trajectory, not an atoms object.
+
+    Arg:
+        atoms   ase.Atoms object to encode
+    Output:
+        hex_    A hex-encoded string object of the trajectory of the atoms object
+    '''
+    # Make the trajectory
     fname = str(uuid.uuid4()) + '.traj'
     atoms.write(fname)
+
+    # Encode the trajectory
     with open(fname, 'rb') as fhandle:
-        hexstr = fhandle.read().hex()
+        hex_ = fhandle.read().hex()
+
+    # Clean up
     os.remove(fname)
-    return hexstr
+    return hex_
+
+
+def decode_trajhex_to_atoms(hex_, index=-1):
+    '''
+    Decode a trajectory-formatted atoms object into a hex string.
+
+    Arg:
+        hex_    A hex-encoded string of a trajectory of atoms objects.
+        index   Trajectories can contain multiple atoms objects.
+                The `index` is used to specify which atoms object to return.
+                -1 corresponds to the last image.
+    Output:
+        atoms   The decoded ase.Atoms object
+    '''
+    # Make the trajectory from the hex
+    fname = str(uuid.uuid4()) + '.traj'
+    with open(fname, 'wb') as fhandle:
+        fhandle.write(bytes.fromhex(hex_))
+
+    # Open up the atoms from the trajectory
+    atoms = ase.io.read(fname, index=index)
+
+    # Clean up
+    os.remove(fname)
+    return atoms
 
 
 def luigi_task_eval(task):
     '''
     This follow luigi logic to evaluate a task by recursively evaluating all requirements.
-    This is useful for executing tasks that are typically independennt of other tasks,
+    This is useful for executing tasks that are typically independent of other tasks,
     e.g., populating a catalog of sites.
 
     Arg:
