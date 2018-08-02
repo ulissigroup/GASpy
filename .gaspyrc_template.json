@@ -31,14 +31,6 @@
             "user": "user",
             "password": "pw"
             },
-        "for_unit_testing":{
-            "host": "host.name",
-            "port": "99999",
-            "database": "database",
-            "collection_name": "collection_name",
-            "user": "user",
-            "password": "pw"
-            },
         "atoms":{
             "host": "host.name",
             "port": "99999",
@@ -72,6 +64,30 @@
             "password": "pw"
             },
         "catalog_readonly":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "unit_testing_adsorption":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "unit_testing_catalog":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "unit_testing_surface_energy":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

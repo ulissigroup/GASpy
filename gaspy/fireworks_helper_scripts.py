@@ -1,11 +1,8 @@
-import os
 from collections import OrderedDict
-import uuid
 import getpass
 import numpy as np
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
-import ase.io
-from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
+from .utils import print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
 from . import vasp_functions, defaults
 
 
@@ -150,7 +147,6 @@ def get_firework_info(fw):
         settings = defaults.exchange_correlational_settings()[vasp_settings['xc']]
         for key in settings:
             vasp_settings[key] = settings[key]
-    vasp_settings = vasp_settings_to_str(vasp_settings)
 
     return atoms, starting_atoms, atoms_trajhex, vasp_settings
 

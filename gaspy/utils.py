@@ -25,6 +25,7 @@ import uuid
 import ase.io
 import os
 
+
 def read_rc(key=None):
     '''
     This function will pull out keys from the .gaspyrc file for you.
@@ -68,30 +69,6 @@ def print_dict(d, indent=0):
                 print('\t' * (indent+1) + str(item))
     else:
         pass
-
-
-def vasp_settings_to_str(vasp_settings):
-    '''
-    This function is used in various scripts to convert a dictionary of vasp settings
-    into a format that is acceptable by ase-db.
-
-    Input:
-        vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein
-                                may have a different type depending on the VASP setting.
-    Output:
-        vasp_settings   [dict]  Each key is a VASP setting. Each object contained therein
-                                is either an int, float, boolean, or string.
-    '''
-    vasp_settings = vasp_settings.copy()
-
-    # For each item in "vasp_settings"...
-    for key in vasp_settings:
-        # Find anything that's not a string, integer, float, or boolean...
-        if not isinstance(vasp_settings[key], (str, int, float, bool)):
-            # And turn it into a string
-            vasp_settings[key] = str(vasp_settings[key])
-
-    return vasp_settings
 
 
 def docs_to_pdocs(docs):
@@ -276,13 +253,13 @@ def fingerprint_atoms(atoms):
                 'natoms': len(atoms),
                 'nextnearestcoordination': ''}
 
-    vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 10)
-    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 10)
+    vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff=10)
+    vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff=10)
     try:
         coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     except ValueError:
-        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff = 40)
-        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff = 40)
+        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff=40)
+        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff=40)
         coordinated_atoms_data = vnn.get_nn_info(struct, len(atoms)-1)
     coordinated_atoms = [atom_data['site'] for atom_data in coordinated_atoms_data]
     # Create a list of symbols of the coordinations, remove uranium from the list, and
@@ -490,13 +467,15 @@ def decode_hex_to_atoms(atoms_hex):
     atoms = pickle.loads(atoms_bytes)
     return atoms
 
-def decode_trajhex_to_atoms(trajhex,index=-1):
+
+def decode_trajhex_to_atoms(trajhex, index=-1):
     fname = str(uuid.uuid4()) + '.traj'
     with open(fname, 'wb') as fhandle:
         fhandle.write(bytes.fromhex(trajhex))
-    atoms = ase.io.read(fname,index = index) 
-    os.remove(fname)           
+    atoms = ase.io.read(fname, index=index)
+    os.remove(fname)
     return atoms
+
 
 def encode_atoms_to_trajhex(atoms):
     fname = str(uuid.uuid4()) + '.traj'
@@ -505,6 +484,7 @@ def encode_atoms_to_trajhex(atoms):
         hexstr = fhandle.read().hex()
     os.remove(fname)
     return hexstr
+
 
 def luigi_task_eval(task):
     '''

@@ -305,16 +305,14 @@ def adsorbates_dict():
     When making new entries for this dictionary, we recommend "pointing"
     the adsorbate upwards in the z-direction.
     '''
-    # Initialize the adsorbate, and then add a blank entry so that we can relax empty
-    # adslab systems, which are required for adsorption energy calculations.
+    ''' Nullatomic '''
     adsorbates = {}
     adsorbates[''] = Atoms()
 
     ''' Monatomics '''
-    # We use uranium as a place-holder in our Local db of enumerated adsorption sites.
+    # Uranium is a place-holder for an adsorbate
     adsorbates['U'] = Atoms('U')
-    # We put the hydrogen half an angstrom below the origin to help in adsorb onto the
-    # surface
+    # Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
     adsorbates['H'] = Atoms('H', positions=[[0., 0., -0.5]])
     adsorbates['O'] = Atoms('O')
     adsorbates['C'] = Atoms('C')
@@ -338,7 +336,7 @@ def adsorbates_dict():
     ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
                         ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
     adsorbates['OOH'] = ooh
-    # Below is for CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
+    # For CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
     # Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure is H-C-O
     cho = Atoms('CHO', positions=[[0., 0., 1.],
                                   [-0.94, 0.2, 1.7],  # position of H
@@ -348,7 +346,7 @@ def adsorbates_dict():
                         ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
     adsorbates['CHO'] = cho
 
-    # below is for COH, assumed C binds to surface (index 0), O (index 1), and H(index 2)
+    # For COH, assumed C binds to surface (index 0), O (index 1), and H(index 2)
     # trying to apply Hookean so that CH bound doesn't dissociate
     cho = Atoms('CHO', positions=[[0., 0., 0.],
                                   [-1.0, 0.2, 0.45],  # position of H
@@ -356,7 +354,7 @@ def adsorbates_dict():
     cho.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=7.),   # Bind CH
                         ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
     adsorbates['CHO'] = cho
-    # All done!
+
     return adsorbates
 
 
