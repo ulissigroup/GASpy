@@ -205,7 +205,7 @@ class DumpToAuxDB(luigi.Task):
     This class will load the results for the relaxations from the Primary FireWorks
     database into the Auxiliary vasp.mongo database.
     '''
-    num_procs = luigi.IntParameter(10)
+    num_procs = luigi.IntParameter(4)
 
     def run(self):
         lpad = fwhs.get_launchpad()
@@ -288,8 +288,9 @@ class DumpToAuxDB(luigi.Task):
                 fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
                 docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
 
-            if len(docs)>0:
-                atoms_client.insert_many([doc for doc in docs if doc is not None])
+            docs_not_none = [doc for doc in docs if doc is not None]
+            if len(docs_not_none)>0:
+                atoms_client.insert_many(docs_not_none)
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
@@ -1530,10 +1531,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
         # Load all of the slabs and turn them into atoms objects
         requirements = self.input()
 
-        def load_atoms(req):
-            doc = pickle.load(open(req.fn, 'rb'))[0]
-            return make_atoms_from_doc(doc)
-        doc_list = [pickle.load(open(req, 'rb'))[0] for req in requirements]
+        doc_list = [pickle.load(open(req.fn, 'rb'))[0] for req in requirements]
         atoms_list = [make_atoms_from_doc(doc) for doc in doc_list]
 
         # Pull the number of atoms of each slab
