@@ -62,6 +62,7 @@ class UpdateAllDB(luigi.WrapperTask):
         with gasdb.get_mongo_collection(collection_tag='atoms') as collection:
             ads_docs = list(collection.find({'type': 'slab+adsorbate'}))
             surface_energy_docs = list(collection.find({'type': 'slab_surface_energy'}))
+
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.get_mongo_collection('adsorption') as collection:
@@ -104,10 +105,10 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
-        print('# of outstanding adslab calculations: %d'
-              % len([doc for doc in ads_docs
-                     if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
-        for doc in reversed(ads_docs):
+        #print('# of outstanding adslab calculations: %d'
+        #      % len([doc for doc in ads_docs
+        #             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
+        for doc in ads_docs:
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != ''):
@@ -206,7 +207,7 @@ class DumpToAuxDB(luigi.Task):
     This class will load the results for the relaxations from the Primary FireWorks
     database into the Auxiliary vasp.mongo database.
     '''
-    num_procs = luigi.IntParameter(10)
+    num_procs = luigi.IntParameter(4)
 
     def run(self):
         lpad = fwhs.get_launchpad()
@@ -1530,10 +1531,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
         # Load all of the slabs and turn them into atoms objects
         requirements = self.input()
 
-        def load_atoms(req):
-            doc = pickle.load(open(req.fn, 'rb'))[0]
-            return make_atoms_from_doc(doc)
-        doc_list = [pickle.load(open(req, 'rb'))[0] for req in requirements]
+        doc_list = [pickle.load(open(req.fn, 'rb'))[0] for req in requirements]
         atoms_list = [make_atoms_from_doc(doc) for doc in doc_list]
 
         # Pull the number of atoms of each slab
