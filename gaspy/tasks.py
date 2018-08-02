@@ -63,10 +63,12 @@ class UpdateAllDB(luigi.WrapperTask):
         DumpToAuxDB().run()
 
         # Get every doc in the Aux database
-        ads_docs = find_docs(collection_tag='adsorption',
-                             kwargs={'type': 'slab+adsorbate'})
-        surface_energy_docs = find_docs(collection_tag='surface_energy',
-                                        kwargs={'type': 'slab_surface_energy'})
+        with gasdb.get_mongo_collection('atoms') as atoms_client:
+            ads_docs = atoms_client.find({'type': 'slab+adsorbate'})
+
+        with gasdb.get_mongo_collection('surface_energy') as surface_energy_client:
+            surface_energy_docs = surface_energy_client.find({'type': 'slab_surface_energy'})
+
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
         with gasdb.get_mongo_collection('adsorption') as adsorption_client:
@@ -109,10 +111,10 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
-        print('# of outstanding adslab calculations: %d'
-              % len([doc for doc in ads_docs
-                     if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
-        for doc in reversed(ads_docs):
+        #print('# of outstanding adslab calculations: %d'
+        #      % len([doc for doc in ads_docs
+        #             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
+        for doc in ads_docs:
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != ''):
@@ -298,7 +300,8 @@ class DumpToAuxDB(luigi.Task):
                 fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
                 docs = list(tqdm.tqdm(pool.imap(process_fwid,fwids_to_process,chunksize=100),total=len(fwids_to_process)))
 
-            atoms_client.insert_many([doc for doc in docs if doc is not None])
+            if len(docs)>0:
+                atoms_client.insert_many([doc for doc in docs if doc is not None])
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
