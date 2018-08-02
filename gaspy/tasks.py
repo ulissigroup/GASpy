@@ -64,12 +64,12 @@ class UpdateAllDB(luigi.WrapperTask):
             surface_energy_docs = list(collection.find({'type': 'slab_surface_energy'}))
         # Get all of the current fwids numbers in the adsorption collection.
         # Turn the list into a dictionary so that we can parse through it faster.
-        with gasdb.get_mongo_collection('adsorption') as adsorption_client:
-            fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in adsorption_client.find()]
+        with gasdb.get_mongo_collection('adsorption') as collection:
+            fwids = [doc['processed_data']['FW_info']['slab+adsorbate'] for doc in collection.find()]
         fwids = dict.fromkeys(fwids)
 
-        with gasdb.get_mongo_collection('surface_energy') as surface_energy_client:
-            surface_fwids = [doc['processed_data']['FW_info'].values() for doc in surface_energy_client.find()]
+        with gasdb.get_mongo_collection('surface_energy') as collection:
+            surface_fwids = [doc['processed_data']['FW_info'].values() for doc in collection.find()]
         surface_fwids = dict.fromkeys([item for sublist in surface_fwids for item in sublist])
 
         # For each adsorbate/configuration and surface energy calc, make a task to write the results to the output
@@ -160,35 +160,37 @@ class UpdateEnumerations(luigi.Task):
         return FingerprintUnrelaxedAdslabs(self.parameters)
 
     def run(self):
-        with gasdb.get_mongo_collection('catalog') as catalog_client:
-            # Load the configurations
-            configs = pickle.load(open(self.input().fn, 'rb'))
-            # Find the unique configurations based on the fingerprint of each site
-            unq_configs, unq_inds = np.unique([str([x['shift'],
-                                                    x['fp']['coordination'],
-                                                    x['fp']['neighborcoord']]) for x in
-                                               configs],
-                                              return_index=True)
-            # For each configuration, write a doc to the database
-            doclist = []
-            for i in unq_inds:
-                config = configs[i]
-                atoms = config['atoms']
-                slabadsdoc = make_doc_from_atoms(config['atoms'])
-                processed_data = {'fp_init': config['fp'],
-                                  'calculation_info': {'type': 'slab+adsorbate',
-                                                       'formula': atoms.get_chemical_formula('hill'),
-                                                       'mpid': self.parameters['bulk']['mpid'],
-                                                       'miller': config['miller'],
-                                                       'num_slab_atoms': len(atoms)-len(config['adsorbate']),
-                                                       'top': config['top'],
-                                                       'slabrepeat': config['slabrepeat'],
-                                                       'relaxed': False,
-                                                       'adsorbate': config['adsorbate'],
-                                                       'shift': config['shift']}}
-                slabadsdoc['processed_data'] = processed_data
-                doclist.append(slabadsdoc)
-            catalog_client.insert_many(doclist)
+
+        # Find the unique configurations based on the fingerprint of each site
+        configs = pickle.load(open(self.input().fn, 'rb'))
+        unq_configs, unq_inds = np.unique([str([x['shift'],
+                                                x['fp']['coordination'],
+                                                x['fp']['neighborcoord']]) for x in
+                                           configs],
+                                          return_index=True)
+
+        # For each configuration, write a doc to the database
+        doclist = []
+        for i in unq_inds:
+            config = configs[i]
+            atoms = config['atoms']
+            slabadsdoc = make_doc_from_atoms(config['atoms'])
+            processed_data = {'fp_init': config['fp'],
+                              'calculation_info': {'type': 'slab+adsorbate',
+                                                   'formula': atoms.get_chemical_formula('hill'),
+                                                   'mpid': self.parameters['bulk']['mpid'],
+                                                   'miller': config['miller'],
+                                                   'num_slab_atoms': len(atoms)-len(config['adsorbate']),
+                                                   'top': config['top'],
+                                                   'slabrepeat': config['slabrepeat'],
+                                                   'relaxed': False,
+                                                   'adsorbate': config['adsorbate'],
+                                                   'shift': config['shift']}}
+            slabadsdoc['processed_data'] = processed_data
+            doclist.append(slabadsdoc)
+
+        with gasdb.get_mongo_collection('catalog') as collection:
+            collection.insert_many(doclist)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -211,83 +213,83 @@ class DumpToAuxDB(luigi.Task):
 
         # Get all of the FW numbers that have been loaded into the atoms collection already.
         # We turn the list into a dictionary so that we can parse through it more quickly.
-        with gasdb.get_mongo_collection('atoms') as atoms_client:
-            atoms_fws = [a['fwid'] for a in atoms_client.find({'fwid': {'$exists': True}})]
-            atoms_fws = dict.fromkeys(atoms_fws)
+        with gasdb.get_mongo_collection('atoms') as collection:
+            atoms_fws = [a['fwid'] for a in collection.find({'fwid': {'$exists': True}})]
+        atoms_fws = dict.fromkeys(atoms_fws)
 
-            # Get all of the completed fireworks from the Primary DB
-            fws_cmpltd = lpad.get_fw_ids({'state': 'COMPLETED',
-                                          'name.calculation_type': 'unit cell optimization'}) + \
-                lpad.get_fw_ids({'state': 'COMPLETED',
-                                 'name.calculation_type': 'gas phase optimization'}) + \
-                lpad.get_fw_ids({'state': 'COMPLETED',
-                                 'name.calculation_type': 'slab optimization',
-                                 'name.shift': {'$exists': True}}) + \
-                lpad.get_fw_ids({'state': 'COMPLETED',
-                                 'name.calculation_type': 'slab+adsorbate optimization',
-                                 'name.shift': {'$exists': True}}) + \
-                lpad.get_fw_ids({'state': 'COMPLETED',
-                                 'name.calculation_type': 'slab_surface_energy optimization',
-                                 'name.shift': {'$exists': True}})
+        # Get all of the completed fireworks from the Primary DB
+        fws_cmpltd = lpad.get_fw_ids({'state': 'COMPLETED',
+                                      'name.calculation_type': 'unit cell optimization'}) + \
+            lpad.get_fw_ids({'state': 'COMPLETED',
+                             'name.calculation_type': 'gas phase optimization'}) + \
+            lpad.get_fw_ids({'state': 'COMPLETED',
+                             'name.calculation_type': 'slab optimization',
+                             'name.shift': {'$exists': True}}) + \
+            lpad.get_fw_ids({'state': 'COMPLETED',
+                             'name.calculation_type': 'slab+adsorbate optimization',
+                             'name.shift': {'$exists': True}}) + \
+            lpad.get_fw_ids({'state': 'COMPLETED',
+                             'name.calculation_type': 'slab_surface_energy optimization',
+                             'name.shift': {'$exists': True}})
 
-            # For each fireworks object, turn the results into a mongo doc so that we can
-            # dump the mongo doc into the Aux DB.
+        # For each fireworks object, turn the results into a mongo doc so that we can
+        # dump the mongo doc into the Aux DB.
+        def process_fwid(fwid):
+            if fwid not in atoms_fws:
+                # Get the information from the class we just pulled from the launchpad.
+                # Move on if we fail to get the info.
+                fw = lpad.get_fw_by_id(fwid)
+                try:
+                    atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
+                except RuntimeError:
+                    return
 
-            def process_fwid(fwid):
-                if fwid not in atoms_fws:
-                    # Get the information from the class we just pulled from the launchpad.
-                    # Move on if we fail to get the info.
-                    fw = lpad.get_fw_by_id(fwid)
-                    try:
-                        atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
-                    except RuntimeError:
-                        return
+                # In an older version of GASpy, we did not use tags to identify
+                # whether an atom was part of the slab or an adsorbate. Here, we
+                # add the tags back in.
+                if (fw.created_on < datetime(2017, 7, 20) and
+                        fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+                    # In this old version, the adsorbates were added onto the slab.
+                    # Thus, the slab atoms came before the adsorbate atoms in
+                    # the indexing. We use this information to create the tags list.
+                    n_ads_atoms = len(fw.name['adsorbate'])
+                    n_slab_atoms = len(atoms) - n_ads_atoms
+                    tags = [0]*n_slab_atoms
+                    tags.extend([1]*n_ads_atoms)
+                    # Now set the tags for the atoms
+                    atoms.set_tags(tags)
+                    starting_atoms.set_tags(tags)
 
-                    # In an older version of GASpy, we did not use tags to identify
-                    # whether an atom was part of the slab or an adsorbate. Here, we
-                    # add the tags back in.
-                    if (fw.created_on < datetime(2017, 7, 20) and
-                            fw.name['calculation_type'] == 'slab+adsorbate optimization'):
-                        # In this old version, the adsorbates were added onto the slab.
-                        # Thus, the slab atoms came before the adsorbate atoms in
-                        # the indexing. We use this information to create the tags list.
-                        n_ads_atoms = len(fw.name['adsorbate'])
-                        n_slab_atoms = len(atoms) - n_ads_atoms
-                        tags = [0]*n_slab_atoms
-                        tags.extend([1]*n_ads_atoms)
-                        # Now set the tags for the atoms
-                        atoms.set_tags(tags)
-                        starting_atoms.set_tags(tags)
+                # Initialize the mongo document, doc, and the populate it with the fw info
+                doc = make_doc_from_atoms(atoms)
+                doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
+                doc['fwname'] = fw.name
+                doc['fwid'] = fwid
+                doc['directory'] = fw.launches[-1].launch_dir
+                if fw.name['calculation_type'] == 'unit cell optimization':
+                    doc['type'] = 'bulk'
+                elif fw.name['calculation_type'] == 'gas phase optimization':
+                    doc['type'] = 'gas'
+                elif fw.name['calculation_type'] == 'slab optimization':
+                    doc['type'] = 'slab'
+                elif fw.name['calculation_type'] == 'slab_surface_energy optimization':
+                    doc['type'] = 'slab_surface_energy'
+                elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
+                    doc['type'] = 'slab+adsorbate'
 
-                    # Initialize the mongo document, doc, and the populate it with the fw info
-                    doc = make_doc_from_atoms(atoms)
-                    doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
-                    doc['fwname'] = fw.name
-                    doc['fwid'] = fwid
-                    doc['directory'] = fw.launches[-1].launch_dir
-                    if fw.name['calculation_type'] == 'unit cell optimization':
-                        doc['type'] = 'bulk'
-                    elif fw.name['calculation_type'] == 'gas phase optimization':
-                        doc['type'] = 'gas'
-                    elif fw.name['calculation_type'] == 'slab optimization':
-                        doc['type'] = 'slab'
-                    elif fw.name['calculation_type'] == 'slab_surface_energy optimization':
-                        doc['type'] = 'slab_surface_energy'
-                    elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
-                        doc['type'] = 'slab+adsorbate'
+                # Convert the miller indices from strings to integers
+                if 'miller' in fw.name:
+                    if isinstance(fw.name['miller'], str):
+                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
 
-                    # Convert the miller indices from strings to integers
-                    if 'miller' in fw.name:
-                        if isinstance(fw.name['miller'], str):
-                            doc['fwname']['miller'] = eval(doc['fwname']['miller'])
+                return doc
 
-                    return doc
+        with mp.Pool(self.num_procs) as pool:
+            fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
+            docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
 
-            with mp.Pool(self.num_procs) as pool:
-                fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
-                docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
-
-            atoms_client.insert_many([doc for doc in docs if doc is not None])
+        with gasdb.get_mongo_collection('atoms') as collection:
+            collection.insert_many([doc for doc in docs if doc is not None])
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
@@ -425,8 +427,8 @@ class DumpToAdsorptionDB(luigi.Task):
         best_sys_pkl_slab_ads['processed_data'] = processed_data
         # Write the entry into the database
 
-        with gasdb.get_mongo_collection('adsorption') as adsorption_client:
-            adsorption_client.insert_one(best_sys_pkl_slab_ads)
+        with gasdb.get_mongo_collection('adsorption') as collection:
+            collection.insert_one(best_sys_pkl_slab_ads)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
@@ -506,8 +508,8 @@ class SubmitToFW(luigi.Task):
             search_strings['fwname.shift'] = {'$gte': shift - 1e-4, '$lte': shift + 1e-4}
 
         # Grab all of the matching entries in the Auxiliary database
-        with gasdb.get_mongo_collection('atoms') as atoms_client:
-            self.matching_doc = list(atoms_client.find(search_strings))
+        with gasdb.get_mongo_collection('atoms') as collection:
+            self.matching_doc = list(collection.find(search_strings))
 
         # If there are no matching entries, we need to yield a requirement that will
         # generate the necessary unrelaxed structure
@@ -535,8 +537,8 @@ class SubmitToFW(luigi.Task):
                                   'fwname.top': self.parameters['slab']['top'],
                                   'fwname.mpid': self.parameters['bulk']['mpid'],
                                   'fwname.adsorbate': self.parameters['adsorption']['adsorbates'][0]['name']}
-                with gasdb.get_mongo_collection('atoms') as atoms_client:
-                    self.matching_docs_all_calcs = list(atoms_client.find(search_strings))
+                with gasdb.get_mongo_collection('atoms') as collection:
+                    self.matching_docs_all_calcs = list(collection.find(search_strings))
 
                 # If we don't modify the parameters, the parameters will contain the FP for the
                 # request. This will trigger a FingerprintUnrelaxedAdslabs for each FP, which
@@ -1621,8 +1623,8 @@ class DumpToSurfaceEnergyDB(luigi.Task):
         surface_energy_pkl_slab['processed_data'] = processed_data
 
         # Write the entry into the database
-        with gasdb.get_mongo_collection('surface_energy') as surface_energy_client:
-            surface_energy_client.insert_one(surface_energy_pkl_slab)
+        with gasdb.get_mongo_collection('surface_energy') as collection:
+            collection.insert_one(surface_energy_pkl_slab)
 
         # Write a blank token file to indicate this was done so that the entry is not written again
         with self.output().temporary_path() as self.temp_output_path:
