@@ -5,6 +5,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
 from ..utils import find_adsorption_sites, \
+    unfreeze_dict, \
     encode_atoms_to_hex, \
     decode_hex_to_atoms, \
     encode_atoms_to_trajhex, \
@@ -13,6 +14,7 @@ from ..utils import find_adsorption_sites, \
 # Things we need to do the tests
 import numpy as np
 import numpy.testing as npt
+from luigi.parameter import _FrozenOrderedDict
 from .baselines import get_standard_atoms
 from .learning_tests.pymatgen_test import _get_sites_for_standard_structure
 
@@ -26,6 +28,35 @@ def test_find_adsorption_sites():
     standard_sites = _get_sites_for_standard_structure()['all']
     sites = find_adsorption_sites(get_standard_atoms())
     npt.assert_allclose(np.array(sites), np.array(standard_sites), rtol=1e-5, atol=-1e-7)
+
+
+def test_unfreeze_dict():
+    frozen_dict = _FrozenOrderedDict(foo='bar', alpha='omega',
+                                     sub_dict0=_FrozenOrderedDict(),
+                                     sub_dict1=_FrozenOrderedDict(great='googly moogly'))
+    unfrozen_dict = unfreeze_dict(frozen_dict)
+    _look_for_type_in_dict(_FrozenOrderedDict, unfrozen_dict)
+
+
+def _look_for_type_in_dict(type_, dict_):
+    '''
+    Recursive function that checks if there is any object type inside any branch
+    of a dictionary. It does so by performing an `assert` check on every single
+    value in the dictionary.
+
+    Args:
+        type_   An object type (e.g, int, float, str, etc) that you want to look for
+        dict_   A dictionary that you want to parse. Can really be any object with
+                the `items` method.
+    '''
+    # Check the current layer's values
+    for key, value in dict_.items():
+        assert type(value) != type_
+        # Recur
+        try:
+            _look_for_type_in_dict(type_, value)
+        except AttributeError:
+            pass
 
 
 def test_encode_atoms_to_hex():

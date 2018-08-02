@@ -465,11 +465,22 @@ def map_method(instance, method, inputs, chunked=False, processes=32,
 
 
 def unfreeze_dict(frozen_dict):
-    frozen_dict = OrderedDict(frozen_dict)
-    for key in frozen_dict:
-        if type(frozen_dict[key]) == _FrozenOrderedDict:
-            frozen_dict[key] = unfreeze_dict(frozen_dict[key])
-    return frozen_dict
+    '''
+    Recursive function to turn a Luigi frozen dictionary into an ordered dictionary,
+    along with all of the branches.
+
+    Arg:
+        frozen_dict     Instance of a luigi.parameter._FrozenOrderedDict
+    Output:
+        dict_   Ordered dictionary
+    '''
+    # Unfreeze
+    unfrozen_dict = OrderedDict(frozen_dict)
+    # Recur
+    for key, value in unfrozen_dict.items():
+        if isinstance(value, _FrozenOrderedDict):
+            unfrozen_dict[key] = unfreeze_dict(value)
+    return unfrozen_dict
 
 
 def encode_atoms_to_hex(atoms):
