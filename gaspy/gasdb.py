@@ -401,7 +401,6 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
             extra_mongo_ids = doc['mongo_ids'][1:]
             for id_ in extra_mongo_ids:
                 collection.delete_one({'_id': id_})
-                print('Just deleted %s in the %s collection' % (id_, collection_tag))
 
 
 # TODO:  Comment and clean up everything below here
