@@ -28,4 +28,4 @@ while [[ ! -z "$our_error" ]]; do
 done
 
 # Now remove duplicate entries from GASdb
-python -c "from gaspy.gasdb import remove_duplicates; remove_duplicates()"
+python -c "from gaspy import gasdb; remove_duplicates_in_adsorption_collection(); remove_duplicates_in_atoms_collection()"
