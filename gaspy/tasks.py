@@ -140,12 +140,21 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                            settings=settings)}
 
                 # If we've hit the maxmum number of processes, flag and stop
-                i += 1
-                if i >= self.max_processes and self.max_processes > 0:
-                    print('Reached the maximum number of processes, %s' % self.max_processes)
-                    break
+                #i += 1
+                #if i >= self.max_processes and self.max_processes > 0:
+                #    print('Reached the maximum number of processes, %s' % self.max_processes)
+                #    break
 
-                yield DumpToAdsorptionDB(parameters)
+                #If we have duplicates, the FWID might trigger a DumpToAdsorptionDB
+                # even if there is basically an identical calculation in the database
+                DTADB = DumpToAdsorptionDB(parameters)
+                if not(DTADB.complete()):
+                    # If we've hit the maxmum number of processes, flag and stop
+                    i += 1
+                    if i >= self.max_processes and self.max_processes > 0:
+                        print('Reached the maximum number of processes, %s' % self.max_processes)
+                        break
+                    yield DumpToAdsorptionDB(parameters)
 
 
 class UpdateEnumerations(luigi.Task):
@@ -289,8 +298,10 @@ class DumpToAuxDB(luigi.Task):
             fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
             docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
 
-        with gasdb.get_mongo_collection('atoms') as collection:
-            collection.insert_many([doc for doc in docs if doc is not None])
+        docs_not_none = [doc for doc in docs if doc is not None]
+        if len(docs_not_none)>0:
+            with gasdb.get_mongo_collection('atoms') as collection:
+                collection.insert_many(docs_not_none)
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/DumpToAuxDB.token')
@@ -571,24 +582,24 @@ class SubmitToFW(luigi.Task):
 
             # A way to append `tosubmit`, but specialized for gas relaxations
             if self.calctype == 'gas':
-                name = {'vasp_settings': self.parameters['gas']['vasp_settings'],
+                name = {'vasp_settings': utils.unfreeze_dict(self.parameters['gas']['vasp_settings']),
                         'gasname': self.parameters['gas']['gasname'],
                         'calculation_type': 'gas phase optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     atoms = make_atoms_from_doc(pickle.load(open(self.input().fn, 'rb'))[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['gas']['vasp_settings'],
+                                                       utils.unfreeze_dict(self.parameters['gas']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms']))
 
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
-                name = {'vasp_settings': self.parameters['bulk']['vasp_settings'],
+                name = {'vasp_settings': utils.unfreeze_dict(self.parameters['bulk']['vasp_settings']),
                         'mpid': self.parameters['bulk']['mpid'],
                         'calculation_type': 'unit cell optimization'}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     atoms = make_atoms_from_doc(pickle.load(open(self.input().fn, 'rb'))[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['bulk']['vasp_settings'],
+                                                       utils.unfreeze_dict(self.parameters['bulk']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms']))
 
             # A way to append `tosubmit`, but specialized for slab relaxations
@@ -612,12 +623,12 @@ class SubmitToFW(luigi.Task):
                         'mpid': self.parameters['bulk']['mpid'],
                         'miller': self.parameters['slab']['miller'],
                         'top': self.parameters['slab']['top'],
-                        'vasp_settings': self.parameters['slab']['vasp_settings'],
+                        'vasp_settings': utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                         'calculation_type': 'slab optimization',
                         'num_slab_atoms': len(atoms)}
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['slab']['vasp_settings'],
+                                                       utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
             # A way to append `tosubmit`, but specialized for surface energy calculations. Pretty much
@@ -642,14 +653,14 @@ class SubmitToFW(luigi.Task):
                 name = {'shift': self.parameters['slab']['shift'],
                         'mpid': self.parameters['bulk']['mpid'],
                         'miller': self.parameters['slab']['miller'],
-                        'vasp_settings': self.parameters['slab']['vasp_settings'],
+                        'vasp_settings': utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                         'calculation_type': 'slab_surface_energy optimization',
                         'num_slab_atoms': len(atoms)}
                 atoms.constraints = []
                 atoms = utils.constrain_slab(atoms, symmetric=True)
                 if len(fwhs.running_fireworks(name, launchpad)) == 0:
                     tosubmit.append(fwhs.make_firework(atoms, name,
-                                                       self.parameters['slab']['vasp_settings'],
+                                                       utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
             # A way to append `tosubmit`, but specialized for adslab relaxations
@@ -700,7 +711,7 @@ class SubmitToFW(luigi.Task):
                             'shift': doc['shift'],
                             'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
                             'adsorption_site': doc['adsorption_site'],
-                            'vasp_settings': self.parameters['adsorption']['vasp_settings'],
+                            'vasp_settings': utils.unfreeze_dict(self.parameters['adsorption']['vasp_settings']),
                             'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat': self.parameters['adsorption']['slabrepeat'],
                             'calculation_type': 'slab+adsorbate optimization'}
@@ -736,7 +747,7 @@ class SubmitToFW(luigi.Task):
                     # Add the firework if it's not already running
                     if len(fwhs.running_fireworks(name, launchpad)) == 0:
                         tosubmit.append(fwhs.make_firework(atoms, name,
-                                                           self.parameters['adsorption']['vasp_settings'],
+                                                           utils.unfreeze_dict(self.parameters['adsorption']['vasp_settings']),
                                                            max_atoms=self.parameters['bulk']['max_atoms'],
                                                            max_miller=self.parameters['slab']['max_miller']))
                     # Filter out any blanks we may have introduced earlier, and then trim the
@@ -755,6 +766,10 @@ class SubmitToFW(luigi.Task):
                 print('Just submitted the following Fireworks: ')
                 for fw in tosubmit:
                     utils.print_dict(fw.name, indent=1)
+                return Exception('SubmitToFW unable to complete, waiting on a FW')
+
+            else:
+                return Exception('SubmitToFW unable to complete and nothing to submit')
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
