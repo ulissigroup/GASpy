@@ -8,54 +8,111 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 
 # Things we need to do the testing
+import pytest
+import pickle
 import numpy as np
 import numpy.testing as npt
-from ..baselines import get_standard_atoms, get_standard_structure
+from .. import test_cases
+
+REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/learning_tests/pymatgen/'
 
 
-def test_AseAtomsAdaptor_get_atoms():
-    standard_atoms = get_standard_atoms()
-    standard_structure = get_standard_structure()
+@pytest.mark.parametrize('bulk_atoms_name,bulk_structure_name',
+                         [('Cu_FCC.traj', 'Cu_FCC_structure.pkl')])
+def test_AseAtomsAdaptor_get_atoms(bulk_atoms_name, bulk_structure_name):
+    '''
+    This is currently hard-coded to test only bulks. If you care enough,
+    you can update to check slabs and/or adslabs, too.
+    '''
+    with open(REGRESSION_BASELINES_LOCATION + bulk_structure_name, 'rb') as file_handle:
+        structure = pickle.load(file_handle)
+    atoms = AseAtomsAdaptor.get_atoms(structure)
 
-    atoms = AseAtomsAdaptor.get_atoms(standard_structure)
-    assert atoms == standard_atoms
+    expected_atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    assert atoms == expected_atoms
 
 
-def test_AseAtomsAdaptor_get_structure():
-    standard_atoms = get_standard_atoms()
-    standard_structure = get_standard_structure()
+@pytest.mark.parametrize('bulk_atoms_name,bulk_structure_name',
+                         [('Cu_FCC.traj', 'Cu_FCC_structure.pkl')])
+def test_AseAtomsAdaptor_get_structure(bulk_atoms_name, bulk_structure_name):
+    '''
+    This is currently hard-coded to test only bulks. If you care enough,
+    you can update to check slabs and/or adslabs, too.
+    '''
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    structure = AseAtomsAdaptor.get_structure(atoms)
 
-    structure = AseAtomsAdaptor.get_structure(standard_atoms)
-    assert structure == standard_structure
+    with open(REGRESSION_BASELINES_LOCATION + bulk_structure_name, 'rb') as file_handle:
+        expected_structure = pickle.load(file_handle)
+    assert structure == expected_structure
 
 
-def test_AdsorbateSiteFinder_find_adsorption_site_for_standard_structure_site_types():
+@pytest.mark.baseline
+@pytest.mark.parametrize('slab_name',
+                         ['AlAu2Cu_210.traj',
+                          'CoSb2_110.traj',
+                          'Cu_211.traj',
+                          'FeNi_001.traj',
+                          'Ni4W_001.traj',
+                          'Pt12Si5_110.traj'])
+def test_to_create_adsorption_sites(slab_name):
+    structure = test_cases.get_slab_structure(slab_name)
+    sites_dict = AdsorbateSiteFinder(structure).find_adsorption_sites(put_inside=True)
+
+    slab_name_no_extension = slab_name.split('.')[0]
+    file_name = REGRESSION_BASELINES_LOCATION + 'adsorption_sites_for_' + slab_name_no_extension + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(sites_dict, file_handle)
+
+    assert True
+
+
+@pytest.mark.parametrize('slab_name',
+                         ['AlAu2Cu_210.traj',
+                          'CoSb2_110.traj',
+                          'Cu_211.traj',
+                          'FeNi_001.traj',
+                          'Ni4W_001.traj',
+                          'Pt12Si5_110.traj'])
+def test_AdsorbateSiteFinder_find_adsorption_site_types(slab_name):
     ''' Verify that ASF finds the same exact site types (e.g., ontop, bride, hollow) '''
-    struct = get_standard_structure()
-    site_types = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True).keys()
-    standard_site_types = _get_sites_for_standard_structure().keys()
-    assert site_types == standard_site_types
+    # Use pymatgen to find the sites
+    structure = test_cases.get_slab_structure(slab_name)
+    sites_dict = AdsorbateSiteFinder(structure).find_adsorption_sites(put_inside=True)
+    site_types = sites_dict.keys()
+
+    # Load the baseline sites
+    slab_name_no_extension = slab_name.split('.')[0]
+    file_name = REGRESSION_BASELINES_LOCATION + 'adsorption_sites_for_' + slab_name_no_extension + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_sites_dict = pickle.load(file_handle)
+    expected_site_types = expected_sites_dict.keys()
+
+    assert site_types == expected_site_types
 
 
-def test_AdsorbateSiteFinder_find_adsorption_site_for_standard_structure_sites():
+@pytest.mark.parametrize('slab_name',
+                         ['AlAu2Cu_210.traj',
+                          'CoSb2_110.traj',
+                          'Cu_211.traj',
+                          'FeNi_001.traj',
+                          'Ni4W_001.traj',
+                          'Pt12Si5_110.traj'])
+def test_AdsorbateSiteFinder_find_adsorption_site_locations(slab_name):
     ''' Verify that ASF finds the same cartesion site locations for each site type '''
-    struct = get_standard_structure()
-    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
-    standard_sites_dict = _get_sites_for_standard_structure()
+    # Use pymatgen to find the sites
+    structure = test_cases.get_slab_structure(slab_name)
+    sites_dict = AdsorbateSiteFinder(structure).find_adsorption_sites(put_inside=True)
+
+    # Load the baseline sites
+    slab_name_no_extension = slab_name.split('.')[0]
+    file_name = REGRESSION_BASELINES_LOCATION + 'adsorption_sites_for_' + slab_name_no_extension + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_sites_dict = pickle.load(file_handle)
+
     # The output we're checking is a dictionary of lists of numpy arrays.
     # Let's check convert each list to an array and then check each array one at a time.
-    for site_type in standard_sites_dict:
+    for site_type, expected_sites in expected_sites_dict.items():
         sites = np.array(sites_dict[site_type])
-        standard_sites = np.array(standard_sites_dict[site_type])
-        npt.assert_allclose(sites, standard_sites, rtol=1e-5, atol=1e-7)
-
-
-def _get_sites_for_standard_structure():
-    ''' These are the sites that pymatgen v2018.6.11 found on our standard structure. '''
-    sites = {'all': [np.array([1.15470054, 1.15470054, -1.15470054]),
-                     np.array([2.95970054, 3.86220054, -0.25220054]),
-                     np.array([1.75636721, 1.75636721, 0.04863279])],
-             'bridge': [np.array([2.05720054, 2.05720054, 0.65029946])],
-             'hollow': [np.array([2.35803387, 2.35803387, 1.25196613])],
-             'ontop': [np.array([1.15470054, 1.15470054, -1.15470054])]}
-    return sites
+        expected_sites = np.array(expected_sites)
+        npt.assert_allclose(sites, expected_sites, rtol=1e-5, atol=1e-7)

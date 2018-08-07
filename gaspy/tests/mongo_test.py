@@ -11,19 +11,24 @@ from ..mongo import make_doc_from_atoms, \
     make_atoms_from_doc
 
 # Things we need to do the tests
+import pytest
 import os
 from collections import OrderedDict
 import datetime
-from .baselines import get_standard_atoms, get_standard_relaxed_atoms
+from . import test_cases
 
 
-def test_make_doc_from_atoms_concatenation():
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_make_doc_from_atoms_concatenation(bulk_atoms_name):
     '''
     We test `make_doc_from_atoms` in two separate tests.
     This test is an integration test to see if the function
     concatenates other subfunctions correctly.
+
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
     '''
-    atoms = get_standard_relaxed_atoms()
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     doc = make_doc_from_atoms(atoms)
     del doc['user']
     del doc['ctime']
@@ -38,7 +43,8 @@ def test_make_doc_from_atoms_concatenation():
     assert doc == expected
 
 
-def test_make_doc_from_atoms_population():
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_make_doc_from_atoms_population(bulk_atoms_name):
     '''
     We test `make_doc_from_atoms` in two separate tests.
     This test is an integration test to see if the function
@@ -46,8 +52,11 @@ def test_make_doc_from_atoms_population():
 
     Since the time will not be correct, we simply check that
     whatever is inside there is a datetime object.
+
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
     '''
-    atoms = get_standard_relaxed_atoms()
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     doc = make_doc_from_atoms(atoms)
 
     expected_user = os.getenv('USER')
@@ -58,8 +67,13 @@ def test_make_doc_from_atoms_population():
     assert type(doc['mtime']) == expected_datetime_type
 
 
-def test__make_atoms_dict():
-    atoms = get_standard_atoms()
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test__make_atoms_dict(bulk_atoms_name):
+    '''
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
+    '''
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     atoms_dict = _make_atoms_dict(atoms)
     expected = {'atoms': [{'charge': 0.0,
                            'index': 0,
@@ -81,22 +95,40 @@ def test__make_atoms_dict():
     assert atoms_dict == expected
 
 
-def test__make_calculator_dict():
-    atoms = get_standard_relaxed_atoms()
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test__make_calculator_dict(bulk_atoms_name):
+    '''
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
+    '''
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    atoms = test_cases.relax_atoms(atoms)
     calculator_dict = _make_calculator_dict(atoms)
     expected = OrderedDict(calculator={'module': 'ase.calculators.emt', 'class': 'EMT'})
     assert calculator_dict == expected
 
 
-def test__make_results_dict():
-    atoms = get_standard_relaxed_atoms()
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test__make_results_dict(bulk_atoms_name):
+    '''
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
+    '''
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    atoms = test_cases.relax_atoms(atoms)
     results_dict = _make_results_dict(atoms)
     expected = OrderedDict(energy=-0.005681511358588409, forces=[[0.0, 0.0, 0.0]], fmax=0.0)
     assert results_dict == expected
 
 
-def test_make_atoms_from_doc():
-    expected_atoms = get_standard_relaxed_atoms()
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_make_atoms_from_doc(bulk_atoms_name):
+    '''
+    Note that this is currently hard-coded to test only bulks.
+    Feel free to change it if you care enough.
+    '''
+    expected_atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    expected_atoms = test_cases.relax_atoms(expected_atoms)
     doc = make_doc_from_atoms(expected_atoms)
     atoms = make_atoms_from_doc(doc)
     assert atoms == expected_atoms

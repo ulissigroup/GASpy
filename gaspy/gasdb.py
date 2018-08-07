@@ -3,6 +3,7 @@
 import warnings
 import pickle
 import glob
+import copy
 from itertools import islice
 from bson.objectid import ObjectId
 from multiprocessing import Pool
@@ -229,10 +230,10 @@ def get_unsimulated_catalog_docs(adsorbates,
     # Identify unsimulated documents by comparing hashes
     # of catalog docs vs. simulated adsorption docs
     hashes_simulated = _hash_docs(docs_simulated, ignore_keys=['mongo_id',
-                                                              'formula',
-                                                              'energy',
-                                                              'adsorbates',
-                                                              'adslab_calculation_date'])
+                                                               'formula',
+                                                               'energy',
+                                                               'adsorbates',
+                                                               'adslab_calculation_date'])
     hashes_catalog = _hash_docs(docs_catalog, ignore_keys=['mongo_id', 'formula'])
     hashes_unsimulated = set(hashes_catalog) - set(hashes_simulated)
 
@@ -309,10 +310,6 @@ def _hash_docs(docs, ignore_keys=None, _return_hashes=True):
     if not ignore_keys:
         ignore_keys = []
 
-    # Add the mongo ID to the list of ignored keys, because that'll always yield a different
-    # hash. Then turn it into a set to speed up searching.
-    ignore_keys.append('mongo_id')
-
     # Hash with a progress bar
     hashes = [_hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
               for doc in docs]
@@ -335,6 +332,11 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
     # Python doesn't do well with mutable default arguments
     if not ignore_keys:
         ignore_keys = []
+    else:
+        ignore_keys = copy.deepcopy(ignore_keys)
+
+    # Add the mongo ID to the list of ignored keys, because that'll always yield a different hash.
+    ignore_keys.append('mongo_id')
 
     # `system` will be one long string of the fingerprints.
     # After we populate it with non-ignored key/value pairs, we'll hash it and return it.
