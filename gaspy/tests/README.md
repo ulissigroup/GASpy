@@ -15,7 +15,7 @@ double-check these changes. So if a GASpy developer decides that some
 dependency is important enough to warrant its own test control, then they
 are free to add a learning test to this submodule.
 
-## `gaspy.tests.test\_cases`
+## `gaspy.tests.test_cases`
 
 GASpy operates on atoms objects a lot. But not all atoms are built the same.
 This submodule is virtually a cache of various atoms objects that can be used
