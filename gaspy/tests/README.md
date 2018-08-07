@@ -106,7 +106,7 @@ pytest gaspy/module.py -m baseline
 ...or if you just want to redo all of the baselines:
 
 ```
-pytest gaspy
+pytest gaspy -m baseline
 ```
 
 If you plan to build regression tests, then please refer to the
