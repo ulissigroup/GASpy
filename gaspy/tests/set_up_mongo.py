@@ -4,6 +4,14 @@ Mongo testing environment for proper testing, because many of our unit
 tests expect your Mongo server to have certain contents.
 '''
 
+__author__ = 'Kevin Tran'
+__email__ = 'ktran@andrew.cmu.edu'
+
+# Modify the python path so that we find/use the .gaspyrc.json in the testing
+# folder instead of the main folder
+import os
+os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
+
 import pickle
 from pymongo import MongoClient
 from ..utils import read_rc
@@ -79,7 +87,7 @@ def populate_unit_testing_adsorption_collection(collection_tag):
                         'unit_testing_*' prefix.
     '''
     # Get the documents that are supposed to be in the collection
-    with open(LOCATION_OF_DOCS + collection_tag + '_docs.pkl', 'rb') as file_handle:
+    with open(LOCATION_OF_DOCS + 'unit_testing_' + collection_tag + '_docs.pkl', 'rb') as file_handle:
         docs = pickle.load(file_handle)
 
     # Put the documents in

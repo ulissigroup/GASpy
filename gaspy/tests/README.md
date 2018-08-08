@@ -1,11 +1,11 @@
-# `gaspy.tests` Content
+# gaspy.tests Content
 
 Welcome to the gaspy testing submodule. The structure of this folder mostly
 mimics the structure of the gaspy folders, so you should be able to find the
 appropriate tests at the analogous locations in this submodule. There are
 some differences that warrant an explanation, though.
 
-## `gaspy.tests.learning_tests`
+## gaspy.tests.learning\_tests
 
 A learning test is a type of unit test that is devoted to testing the
 functionality of something that the code base depends on. For example:  We
@@ -15,7 +15,7 @@ double-check these changes. So if a GASpy developer decides that some
 dependency is important enough to warrant its own test control, then they
 are free to add a learning test to this submodule.
 
-## `gaspy.tests.test_cases`
+## gaspy.tests.test\_cases
 
 GASpy operates on atoms objects a lot. But not all atoms are built the same.
 This submodule is virtually a cache of various atoms objects that can be used
@@ -31,7 +31,7 @@ The types of atoms you can get are listed within the subfolders of
 `gaspy.tests.test_cases.*`. You can add more yourself if you want to create
 more test cases, too.
 
-## `gaspy.tests.set_up_mongo`
+## gaspy.tests.set\_up\_mongo
 
 Your Mongo database is probably going to explode if you populate it with enough
 data. It'll be so big that doing unit tests on the database will get very
@@ -43,14 +43,14 @@ unit testing Mongo collections from Python:
 ```
 from gaspy.tests.set_up_mongo import create_and_populate_unit_testing_collection
 
-for collection_tag in ['unit_testing_adsorption', 'unit_testing_catalog', 'unit_testing_surface_energy']:
+for collection_tag in ['adsorption', 'catalog', 'surface_energy']:
     create_and_populate_unit_testing_collection(collection_tag)
 ```
 
 Note that these require a Mongo server set up and your `gaspyrc.json` to be
 populated accordingly.
 
-## `gaspy.tests.regression_baselines`
+## gaspy.tests.regression\_baselines
 
 In computational science, it is common for a function to not have a "correct
 output". Thus the main way to control it with tests is to see if the output
@@ -59,6 +59,26 @@ of a function changes. This is called a regression test.
 This folder is a cache for all of GASpy's regression test results. The
 structure of this folder should mimic the structure of the `gaspy.tests` folder
 itself so that you know where to find the appropriate caches for a test.
+
+# Installation warning!
+
+Note that you must create a .gaspyrc.json file within the `gaspy/tests` folder
+where the second `.gaspyrc_template.json` file is. This second configuration file
+should point to your desired enviromental variables that are set up for unit
+testing. Many tests will fail if you don't have this.
+
+On that note:  If you are creating a unit test that interacts with Mongo collections,
+then you should add this to the top of the testing module:
+
+```
+# Modify the python path so that we find/use the .gaspyrc.json in the testing
+# folder instead of the main folder
+import os
+os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
+```
+
+This, combined with the appropriate `.gaspyrc.json` file, will ensure that you use
+the right collections.
 
 
 # Usage
@@ -83,6 +103,7 @@ Remember that you can use [pdb](https://docs.python.org/3/library/pdb.html) by
 supplying the `--pdb` argument when calling `pytest`. We recommend that you only run
 pytest from within the `gaspy/tests` folder or below to ensure that pytest uses
 the `pytest.ini` files.
+
 
 ## Regression testing
 

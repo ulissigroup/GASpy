@@ -9,6 +9,11 @@ have the same exact JSON architecture.
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
+# Modify the python path so that we find/use the .gaspyrc.json in the testing
+# folder instead of the main folder
+import os
+os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
+
 # Things we're testing
 from ..gasdb import get_mongo_collection, \
     ConnectableCollection, \
@@ -35,8 +40,9 @@ from ..utils import read_rc
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
 
-def test_get_mongo_collection():
-    collection = get_mongo_collection(collection_tag='unit_testing_adsorption')
+@pytest.mark.parametrize('collection_tag', ['adsorption'])
+def test_get_mongo_collection(collection_tag):
+    collection = get_mongo_collection(collection_tag=collection_tag)
 
     # Make sure it's the correct class type
     assert isinstance(collection, ConnectableCollection)
@@ -48,13 +54,14 @@ def test_get_mongo_collection():
         assert False
 
 
-def test_ConnectableCollection():
+@pytest.mark.parametrize('collection_tag', ['adsorption'])
+def test_ConnectableCollection(collection_tag):
     '''
     Verify that the extended `ConnectableCollection` class
     is still a Collection class and has the appropriate methods
     '''
     # Login info
-    mongo_info = read_rc()['mongo_info']['unit_testing_adsorption']
+    mongo_info = read_rc()['mongo_info'][collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']
@@ -78,7 +85,7 @@ def test_ConnectableCollection():
 
 @pytest.mark.baseline
 def test_to_create_expected_aggregated_adsorption_documents():
-    docs = get_adsorption_docs(_collection_tag='unit_testing_adsorption')
+    docs = get_adsorption_docs()
     with open(REGRESSION_BASELINES_LOCATION + 'aggregated_adsorption_documents' + '.pkl', 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
@@ -92,7 +99,7 @@ def get_expected_aggregated_adsorption_documents():
 
 def test_get_adsorption_docs():
     expected_docs = get_expected_aggregated_adsorption_documents()
-    docs = get_adsorption_docs(_collection_tag='unit_testing_adsorption')
+    docs = get_adsorption_docs()
     assert _compare_unordered_sequences(docs, expected_docs)
 
 
@@ -153,7 +160,7 @@ def __make_documents_dirty(docs):
 
 @pytest.mark.baseline
 def test_to_create_aggregated_catalog_documents():
-    docs = get_catalog_docs(_collection_tag='unit_testing_catalog')
+    docs = get_catalog_docs()
     with open(REGRESSION_BASELINES_LOCATION + 'aggregated_catalog_documents' + '.pkl', 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
@@ -167,13 +174,13 @@ def get_expected_aggregated_catalog_documents():
 
 def test_get_catalog_docs():
     expected_docs = get_expected_aggregated_catalog_documents()
-    docs = get_catalog_docs(_collection_tag='unit_testing_catalog')
+    docs = get_catalog_docs()
     assert docs == expected_docs
 
 
 @pytest.mark.baseline
 def test_to_create_aggregated_surface_documents():
-    docs = get_surface_docs(_collection_tag='unit_testing_surface_energy')
+    docs = get_surface_docs()
     with open(REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents' + '.pkl', 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
@@ -182,16 +189,14 @@ def test_to_create_aggregated_surface_documents():
 def test_get_surface_docs():
     with open(REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents' + '.pkl', 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
-    docs = get_surface_docs(_collection_tag='unit_testing_surface_energy')
+    docs = get_surface_docs()
     assert docs == expected_docs
 
 
 @pytest.mark.baseline
 @pytest.mark.parametrize('adsorbates', [['H'], ['CO']])
 def test_to_create_unsimulated_catalog_docs(adsorbates):
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
-                                        _catalog_collection_tag='unit_testing_catalog',
-                                        _adsorption_collection_tag='unit_testing_adsorption')
+    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates)
 
     file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_' + '_'.join(adsorbates) + '_catalog_docs' + '.pkl'
     with open(file_name, 'wb') as file_handle:
@@ -205,17 +210,14 @@ def test_get_unsimulated_catalog_docs(adsorbates):
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
 
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
-                                        _catalog_collection_tag='unit_testing_catalog',
-                                        _adsorption_collection_tag='unit_testing_adsorption')
+    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates)
     assert docs == expected_docs
 
 
 @pytest.mark.baseline
 @pytest.mark.parametrize('adsorbates', [None, ['H'], ['CO']])
 def test_to_create_attempted_adsorption_docs(adsorbates):
-    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates,
-                                          _collection_tag='unit_testing_adsorption')
+    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates)
 
     # EAFP to tag the pickle, since it'll be odd if adsorbates == None
     try:
@@ -242,8 +244,7 @@ def test__get_attempted_adsorption_docs(adsorbates):
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
 
-    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates,
-                                          _collection_tag='unit_testing_adsorption')
+    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates)
     #assert docs == expected_docs
     assert _compare_unordered_sequences(docs, expected_docs)
 
@@ -319,11 +320,11 @@ def test__hash_doc(ignore_keys):
 
 
 def test_remove_duplicates_in_adsorption_collection():
-    collection_tag = 'unit_testing_adsorption'
+    collection_tag = 'adsorption'
     starting_doc_count, id_of_duplicate_doc = add_duplicate_document_to_collection(collection_tag)
 
     try:
-        remove_duplicates_in_adsorption_collection(_collection_tag=collection_tag)
+        remove_duplicates_in_adsorption_collection()
 
         # Verify that removal worked
         with get_mongo_collection(collection_tag=collection_tag) as collection:

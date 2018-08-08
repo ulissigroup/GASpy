@@ -62,7 +62,7 @@ class ConnectableCollection(Collection):
         self.database.client.close()
 
 
-def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
+def get_adsorption_docs(adsorbates=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`.
@@ -75,7 +75,6 @@ def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
                         of those adsorbates; you will *not* get structures
                         with only one of the adsorbates. If you pass nothing, then we
                         get all documents regardless of adsorbates.
-        _collection_tag *For unit testing only.* Do not change this.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -94,7 +93,7 @@ def get_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
 
     # Get the documents and clean them up
     pipeline = [match, group]
-    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+    with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
@@ -143,13 +142,11 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
-def get_catalog_docs(_collection_tag='catalog_readonly'):
+def get_catalog_docs():
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `catalog`.
 
-    Args:
-        _collection_tag *For unit testing only.* Do not change this.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.catalog_fingerprints`
@@ -160,7 +157,7 @@ def get_catalog_docs(_collection_tag='catalog_readonly'):
 
     # Get the documents and clean them up
     pipeline = [group]
-    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+    with get_mongo_collection(collection_tag='catalog') as collection:
         print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
@@ -169,13 +166,11 @@ def get_catalog_docs(_collection_tag='catalog_readonly'):
     return cleaned_docs
 
 
-def get_surface_docs(_collection_tag='surface_energy'):
+def get_surface_docs():
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `surface_energy`.
 
-    Args:
-        _collection_tag *For unit testing only.* Do not change this.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -192,7 +187,7 @@ def get_surface_docs(_collection_tag='surface_energy'):
 
     # Get the documents and clean them up
     pipeline = [match, group]
-    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+    with get_mongo_collection(collection_tag='surface_energy') as collection:
         print('Now pulling surface documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
@@ -201,9 +196,7 @@ def get_surface_docs(_collection_tag='surface_energy'):
     return cleaned_docs
 
 
-def get_unsimulated_catalog_docs(adsorbates,
-                                 _catalog_collection_tag='catalog_readonly',
-                                 _adsorption_collection_tag='adsorption'):
+def get_unsimulated_catalog_docs(adsorbates):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out
     all items that also show up in `get_adsorption_docs`, i.e., gets the
@@ -218,14 +211,11 @@ def get_unsimulated_catalog_docs(adsorbates,
                     ['OH', 'H'] will look for simulations where OH and H
                     are co-adsorbed. It will *not* look for simulations
                     with either OH or H.
-        _catalog_collection_tag     *For unit testing only!* Do not modify.
-        _adsorption_collection_tag  *For unit testing only!* Do not modify.
     Output:
         docs    A list of dictionaries for various fingerprints.
     '''
-    docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates,
-                                                    _collection_tag=_adsorption_collection_tag)
-    docs_catalog = get_catalog_docs(_collection_tag=_catalog_collection_tag)
+    docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates)
+    docs_catalog = get_catalog_docs()
 
     # Identify unsimulated documents by comparing hashes
     # of catalog docs vs. simulated adsorption docs
@@ -244,7 +234,7 @@ def get_unsimulated_catalog_docs(adsorbates,
     return docs
 
 
-def _get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'):
+def _get_attempted_adsorption_docs(adsorbates=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`. This differs from `get_adsorption_docs`
@@ -260,7 +250,6 @@ def _get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'
                         of those adsorbates; you will *not* get structures
                         with only one of the adsorbates. If you pass nothing, then we
                         get all documents regardless of adsorbates.
-        _collection_tag *For unit testing only.* Do not change this.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -282,7 +271,7 @@ def _get_attempted_adsorption_docs(adsorbates=None, _collection_tag='adsorption'
 
     # Get the documents and clean them up
     pipeline = [match, group]
-    with get_mongo_collection(collection_tag=_collection_tag) as collection:
+    with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling adsorption documents for sites we have attempted...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
@@ -357,17 +346,17 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
         return system
 
 
-def remove_duplicates_in_adsorption_collection(_collection_tag='adsorption'):
+def remove_duplicates_in_adsorption_collection():
     ''' Things that share FireWorks IDs for slab+adsorbate structures are duplicates '''
     identifying_query = {'adslab_fwid': '$processed_data.FW_info.slab+adsorbate'}
-    _remove_duplicates_in_a_collection(collection_tag=_collection_tag,
+    _remove_duplicates_in_a_collection(collection_tag='adsorption',
                                        identifying_query=identifying_query)
 
 
-def remove_duplicates_in_atoms_collection(_collection_tag='atoms'):
+def remove_duplicates_in_atoms_collection():
     ''' Things that share FireWorks IDs are duplicates '''
     identifying_query = {'fwid': '$fwid'}
-    _remove_duplicates_in_a_collection(collection_tag=_collection_tag,
+    _remove_duplicates_in_a_collection(collection_tag='atoms',
                                        identifying_query=identifying_query)
 
 

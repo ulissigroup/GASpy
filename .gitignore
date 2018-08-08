@@ -26,8 +26,6 @@
 *.log
 *.sql
 *.sqlite
-*.pkl
-*.traj
 *.token
 *.db
 *.out
