@@ -20,7 +20,7 @@ RUN rm bashrc_additions.sh
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
 RUN mkdir -p $GASPY_HOME
-ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
+ENV PYTHONPATH $GASPY_HOME/GASpy_feedback
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME:$PYTHONPATH
 
