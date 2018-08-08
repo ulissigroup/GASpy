@@ -105,9 +105,6 @@ class UpdateAllDB(luigi.WrapperTask):
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
-        #print('# of outstanding adslab calculations: %d'
-        #      % len([doc for doc in ads_docs
-        #             if (doc['fwid'] not in fwids and doc['fwname']['adsorbate'] != '')]))
         for doc in ads_docs:
             # Only make the task if 1) the fireworks task is not already in the database, and
             # 2) there is an adsorbate
@@ -139,13 +136,7 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                            adsorption_site=adsorption_site,
                                                                            settings=settings)}
 
-                # If we've hit the maxmum number of processes, flag and stop
-                #i += 1
-                #if i >= self.max_processes and self.max_processes > 0:
-                #    print('Reached the maximum number of processes, %s' % self.max_processes)
-                #    break
-
-                #If we have duplicates, the FWID might trigger a DumpToAdsorptionDB
+                # If we have duplicates, the FWID might trigger a DumpToAdsorptionDB
                 # even if there is basically an identical calculation in the database
                 DTADB = DumpToAdsorptionDB(parameters)
                 if not(DTADB.complete()):
@@ -299,7 +290,7 @@ class DumpToAuxDB(luigi.Task):
             docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
 
         docs_not_none = [doc for doc in docs if doc is not None]
-        if len(docs_not_none)>0:
+        if len(docs_not_none) > 0:
             with gasdb.get_mongo_collection('atoms') as collection:
                 collection.insert_many(docs_not_none)
 
