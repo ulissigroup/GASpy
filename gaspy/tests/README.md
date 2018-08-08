@@ -68,17 +68,21 @@ GASpy, you need to have Mongo set up (see above). Then you can do this from the
 command line:
 
 ```
-pytest gaspy/tests
+cd GASpy/gaspy/tests
+pytest
 ```
 
 You can also test a specific submodule:
 
 ```
-pytest gaspy/tests/utils_test.py
+cd GASpy/gaspy/tests
+pytest utils_test.py
 ```
 
 Remember that you can use [pdb](https://docs.python.org/3/library/pdb.html) by
-supplying the `--pdb` argument when calling `pytest`.
+supplying the `--pdb` argument when calling `pytest`. We recommend that you only run
+pytest from within the `gaspy/tests` folder or below to ensure that pytest uses
+the `pytest.ini` files.
 
 ## Regression testing
 
