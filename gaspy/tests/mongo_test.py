@@ -15,7 +15,10 @@ import pytest
 import os
 from collections import OrderedDict
 import datetime
+import pickle
 from . import test_cases
+
+REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/mongo/'
 
 
 @pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
@@ -67,6 +70,18 @@ def test_make_doc_from_atoms_population(bulk_atoms_name):
     assert type(doc['mtime']) == expected_datetime_type
 
 
+@pytest.mark.baseline
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_to_create_atoms_dict(bulk_atoms_name):
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    atoms_dict = _make_atoms_dict(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(atoms_dict, file_handle)
+    assert True
+
+
 @pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
 def test__make_atoms_dict(bulk_atoms_name):
     '''
@@ -75,24 +90,24 @@ def test__make_atoms_dict(bulk_atoms_name):
     '''
     atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     atoms_dict = _make_atoms_dict(atoms)
-    expected = {'atoms': [{'charge': 0.0,
-                           'index': 0,
-                           'magmom': 0.0,
-                           'momentum': [0.0, 0.0, 0.0],
-                           'position': [0.0, 0.0, 0.0],
-                           'symbol': 'Cu',
-                           'tag': 0}],
-                'cell': [[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]],
-                'chemical_symbols': ['Cu'],
-                'constraints': [],
-                'info': {},
-                'mass': 63.546,
-                'natoms': 1,
-                'pbc': [True, True, True],
-                'spacegroup': 'Fm-3m (225)',
-                'symbol_counts': {'Cu': 1},
-                'volume': 11.76147025}
-    assert atoms_dict == expected
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_atoms_dict = pickle.load(file_handle)
+    assert atoms_dict == expected_atoms_dict
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_to_create_calculator_dict(bulk_atoms_name):
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    atoms = test_cases.relax_atoms(atoms)
+    calculator_dict = _make_calculator_dict(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'calculator_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(calculator_dict, file_handle)
+    assert True
 
 
 @pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
@@ -104,8 +119,24 @@ def test__make_calculator_dict(bulk_atoms_name):
     atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     atoms = test_cases.relax_atoms(atoms)
     calculator_dict = _make_calculator_dict(atoms)
-    expected = OrderedDict(calculator={'module': 'ase.calculators.emt', 'class': 'EMT'})
-    assert calculator_dict == expected
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'calculator_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_calculator_dict = pickle.load(file_handle)
+    assert calculator_dict == expected_calculator_dict
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
+def test_to_create_results_dict(bulk_atoms_name):
+    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
+    atoms = test_cases.relax_atoms(atoms)
+    results_dict = _make_results_dict(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'results_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(results_dict, file_handle)
+    assert True
 
 
 @pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
@@ -117,8 +148,11 @@ def test__make_results_dict(bulk_atoms_name):
     atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
     atoms = test_cases.relax_atoms(atoms)
     results_dict = _make_results_dict(atoms)
-    expected = OrderedDict(energy=-0.005681511358588409, forces=[[0.0, 0.0, 0.0]], fmax=0.0)
-    assert results_dict == expected
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'results_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_results_dict = pickle.load(file_handle)
+    assert results_dict == expected_results_dict
 
 
 @pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
