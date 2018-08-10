@@ -504,7 +504,7 @@ def decode_hex_to_atoms(atoms_hex):
     to store atoms objects in GASdb (AKA AuxDB), *not* the FireWorks DB.
     '''
     atoms_bytes = bytes.fromhex(atoms_hex)
-    atoms = pickle.loads(atoms_bytes)
+    atoms = pickle.loads(atoms_bytes, encoding='latin-1')
     return atoms
 
 
