@@ -64,10 +64,10 @@ def create_unit_testing_adsorption_collection(collection_tag):
     collection_name = mongo_info['collection_name']
 
     # Create the collection
-    client = MongoClient(host=host, port=port)
-    database = getattr(client, database_name)
-    database.authenticate(user, password)
-    database.create_collection(collection_name)
+    with MongoClient(host=host, port=port) as client:
+        database = getattr(client, database_name)
+        database.authenticate(user, password)
+        database.create_collection(collection_name)
 
 
 def populate_unit_testing_adsorption_collection(collection_tag):
