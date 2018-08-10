@@ -102,6 +102,29 @@ def _look_for_type_in_dict(type_, dict_):
             pass
 
 
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_encode_atoms_to_hex(adslab_atoms_name):
+    '''
+    This actually tests GASpy's ability to both encode and decode,
+    because what we really care about is being able to successfully decode whatever
+    we encode.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+
+    hex_ = encode_atoms_to_hex(expected_atoms)
+    atoms = decode_hex_to_atoms(hex_)
+    assert atoms == expected_atoms
+
+
 @pytest.mark.baseline
 @pytest.mark.parametrize('adslab_atoms_name',
                          ['CO_dissociate_Pt12Si5_110.traj',
@@ -131,29 +154,11 @@ def test_to_create_atoms_hex_encoding(adslab_atoms_name):
                           'OH_desorb_CoSb2_110.traj',
                           'OOH_dissociate_Ni4W_001.traj',
                           'OOH_hollow_FeNi_001.traj'])
-def test_encode_atoms_to_hex(adslab_atoms_name):
-    '''
-    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
-    Feel free to update it.
-    '''
-    atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
-    hex_ = encode_atoms_to_hex(atoms)
-
-    file_name = REGRESSION_BASELINES_LOCATION + 'hex_for_' + adslab_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_hex = pickle.load(file_handle)
-    assert hex_ == expected_hex
-
-
-@pytest.mark.parametrize('adslab_atoms_name',
-                         ['CO_dissociate_Pt12Si5_110.traj',
-                          'CO_top_Cu_211.traj',
-                          'C_hollow_AlAu2Cu_210.traj',
-                          'OH_desorb_CoSb2_110.traj',
-                          'OOH_dissociate_Ni4W_001.traj',
-                          'OOH_hollow_FeNi_001.traj'])
 def test_decode_hex_to_atoms(adslab_atoms_name):
     '''
+    This is a regression test to make sure that we can keep reading old hex strings
+    and turning them into the appropriate atoms objects.
+
     This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
     Feel free to update it.
     '''
@@ -163,6 +168,29 @@ def test_decode_hex_to_atoms(adslab_atoms_name):
     atoms = decode_hex_to_atoms(hex_)
 
     expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+    assert atoms == expected_atoms
+
+
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_encode_atoms_to_trajhex(adslab_atoms_name):
+    '''
+    This actually tests GASpy's ability to both encode and decode,
+    because what we really care about is being able to successfully decode whatever
+    we encode.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+
+    trajhex = encode_atoms_to_trajhex(expected_atoms)
+    atoms = decode_trajhex_to_atoms(trajhex)
     assert atoms == expected_atoms
 
 
@@ -195,29 +223,11 @@ def test_to_create_atoms_trajhex_encoding(adslab_atoms_name):
                           'OH_desorb_CoSb2_110.traj',
                           'OOH_dissociate_Ni4W_001.traj',
                           'OOH_hollow_FeNi_001.traj'])
-def test_encode_atoms_to_trajhex(adslab_atoms_name):
-    '''
-    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
-    Feel free to update it.
-    '''
-    atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
-    trajhex = encode_atoms_to_trajhex(atoms)
-
-    file_name = REGRESSION_BASELINES_LOCATION + 'trajhex_for_' + adslab_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_trajhex = pickle.load(file_handle)
-    assert trajhex == expected_trajhex
-
-
-@pytest.mark.parametrize('adslab_atoms_name',
-                         ['CO_dissociate_Pt12Si5_110.traj',
-                          'CO_top_Cu_211.traj',
-                          'C_hollow_AlAu2Cu_210.traj',
-                          'OH_desorb_CoSb2_110.traj',
-                          'OOH_dissociate_Ni4W_001.traj',
-                          'OOH_hollow_FeNi_001.traj'])
 def test_decode_trajhex_to_atoms(adslab_atoms_name):
     '''
+    This is a regression test to make sure that we can keep reading old hex strings
+    and turning them into the appropriate atoms objects.
+
     This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
     Feel free to update it.
     '''

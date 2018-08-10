@@ -484,8 +484,11 @@ def unfreeze_dict(frozen_dict):
 
 def encode_atoms_to_hex(atoms):
     '''
-    Encode an atoms object into a hex string. Useful when trying to
-    store atoms objects into jsons.
+    Encode an atoms object into a hex string.
+    Useful when trying to store atoms objects into jsons.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in GASdb (AKA AuxDB), *not* the FireWorks DB.
     '''
     atoms_bytes = pickle.dumps(atoms)
     atoms_hex = atoms_bytes.hex()
@@ -494,8 +497,11 @@ def encode_atoms_to_hex(atoms):
 
 def decode_hex_to_atoms(atoms_hex):
     '''
-    Decode a hex string into an atoms object. Useful when trying to
-    read atoms objects from jsons.
+    Decode a hex string into an atoms object.
+    Useful when trying to read atoms objects from jsons.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in GASdb (AKA AuxDB), *not* the FireWorks DB.
     '''
     atoms_bytes = bytes.fromhex(atoms_hex)
     atoms = pickle.loads(atoms_bytes)
@@ -507,6 +513,9 @@ def encode_atoms_to_trajhex(atoms):
     Encode a trajectory-formatted atoms object into a hex string.
     Differs from `encode_atoms_to_hex` since this method is hex-encoding
     the trajectory, not an atoms object.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
 
     Arg:
         atoms   ase.Atoms object to encode
@@ -529,6 +538,9 @@ def encode_atoms_to_trajhex(atoms):
 def decode_trajhex_to_atoms(hex_, index=-1):
     '''
     Decode a trajectory-formatted atoms object into a hex string.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
 
     Arg:
         hex_    A hex-encoded string of a trajectory of atoms objects.
