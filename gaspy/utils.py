@@ -5,7 +5,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 import pdb  # noqa: F401
 from pprint import pprint
-import dill as pickle
+import pickle
 import numpy as np
 from multiprocess import Pool
 import gc
@@ -19,8 +19,7 @@ import tqdm
 from . import defaults, readrc
 from luigi.parameter import _FrozenOrderedDict
 from luigi.target import FileAlreadyExists
-import collections
-from collections import OrderedDict
+from collections import OrderedDict, Iterable
 import uuid
 import ase.io
 import os
@@ -552,7 +551,31 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     return atoms
 
 
-def luigi_task_eval(task):
+def save_luigi_task_run_results(task, output):
+    '''
+    This function is a light wrapper to save a luigi task's output. Instead of
+    writing the output directly onto the output file, we write onto a temporary
+    file and then atomically move the temporary file onto the output file.
+
+    This defends against situations where we may have accidentally queued
+    multiple instances of a task; if this happens and both tasks try to write
+    to the same file, then the file gets corrupted. But if both of these tasks
+    simply write to separate files and then each perform an atomic move, then
+    the final output file remains uncorrupted.
+
+    Doing this for more or less every single task in GASpy gots annoying, so
+    we wrapped it.
+
+    Args:
+        task    Instance of a luigi task whose output you want to write to
+        output  Whatever object that you want to save
+    '''
+    with task.output().temporary_path() as task.temp_output_path:
+        with open(task.temp_output_path, 'wb') as file_handle:
+            pickle.dump(output, file_handle)
+
+
+def evaluate_luigi_task(task):
     '''
     This follow luigi logic to evaluate a task by recursively evaluating all requirements.
     This is useful for executing tasks that are typically independent of other tasks,
@@ -561,18 +584,23 @@ def luigi_task_eval(task):
     Arg:
         task    Class instance of a luigi task
     '''
+    # If the task is done, then we are done
     if task.complete():
         return
+
+    # Execute prerequisite tasks (& recur)
     else:
         task_req = task.requires()
         if task_req:
-            if isinstance(task_req, collections.Iterable):
+            if isinstance(task_req, Iterable):
                 for req in task.requires():
                     if not(req.complete()):
-                        luigi_task_eval(req)
+                        evaluate_luigi_task(req)
             else:
                 if not(task_req.complete()):
-                    luigi_task_eval(task_req)
+                    evaluate_luigi_task(task_req)
+
+        # Run the task after prerequisites are done
         try:
             task.run()
         except FileAlreadyExists:

@@ -3,23 +3,33 @@
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
+# Modify the python path so that we find/use the .gaspyrc.json in the testing
+# folder instead of the main folder
+import os
+os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
+
 # Things we're testing
 from ..utils import find_adsorption_sites, \
     unfreeze_dict, \
     encode_atoms_to_hex, \
     decode_hex_to_atoms, \
     encode_atoms_to_trajhex, \
-    decode_trajhex_to_atoms
+    decode_trajhex_to_atoms, \
+    save_luigi_task_run_results, \
+    evaluate_luigi_task
 
 # Things we need to do the tests
 import pytest
 import pickle
 import numpy as np
 import numpy.testing as npt
+import luigi
 from luigi.parameter import _FrozenOrderedDict
 from . import test_cases
+from ..utils import read_rc
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/utils/'
+TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path')
 
 
 @pytest.mark.baseline
@@ -218,3 +228,82 @@ def test_decode_trajhex_to_atoms(adslab_atoms_name):
 
     expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
     assert atoms == expected_atoms
+
+
+def test_save_luigi_task_run_results():
+    '''
+    Instead of actually testing this function, we perform a rough
+    learning test on Luigi.
+    '''
+    assert 'temporary_path' in dir(luigi.LocalTarget)
+
+
+def test_evaluate_luigi_task():
+    '''
+    We made some test tasks and try to execute them here. Then we verify
+    the output results of the tasks.
+    '''
+    # Define where/what the outputs should be
+    output_file_names = ['BranchTestTask/BranchTestTask_False_1_ca4048d8e6.pkl',
+                         'BranchTestTask/BranchTestTask_False_42_fedcdcbd62.pkl',
+                         'BranchTestTask/BranchTestTask_True_7_498ea8eed2.pkl',
+                         'RootTestTask/RootTestTask__99914b932b.pkl']
+    output_file_names = [TASKS_OUTPUTS_LOCATION + '/pickles/' + file_name
+                         for file_name in output_file_names]
+    expected_outputs = [1, 42, 7, 'We did it!']
+
+    # Run the tasks
+    try:
+        evaluate_luigi_task(RootTestTask())
+
+        # Test that each task executed correctly
+        for output_file_name, expected_output in zip(output_file_names, expected_outputs):
+            with open(output_file_name, 'rb') as file_handle:
+                output = pickle.load(file_handle)
+            assert output == expected_output
+
+        # Clean up, regardless of what happened during testing
+        __delete_files(output_file_names)
+    except: # noqa: 722
+        __delete_files(output_file_names)
+        raise
+
+
+def __delete_files(file_names):
+    ''' Helper function to try and delete some files '''
+    for file_name in file_names:
+        try:
+            os.remove(file_name)
+        except OSError:
+            pass
+
+
+class RootTestTask(luigi.Task):
+    def requires(self):
+        return [BranchTestTask(task_result=1),
+                BranchTestTask(task_result=7, branch_again=True)]
+
+    def run(self):
+        save_luigi_task_run_results(self, 'We did it!')
+
+    def output(self):
+        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
+                                 % (type(self).__name__, self.task_id))
+
+
+class BranchTestTask(luigi.Task):
+    task_result = luigi.IntParameter(42)
+    branch_again = luigi.BoolParameter(False)
+
+    def requires(self):
+        if self.branch_again:
+            return BranchTestTask()
+        else:
+            return
+
+    def run(self):
+        save_luigi_task_run_results(self, self.task_result)
+
+    def output(self):
+        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
+                                 % (type(self).__name__, self.task_id))
