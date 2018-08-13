@@ -27,9 +27,10 @@ def create_and_populate_unit_testing_collection(collection_tag):
     Arg:
         collection_tag  String indicating which collection you want
                         to create. Should probably be either:
-                            'unit_testing_adsorption'
-                            'unit_testing_catalog'
-                            'unit_testing_surface_energy'
+                            'adsorption'
+                            'catalog'
+                            'surface_energy'
+                            'atoms'
                         Valid tags can be seen in the
                         `.gaspyrc.json.template` file under the
                         `mongo_info` branch and should have a
@@ -46,9 +47,10 @@ def create_unit_testing_adsorption_collection(collection_tag):
     Arg:
         collection_tag  String indicating which collection you want
                         to create. Should probably be either:
-                            'unit_testing_adsorption'
-                            'unit_testing_catalog'
-                            'unit_testing_surface_energy'
+                            'adsorption'
+                            'catalog'
+                            'surface_energy'
+                            'atoms'
                         Valid tags can be seen in the
                         `.gaspyrc.json.template` file under the
                         `mongo_info` branch and should have a
@@ -78,9 +80,10 @@ def populate_unit_testing_adsorption_collection(collection_tag):
     Arg:
         collection_tag  String indicating which collection you want
                         to create. Should probably be either:
-                            'unit_testing_adsorption'
-                            'unit_testing_catalog'
-                            'unit_testing_surface_energy'
+                            'adsorption'
+                            'catalog'
+                            'surface_energy'
+                            'atoms'
                         Valid tags can be seen in the
                         `.gaspyrc.json.template` file under the
                         `mongo_info` branch and should have a
