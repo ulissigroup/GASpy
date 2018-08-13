@@ -222,17 +222,36 @@ def test_get_catalog_docs():
 
 
 @pytest.mark.baseline
-def test_to_create_aggregated_surface_documents():
-    docs = get_surface_docs()
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents' + '.pkl', 'wb') as file_handle:
+@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+def test_to_create_aggregated_surface_documents(extra_fingerprints):
+    try:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
+            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
+    except AttributeError:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+
+    docs = get_surface_docs(extra_fingerprints)
+    with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-def test_get_surface_docs():
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents' + '.pkl', 'rb') as file_handle:
+@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+def test_get_surface_docs(extra_fingerprints):
+    '''
+    Currently not testing the "filters" argument because, well, I am being lazy.
+    Feel free to change that yourself.
+    '''
+    # EAFP to set the file name; depends on whether or not there are extra fingerprints
+    try:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
+            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
+    except AttributeError:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+
+    with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
-    docs = get_surface_docs()
+    docs = get_surface_docs(extra_fingerprints)
     assert docs == expected_docs
 
 

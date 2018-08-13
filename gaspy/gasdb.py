@@ -183,11 +183,24 @@ def get_catalog_docs():
     return cleaned_docs
 
 
-def get_surface_docs():
+def get_surface_docs(extra_fingerprints=None, filters=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `surface_energy`.
 
+    Args:
+        extra_fingerprints  A dictionary with key/value pairings that correspond
+                            to a new fingerprint you want to fetch and its location in
+                            the Mongo docs, respectively. Refer to
+                            `gaspy.defaults.surface_fingerprints` for examples.
+        filters             A dictionary whose keys are the locations of elements
+                            in the Mongo collection and whose values are Mongo
+                            matching commands. For examples, look up Mongo `match`
+                            commands. If this argument is `None`, then it will
+                            fetch the default filters from
+                            `gaspy.defaults.surface_filters`. If you want to modify
+                            them, we suggest simply fetching that object, modifying it,
+                            and then passing it here.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -195,11 +208,16 @@ def get_surface_docs():
                 `gaspy.defaults.adsorption_filters`
     '''
     # Establish the information that'll be contained in the documents we'll be getting
+    # Also add anything the user asked for.
     fingerprints = defaults.surface_fingerprints()
+    if extra_fingerprints:
+        for key, value in extra_fingerprints.items():
+            fingerprints[key] = value
     group = {'$group': {'_id': fingerprints}}
 
     # Set the filtering criteria of the documents we'll be getting
-    filters = defaults.surface_filters()
+    if not filters:
+        filters = defaults.surface_filters()
     match = {'$match': filters}
 
     # Get the documents and clean them up
