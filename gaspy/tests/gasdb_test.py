@@ -32,6 +32,7 @@ import pytest
 import copy
 import pickle
 import random
+import binascii
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
@@ -84,22 +85,64 @@ def test_ConnectableCollection(collection_tag):
 
 
 @pytest.mark.baseline
-def test_to_create_expected_aggregated_adsorption_documents():
-    docs = get_adsorption_docs()
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_adsorption_documents' + '.pkl', 'wb') as file_handle:
+@pytest.mark.parametrize('adsorbates,extra_fingerprints',
+                         [(None, None),
+                          (['CO'], None),
+                          (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
+                          (['H'], {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'})])
+def test_to_create_expected_aggregated_adsorption_documents(adsorbates, extra_fingerprints):
+    docs = get_adsorption_docs(adsorbates=adsorbates, extra_fingerprints=extra_fingerprints)
+    file_name = __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints)
+    with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-def get_expected_aggregated_adsorption_documents():
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_adsorption_documents' + '.pkl', 'rb') as file_handle:
+def get_expected_aggregated_adsorption_documents(adsorbates=None, extra_fingerprints=None):
+    file_name = __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints)
+    with open(file_name, 'rb') as file_handle:
         docs = pickle.load(file_handle)
     return docs
 
 
-def test_get_adsorption_docs():
-    expected_docs = get_expected_aggregated_adsorption_documents()
-    docs = get_adsorption_docs()
+def __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints):
+    '''
+    We need to save pickle caches for some test results with different parameters.
+    This is a helper function to establish what these files will be called.
+    '''
+    # Turn `extra_fingerprints` into a hex string. EAFP to deal with nested vs. flat fingerprints
+    try:
+        fps_as_str = str(list(extra_fingerprints.keys())) + str(list(extra_fingerprints.values()))
+    except AttributeError:
+        fps_as_str = ''
+    fps_as_hex = binascii.hexlify(fps_as_str.encode()).hex()
+    fps_as_hex = fps_as_hex[:5] + fps_as_hex[-5:]   # Hackly get around an issue around too-long-of-a-file-name
+
+    # Turn `adsorbates` into a string. EAFP to deal with `None`
+    try:
+        ads_as_str = '_'.join(adsorbates)
+    except TypeError:
+        ads_as_str = ''
+
+    # Concatenate inputs
+    inputs_as_str = ads_as_str + '_' + fps_as_hex
+    file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_adsorption_documents_' + inputs_as_str + '.pkl'
+    return file_name
+
+
+@pytest.mark.parametrize('adsorbates,extra_fingerprints',
+                         [(None, None),
+                          (['CO'], None),
+                          (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
+                          (['H'], {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'})])
+def test_get_adsorption_docs(adsorbates, extra_fingerprints):
+    '''
+    Currently not testing the "filters" argument because, well, I am being lazy.
+    Feel free to change that yourself.
+    '''
+    expected_docs = get_expected_aggregated_adsorption_documents(adsorbates=adsorbates,
+                                                                 extra_fingerprints=extra_fingerprints)
+    docs = get_adsorption_docs(adsorbates=adsorbates, extra_fingerprints=extra_fingerprints)
     assert _compare_unordered_sequences(docs, expected_docs)
 
 

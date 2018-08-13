@@ -62,31 +62,48 @@ class ConnectableCollection(Collection):
         self.database.client.close()
 
 
-def get_adsorption_docs(adsorbates=None):
+def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`.
 
     Args:
-        adsorbates      [optional] A list of the adsorbates that you need to
-                        be present in each document's corresponding atomic
-                        structure. Note that if you pass a list with two adsorbates,
-                        then you will only get matches for structures with *both*
-                        of those adsorbates; you will *not* get structures
-                        with only one of the adsorbates. If you pass nothing, then we
-                        get all documents regardless of adsorbates.
+        adsorbates          [optional] A list of the adsorbates that you need to
+                            be present in each document's corresponding atomic
+                            structure. Note that if you pass a list with two adsorbates,
+                            then you will only get matches for structures with *both*
+                            of those adsorbates; you will *not* get structures
+                            with only one of the adsorbates. If you pass nothing, then we
+                            get all documents regardless of adsorbates.
+        extra_fingerprints  A dictionary with key/value pairings that correspond
+                            to a new fingerprint you want to fetch and its location in
+                            the Mongo docs, respectively. Refer to
+                            `gaspy.defaults.adsorption_fingerprints` for examples.
+        filters             A dictionary whose keys are the locations of elements
+                            in the Mongo collection and whose values are Mongo
+                            matching commands. For examples, look up Mongo `match`
+                            commands. If this argument is `None`, then it will
+                            fetch the default filters from
+                            `gaspy.defaults.adsorption_filters`. If you want to modify
+                            them, we suggest simply fetching that object, modifying it,
+                            and then passing it here.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
                 and who meet the filtering criteria of
                 `gaspy.defaults.adsorption_filters`
     '''
-    # Establish the information that'll be contained in the documents we'll be getting
+    # Establish the information that'll be contained in the documents we'll be getting.
+    # Also add anything the user asked for.
     fingerprints = defaults.adsorption_fingerprints()
+    if extra_fingerprints:
+        for key, value in extra_fingerprints.items():
+            fingerprints[key] = value
     group = {'$group': {'_id': fingerprints}}
 
     # Set the filtering criteria of the documents we'll be getting
-    filters = defaults.adsorption_filters()
+    if not filters:
+        filters = defaults.adsorption_filters()
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
     match = {'$match': filters}
