@@ -36,7 +36,7 @@ def get_mongo_collection(collection_tag):
                     tag you specified, but with `__enter__` and `__exit__` methods.
     '''
     # Login info
-    mongo_info = utils.read_rc()['mongo_info'][collection_tag]
+    mongo_info = utils.read_rc('mongo_info')[collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']
@@ -174,7 +174,7 @@ def get_catalog_docs():
 
     # Get the documents and clean them up
     pipeline = [group]
-    with get_mongo_collection(collection_tag='catalog') as collection:
+    with get_mongo_collection(collection_tag='catalog_readonly') as collection:
         print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
