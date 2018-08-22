@@ -421,10 +421,10 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
     with get_mongo_collection(collection_tag=collection_tag) as collection:
         docs = list(collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True))
 
-        # For each FWID that has duplicates, keep only the first document.
+        # For each FWID that has duplicates, keep only the last document.
         # Delete the rest.
         for doc in docs:
-            extra_mongo_ids = doc['mongo_ids'][1:]
+            extra_mongo_ids = doc['mongo_ids'][:-1]
             for id_ in extra_mongo_ids:
                 collection.delete_one({'_id': id_})
 
