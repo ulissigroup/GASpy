@@ -9,7 +9,8 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ..utils import find_adsorption_sites, \
+from ..utils import fingerprint_atoms, \
+    find_adsorption_sites, \
     unfreeze_dict, \
     encode_atoms_to_hex, \
     decode_hex_to_atoms, \
@@ -21,15 +22,52 @@ from ..utils import find_adsorption_sites, \
 # Things we need to do the tests
 import pytest
 import pickle
+import json
 import numpy as np
 import numpy.testing as npt
 import luigi
 from luigi.parameter import _FrozenOrderedDict
 from . import test_cases
 from ..utils import read_rc, defaults
+from ..mongo import make_atoms_from_doc
+from ..gasdb import get_mongo_collection
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/utils/'
 TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path')
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('collection_tag', ['catalog', 'adsorption'])
+def test_to_create_fingerprints(collection_tag):
+    # Get and fingerprint the documents
+    with get_mongo_collection(collection_tag) as collection:
+        docs = list(collection.find())
+    fingerprints = []
+    for doc in docs:
+        atoms = make_atoms_from_doc(doc)
+        fingerprint = fingerprint_atoms(atoms)
+        fingerprints.append(fingerprint)
+
+    # Save them
+    cache_location = REGRESSION_BASELINES_LOCATION + 'fingerprints_of_%s' % collection_tag + '.json'
+    with open(cache_location, 'w') as file_handle:
+        json.dump(fingerprints, file_handle)
+
+
+@pytest.mark.parametrize('collection_tag', ['catalog', 'adsorption'])
+def test_fingerprint_atoms(collection_tag):
+    # Load the cache of baseline answers
+    cache_location = REGRESSION_BASELINES_LOCATION + 'fingerprints_of_%s' % collection_tag + '.json'
+    with open(cache_location, 'r') as file_handle:
+        expected_fingerprints = json.load(file_handle)
+
+    # Get and fingerprint the documents, then test
+    with get_mongo_collection(collection_tag) as collection:
+        docs = list(collection.find())
+    for doc, expected_fingerprint in zip(docs, expected_fingerprints):
+        atoms = make_atoms_from_doc(doc)
+        fingerprint = fingerprint_atoms(atoms)
+        assert fingerprint == expected_fingerprint
 
 
 @pytest.mark.baseline
