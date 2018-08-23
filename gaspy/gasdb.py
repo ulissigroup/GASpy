@@ -143,11 +143,18 @@ def _clean_up_aggregated_docs(docs, expected_keys):
         # Clean up documents that don't have the right keys
         if doc.keys() != expected_keys:
             is_clean = False
-        # Clean up documents that have `None` as values
+        # Clean up documents that have `None` or '' as values
         for key, value in doc.items():
             if (value is None) or (value is ''):
                 is_clean = False
                 break
+            # Clean up documents that have no second-shell atoms
+            if key == 'neighborcoord':
+                for neighborcoord in value:  # neighborcoord looks like ['Cu:Cu-Cu-Cu-Cu', 'Cu:Cu-Cu-Cu-Cu']
+                    neighbor, coord = neighborcoord.split(':')
+                    if not coord:
+                        is_clean = False
+                        break
 
         if is_clean:
             cleaned_docs.append(doc)

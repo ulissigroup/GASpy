@@ -200,8 +200,12 @@ def __make_documents_dirty(docs):
     key_to_modify = random.choice(list(doc_empty1.keys()))
     doc_empty1[key_to_modify] = ''
 
+    # Make a document with no second shell atoms
+    doc_empty2 = copy.deepcopy(random.choice(docs))
+    doc_empty2['neighborcoord'] = ['Cu:', 'Al:']
+
     # Make the dirty documents
-    dirty_docs = copy.deepcopy(docs) + [doc_partial] + [doc_empty0] + [doc_empty1]
+    dirty_docs = copy.deepcopy(docs) + [doc_partial, doc_empty0, doc_empty1, doc_empty2]
     dirty_docs = [{'_id': doc} for doc in dirty_docs]   # because mongo is stupid
     return dirty_docs
 
