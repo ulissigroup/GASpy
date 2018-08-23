@@ -142,10 +142,10 @@ def _clean_up_aggregated_docs(docs, expected_keys):
 
         # Clean up documents that don't have the right keys
         if doc.keys() != expected_keys:
-            break
+            is_clean = False
         # Clean up documents that have `None` as values
         for key, value in doc.items():
-            if value is None:
+            if (value is None) or (value is ''):
                 is_clean = False
                 break
 

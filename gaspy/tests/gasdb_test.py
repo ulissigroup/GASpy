@@ -191,12 +191,17 @@ def __make_documents_dirty(docs):
     _ = doc_partial.pop(key_to_delete)   # noqa: F841
 
     # Make a document with a `None` value
-    doc_empty = copy.deepcopy(random.choice(docs))
-    key_to_modify = random.choice(list(doc_empty.keys()))
-    doc_empty[key_to_modify] = None
+    doc_empty0 = copy.deepcopy(random.choice(docs))
+    key_to_modify = random.choice(list(doc_empty0.keys()))
+    doc_empty0[key_to_modify] = None
+
+    # Make a document with a '' value
+    doc_empty1 = copy.deepcopy(random.choice(docs))
+    key_to_modify = random.choice(list(doc_empty1.keys()))
+    doc_empty1[key_to_modify] = ''
 
     # Make the dirty documents
-    dirty_docs = copy.deepcopy(docs) + [doc_partial] + [doc_empty]
+    dirty_docs = copy.deepcopy(docs) + [doc_partial] + [doc_empty0] + [doc_empty1]
     dirty_docs = [{'_id': doc} for doc in dirty_docs]   # because mongo is stupid
     return dirty_docs
 
