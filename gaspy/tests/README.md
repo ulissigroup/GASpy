@@ -31,24 +31,24 @@ The types of atoms you can get are listed within the subfolders of
 `gaspy.tests.test_cases.*`. You can add more yourself if you want to create
 more test cases, too.
 
-## gaspy.tests.set\_up\_mongo
+## gaspy.tests.mongo\_test\_collections
 
 Your Mongo database is probably going to explode if you populate it with enough
 data. It'll be so big that doing unit tests on the database will get very
 slow, and slow unit tests = not performed unit tests. So we set up small
 Mongo collections and do unit testing on them, instead. The functions in this
-submodule do this for you. This is how you can create and set up some
+submodule do this for you. This is how you can create and set up the
 unit testing Mongo collections from Python:
 
 ```
-from gaspy.tests.set_up_mongo import create_and_populate_unit_testing_collection
+from gaspy.tests.mongo_test_collections import create_and_populate_all_unit_testing_collections
 
-for collection_tag in ['adsorption', 'catalog', 'surface_energy']:
-    create_and_populate_unit_testing_collection(collection_tag)
+create_and_populate_all_unit_testing_collections()
 ```
 
 Note that these require a Mongo server set up and your `gaspyrc.json` to be
-populated accordingly.
+populated accordingly. The `mongo_test_collections` submodule also has quite a
+few other functions that you may find helpful for managing your test collections.
 
 ## gaspy.tests.regression\_baselines
 
