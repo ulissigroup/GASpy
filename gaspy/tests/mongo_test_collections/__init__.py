@@ -46,7 +46,7 @@ def create_and_populate_unit_testing_collection(collection_tag):
     populate_unit_testing_adsorption_collection(collection_tag)
 
 
-def create_unit_testing_adsorption_collection(collection_tag):
+def create_unit_testing_collection(collection_tag):
     '''
     This function will create a mock collection for unit testing.
 
@@ -78,7 +78,7 @@ def create_unit_testing_adsorption_collection(collection_tag):
         database.create_collection(collection_name)
 
 
-def populate_unit_testing_adsorption_collection(collection_tag):
+def populate_unit_testing_collection(collection_tag):
     '''
     This function will populate a unit testing collection with
     the contents that it's "supposed" to have.
