@@ -16,13 +16,14 @@ from ...utils import read_rc
 from ...gasdb import get_mongo_collection
 
 LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/mongo_test_collections/'
+ALL_COLLECTION_TAGS = ['atoms', 'catalog', 'adsorption', 'surface_energy']
 
 
 def create_and_populate_all_unit_testing_collections():
     '''
     This function will create and populate all unit testing collections.
     '''
-    for collection_tag in ['atoms', 'catalog', 'adsorption', 'surface_energy']:
+    for collection_tag in ALL_COLLECTION_TAGS:
         create_and_populate_unit_testing_collection(collection_tag)
 
 
@@ -42,8 +43,8 @@ def create_and_populate_unit_testing_collection(collection_tag):
                         `mongo_info` branch and should have a
                         'unit_testing_*' prefix.
     '''
-    create_unit_testing_adsorption_collection(collection_tag)
-    populate_unit_testing_adsorption_collection(collection_tag)
+    create_unit_testing_collection(collection_tag)
+    populate_unit_testing_collection(collection_tag)
 
 
 def create_unit_testing_collection(collection_tag):
@@ -154,6 +155,53 @@ def push_doc(doc, collection_tag):
     '''
     with get_mongo_collection(collection_tag) as collection:
         collection.insert_one(doc)
+
+
+def populate_unit_testing_atoms_collection():
+    '''
+    If you're crafting your ouwn unit testing collections,
+    it'd makes sense if your unit testing atoms collection contains
+    all of the atoms objects that were prerequisite to the documents
+    you have in the `adsorption` collections.
+
+    This function will read your unit testing `adsorption` collection
+    and populate your unit testing `atoms` collection accordingly.
+    '''
+    # Get the docs of all the atoms in the 'unit_testing_adsorption' collection
+    with get_mongo_collection('unit_testing_adsorption') as collection:
+        adsorption_docs = list(collection.find({}, {'processed_data.FW_info': 1}))
+
+    # Find the FWIDs of all of the prerequisite calculations
+    fwids = []
+    for doc in adsorption_docs:
+        fw_info = doc['processed_data']['FW_info']
+        for calc_type in ['bulk', 'slab', 'slab+adsorbate']:
+            fwid = fw_info[calc_type]
+            fwids.append(fwid)
+
+    # Get and save all of the atoms documents needed to make the adsorption documents
+    atoms_docs = []
+    with get_mongo_collection('atoms') as collection:
+        for fwid in set(fwids):
+            doc = list(collection.find({'fwid': fwid}))[0]
+            atoms_docs.append(doc)
+    with get_mongo_collection('unit_testing_atoms') as collection:
+        collection.insert_many(atoms_docs)
+
+    # Let's just throw in all of the adsorbate calculations for good measure
+    with get_mongo_collection('atoms') as collection:
+        gas_docs = list(collection.find({'type': 'gas'}))
+    with get_mongo_collection('unit_testing_atoms') as collection:
+        collection.insert_many(gas_docs)
+
+
+def dump_all_unit_testing_collections_to_pickles():
+    '''
+    This function will create and populate all unit testing collections.
+    '''
+    for collection_tag in ALL_COLLECTION_TAGS:
+        collection_tag = 'unit_testing_' + collection_tag
+        dump_collection_to_pickle(collection_tag)
 
 
 def dump_collection_to_pickle(collection_tag):
