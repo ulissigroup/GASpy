@@ -31,6 +31,7 @@
 *.out
 *.error
 *.out
+*.cache
 .pytest_cache/
 
 # OS generated files #
