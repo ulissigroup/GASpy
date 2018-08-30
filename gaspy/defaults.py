@@ -80,7 +80,8 @@ def catalog_fingerprints():
                     'top': '$processed_data.calculation_info.top',
                     'coordination': '$processed_data.fp_init.coordination',
                     'neighborcoord': '$processed_data.fp_init.neighborcoord',
-                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination'}
+                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
+                    'predictions': '$predictions'}
     return fingerprints
 
 
