@@ -7,7 +7,13 @@ import copy
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
-from . import utils
+from .utils import encode_atoms_to_hex
+
+XC = 'rpbe'
+MAX_NUM_BULK_ATOMS = 80
+MAX_NUM_ADSLAB_ATOMS = 80
+MAX_NUM_SURFACE_ATOMS = 110
+ENCUT = 500.
 
 
 def adsorption_fingerprints():
@@ -175,7 +181,7 @@ def exchange_correlational_settings():
     return xc_settings
 
 
-def calc_settings(xc='rpbe'):
+def calc_settings(xc=XC):
     '''
     The default calculational settings for GASpy to use.
 
@@ -200,14 +206,16 @@ def calc_settings(xc='rpbe'):
     return settings
 
 
-def gas_parameters(gasname, settings='rpbe'):
+def gas_parameters(gasname, settings=XC):
     '''
     Generate some default parameters for a gas and expected relaxation settings
 
     Args:
         gasname     A string containing the name of the gas
-        settings    A string that Vaspy can use to create vasp settings.
-                    Or `rpbe` if we want to use that
+        settings    A string that's identical to one of the keys found in
+                    `gaspy.defaults.exchange_correlational_settings()`.
+                    This tells our DFT calculator what calculation
+                    settings to use.
     '''
     # calc_settings returns a default set of calculational settings, but only if
     # the `settings` argument is a string.
@@ -224,14 +232,16 @@ def gas_parameters(gasname, settings='rpbe'):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings='rpbe', encut=500., max_atoms=80):
+def bulk_parameters(mpid, settings=XC, encut=ENCUT, max_atoms=MAX_NUM_BULK_ATOMS):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
     Args:
         gasname     A string containing the name of the gas
-        settings    A string that Vaspy can use to create vasp settings.
-                    Or `rpbe` if we want to use that
+        settings    A string that's identical to one of the keys found in
+                    `gaspy.defaults.exchange_correlational_settings()`.
+                    This tells our DFT calculator what calculation
+                    settings to use.
         encut       The energy cut-off
     '''
     # calc_settings returns a default set of calculational settings, but only if
@@ -255,7 +265,7 @@ def bulk_parameters(mpid, settings='rpbe', encut=500., max_atoms=80):
                                                  **settings))
 
 
-def slab_parameters(miller, top, shift, settings='rpbe'):
+def slab_parameters(miller, top, shift, settings=XC):
     '''
     Generate some default parameters for a slab and expected relaxation settings
 
@@ -264,8 +274,10 @@ def slab_parameters(miller, top, shift, settings='rpbe'):
         top         A boolean stating whether or not the "top" of the slab is pointing upwards
         shift       As per PyMatGen, the shift is the distance of the planar translation
                     in the z-direction (after the cut). Look up PyMatGen for more details.
-        settings    A string that Vaspy can use to create vasp settings.
-                    Or `rpbe` if we want to use that
+        settings    A string that's identical to one of the keys found in
+                    `gaspy.defaults.exchange_correlational_settings()`.
+                    This tells our DFT calculator what calculation
+                    settings to use.
     '''
     # calc_settings returns a default set of calculational settings, but only if
     # the `settings` argument is a string.
@@ -377,8 +389,10 @@ def adsorption_parameters(adsorbate,
         slabrepeat      The number of times the basic slab has been repeated
         numb_slab_atoms The number of atoms in the slab. We use this number to help
                         differentiate slab and adsorbate atoms (later on).
-        settings        A string that Vaspy can use to create vasp settings.
-                        Or `rpbe` if we want to use that
+        settings        A string that's identical to one of the keys found in
+                        `gaspy.defaults.exchange_correlational_settings()`.
+                        This tells our DFT calculator what calculation
+                        settings to use.
     '''
     # calc_settings returns a default set of calculational settings, but only if
     # the `settings` argument is a string.
@@ -400,7 +414,7 @@ def adsorption_parameters(adsorbate,
                        num_slab_atoms=num_slab_atoms,
                        slabrepeat=slabrepeat,
                        adsorbates=[OrderedDict(name=name,
-                                               atoms=utils.encode_atoms_to_hex(atoms),
+                                               atoms=encode_atoms_to_hex(atoms),
                                                adsorption_site=adsorption_site)],
                        vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=200,

@@ -33,8 +33,10 @@ import statsmodels.api as sm
 import tqdm
 import multiprocess as mp
 
-# Get the path for the GASdb folder location from the gaspy config file
 GASdb_path = utils.read_rc()['gasdb_path']
+DEFAULT_XC = defaults.XC
+MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
+MAX_SURFACE_SIZE = defaults.MAX_NUM_SURFACE_ATOMS
 
 
 class UpdateAllDB(luigi.WrapperTask):
@@ -89,7 +91,7 @@ class UpdateAllDB(luigi.WrapperTask):
                     if key in doc['fwname']['vasp_settings']:
                         settings[key] = doc['fwname']['vasp_settings'][key]
                 # Create the nested dictionary of information that we will store in the Aux DB
-                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings, max_atoms=110),
+                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings, max_atoms=MAX_SURFACE_SIZE),
                               'slab': defaults.slab_parameters(miller=miller,
                                                                shift=shift,
                                                                top=True,
@@ -1377,17 +1379,17 @@ class EnumerateAlloys(luigi.WrapperTask):
             for facet in facets:
                 if not(self.dft):
                     task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=50),
+                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE),
                                                                      slab=defaults.slab_parameters(facet[1], True, 0),
                                                                      gas=defaults.gas_parameters('CO'),
                                                                      adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24)))
                 else:
                     task = FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed='relaxed_bulk',
-                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=50, settings='rpbe'),
-                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings='rpbe'),
-                                                                              gas=defaults.gas_parameters('CO', settings='rpbe'),
+                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC),
+                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings=DEFAULT_XC),
+                                                                              gas=defaults.gas_parameters('CO', settings=DEFAULT_XC),
                                                                               adsorption=defaults.adsorption_parameters('U',
-                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings='rpbe')))
+                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings=DEFAULT_XC)))
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
@@ -1447,7 +1449,7 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
 
         tasks_to_submit = []
         for result in results:
-            task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=50, settings='rpbe')))
+            task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC)))
             if not(task.complete()):
                 tasks_to_submit.append(task)
 
