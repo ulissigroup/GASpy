@@ -4,6 +4,7 @@ import warnings
 import pickle
 import glob
 import copy
+from collections import defaultdict
 from itertools import islice
 from bson.objectid import ObjectId
 from multiprocessing import Pool
@@ -253,7 +254,7 @@ def get_unsimulated_catalog_docs(adsorbates):
                     ['OH', 'H'] will look for simulations where OH and H
                     are co-adsorbed. It will *not* look for simulations
                     with either OH or H.
-    Output:
+    Returns:
         docs    A list of dictionaries for various fingerprints.
     '''
     docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates)
@@ -386,6 +387,73 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
     # For unit testing, because hashes change between instances of Python
     else:
         return system
+
+
+def get_low_coverage_docs_by_surface(adsorbates, model_tag='model0'):
+    '''
+    Each surface has many possible adsorption sites. The site with the most
+    negative adsorption energy (i.e., the strongest-binding site) will tend to
+    be the dominating site at low adsorbate coverages. This function will find
+    and return the low-coverage binding site for each surface. The adsorption
+    energies used to find these sites are taken from DFT calculations whenever
+    possible; when not possible, the energies are taken from model predictions.
+
+    If a document came from the adsorption collection, then it will inherit
+    the structure it got from `get_adsorption_docs`. If a document came from
+    the catalog collection, then it will inherit the structure it got from
+    `get_catalog_docs`. For ease-of-use, we also copied the predicted energies
+    within each catalog document into the 'energy' key of the document (just
+    like the adsorption documents have) so that all documents have energies
+    in one consistent location.
+
+    Args:
+        adsorbates  A list of strings that represent the adsorbates you want
+                    to get the low-coverage sites for. Example: ['CO'] or ['CO', 'C']
+        model_tag   A string indicating which model you want to
+                    use when using non-DFT, predicted energies. Check out
+                    the `predictions.adsorption_energy` key in the catalog
+                    documents for valid inputs. Note that these keys
+                    are created by the `GASpy_regressions` submodule.
+    Returns:
+        low_coverage_docs_by_surface    A dictionary whose keys are 2-tuples
+                                        of the MPID and miller index of a surface
+                                        and whose values are the aggregated
+                                        documents we get from either
+                                        `get_adsorption_docs` or `get_catalog_docs`
+    '''
+    # Get the documents, and then copy the predicted energies into the appropriate key
+    adsorption_docs = get_adsorption_docs(adsorbates)
+    catalog_docs = get_unsimulated_catalog_docs(adsorbates)
+    for doc in catalog_docs:
+        energy_data_by_date = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag]
+        dates = energy_data_by_date.keys()
+        energy_data = energy_data_by_date.values()
+        dates_and_energy_data = list(zip(dates, energy_data))
+        latest_energy_data = sorted(dates_and_energy_data)[-1][1]
+        doc['energy'] = latest_energy_data['energy']
+
+    # Fetch each document and organize/bucket them by surface
+    docs_by_surface = defaultdict(list)
+    for doc in adsorption_docs + catalog_docs:
+        surface = (doc['mpid'], str(doc['miller']))
+        docs_by_surface[surface].append(doc)
+
+    # Initialize output
+    surfaces = docs_by_surface.keys()
+    low_coverage_docs_by_surface = dict.fromkeys(surfaces)
+
+    # For each surface, find the document that corresponds to the low-coverage site
+    for surface, docs in docs_by_surface.items():
+        energies = [doc['energy'] for doc in docs]
+        low_coverage_doc = docs[np.argmin(np.array(energies))]
+        # Tag each document explicitly so that users will know which is which
+        if 'predictions' not in low_coverage_doc:
+            low_coverage_doc['DFT_calculated'] = True
+        else:
+            low_coverage_doc['DFT_calculated'] = False
+
+        low_coverage_docs_by_surface[surface] = low_coverage_doc
+    return low_coverage_docs_by_surface
 
 
 def remove_duplicates_in_adsorption_collection():

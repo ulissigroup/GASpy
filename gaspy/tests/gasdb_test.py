@@ -25,6 +25,7 @@ from ..gasdb import get_mongo_collection, \
     _get_attempted_adsorption_docs, \
     _hash_docs, \
     _hash_doc, \
+    get_low_coverage_docs_by_surface, \
     remove_duplicates_in_adsorption_collection
 
 # Things we need to do the tests
@@ -33,6 +34,8 @@ import copy
 import pickle
 import random
 import binascii
+from collections import defaultdict
+import numpy as np
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
@@ -388,6 +391,71 @@ def test__hash_doc(ignore_keys):
     doc = get_expected_aggregated_adsorption_documents()[0]
     string = _hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=False)
     assert string == expected_string
+
+
+@pytest.mark.parametrize('adsorbates,model_tag',
+                         [(['H'], 'model0'),
+                          (['CO'], 'model0')])
+def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
+    '''
+    We test `get_low_coverage_docs_by_surface' in multiple unit tests.
+    This test checks that the surfaces we find are correct.
+    '''
+    low_coverage_docs = get_low_coverage_docs_by_surface(adsorbates, model_tag)
+
+    adsorption_docs = get_adsorption_docs(adsorbates)
+    catalog_docs = get_unsimulated_catalog_docs(adsorbates)
+
+    surfaces = set(low_coverage_docs.keys())
+    expected_surfaces = set((doc['mpid'], str(doc['miller']))
+                            for doc in adsorption_docs + catalog_docs)
+    assert surfaces == expected_surfaces
+
+
+@pytest.mark.parametrize('adsorbates,model_tag',
+                         [(['H'], 'model0'),
+                          (['CO'], 'model0')])
+def test_docs_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
+    '''
+    We test `get_low_coverage_docs_by_surface' in multiple unit tests.
+    This test verifies that the documents provided by this function are
+    actually have the minimum energy within each surface.
+    '''
+    low_coverage_docs = get_low_coverage_docs_by_surface(adsorbates, model_tag)
+
+    # Get the documents, and then copy the predicted energies into the appropriate key
+    adsorption_docs = get_adsorption_docs(adsorbates)
+    catalog_docs = get_unsimulated_catalog_docs(adsorbates)
+    for doc in catalog_docs:
+        energy_data_by_date = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag]
+        dates = energy_data_by_date.keys()
+        energy_data = energy_data_by_date.values()
+        dates_and_energy_data = list(zip(dates, energy_data))
+        latest_energy_data = sorted(dates_and_energy_data)[-1][1]
+        doc['energy'] = latest_energy_data['energy']
+
+    # Organize/bucket the documents by surface
+    docs_by_surface = defaultdict(list)
+    for doc in adsorption_docs + catalog_docs:
+        surface = (doc['mpid'], str(doc['miller']))
+        docs_by_surface[surface].append(doc)
+
+    # Find the lower covearge documents ourselves and then compare them to
+    # whatever the function returned
+    for surface, docs in docs_by_surface.items():
+        energies = [doc['energy'] for doc in docs]
+        expected_low_coverage_doc = docs[np.argmin(np.array(energies))]
+        if 'predictions' not in expected_low_coverage_doc:
+            expected_low_coverage_doc['DFT_calculated'] = True
+        else:
+            expected_low_coverage_doc['DFT_calculated'] = False
+        assert low_coverage_docs[surface] == expected_low_coverage_doc
+
+        # Test if we tagged each document correctly
+        if 'predictions' not in expected_low_coverage_doc:
+            assert expected_low_coverage_doc['DFT_calculated']
+        else:
+            assert not expected_low_coverage_doc['DFT_calculated']
 
 
 def test_remove_duplicates_in_adsorption_collection():
