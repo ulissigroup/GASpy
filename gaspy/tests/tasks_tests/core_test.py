@@ -9,19 +9,19 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ..tasks import GenerateBulk
+from ...tasks.core import GenerateBulk
 
 # Things we need to do the tests
 import pytest
 import pickle
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
-from gaspy import defaults
-from gaspy.utils import evaluate_luigi_task, read_rc
-from gaspy.mongo import make_atoms_from_doc
+from ... import defaults
+from ...utils import evaluate_luigi_task, read_rc
+from ...mongo import make_atoms_from_doc
 
 # Get the path for the GASdb folder location from the gaspy config file
-TASKS_CACHE_LOCATION = read_rc()['gasdb_path'] + '/pickles/'
+TASKS_CACHE_LOCATION = read_rc('gasdb_path') + '/pickles/'
 
 
 @pytest.mark.parametrize('mpid', ['mp-30', 'mp-867306'])

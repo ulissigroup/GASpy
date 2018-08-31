@@ -4,7 +4,6 @@ submitted to Fireworks. This is intended to be used in conjunction with a bash s
 file.
 '''
 
-import pdb  # noqa: F401
 import copy
 import math
 from datetime import datetime
@@ -26,12 +25,12 @@ from pymatgen.core.surface import SlabGenerator
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from fireworks import Workflow
 import luigi
-from gaspy.mongo import make_doc_from_atoms, make_atoms_from_doc
-from gaspy import defaults, utils, gasdb
-from gaspy import fireworks_helper_scripts as fwhs
 import statsmodels.api as sm
 import tqdm
 import multiprocess as mp
+from ..mongo import make_doc_from_atoms, make_atoms_from_doc
+from .. import defaults, utils, gasdb
+from .. import fireworks_helper_scripts as fwhs
 
 GASdb_path = utils.read_rc()['gasdb_path']
 DEFAULT_XC = defaults.XC
@@ -459,18 +458,21 @@ class SubmitToFW(luigi.Task):
     def requires(self):
         # Define a dictionary that will be used to search the Auxiliary database and find
         # the correct entry
+
         if self.calctype == 'gas':
             search_strings = {'type': 'gas',
                               'fwname.gasname': self.parameters['gas']['gasname']}
             for key in self.parameters['gas']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s' % key] = \
                     self.parameters['gas']['vasp_settings'][key]
+
         elif self.calctype == 'bulk':
             search_strings = {'type': 'bulk',
                               'fwname.mpid': self.parameters['bulk']['mpid']}
             for key in self.parameters['bulk']['vasp_settings']:
                 search_strings['fwname.vasp_settings.%s' % key] = \
                     self.parameters['bulk']['vasp_settings'][key]
+
         elif self.calctype == 'slab':
             search_strings = {'type': 'slab',
                               'fwname.miller': list(self.parameters['slab']['miller']),
@@ -481,6 +483,7 @@ class SubmitToFW(luigi.Task):
                 if key not in ['isym']:
                     search_strings['fwname.vasp_settings.%s' % key] = \
                         self.parameters['slab']['vasp_settings'][key]
+
         elif self.calctype == 'slab_surface_energy':
             # pretty much identical to "slab" above, except no top since top/bottom
             # surfaces are both relaxed
@@ -493,6 +496,7 @@ class SubmitToFW(luigi.Task):
                 if key not in ['isym']:
                     search_strings['fwname.vasp_settings.%s' % key] = \
                         self.parameters['slab']['vasp_settings'][key]
+
         elif self.calctype == 'slab+adsorbate':
             search_strings = {'type': 'slab+adsorbate',
                               'fwname.miller': list(self.parameters['slab']['miller']),
@@ -507,6 +511,7 @@ class SubmitToFW(luigi.Task):
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = \
                     self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
+
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
             shift = search_strings['fwname.shift']
@@ -624,6 +629,7 @@ class SubmitToFW(luigi.Task):
                                                        utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
+
             # A way to append `tosubmit`, but specialized for surface energy calculations. Pretty much
             # identical to slab calcs, but different calculation type to keep them seperate and using
             # symmetric slab constraints (keep top and bottom layers free. For that reason, there is
@@ -656,6 +662,7 @@ class SubmitToFW(luigi.Task):
                                                        utils.unfreeze_dict(self.parameters['slab']['vasp_settings']),
                                                        max_atoms=self.parameters['bulk']['max_atoms'],
                                                        max_miller=self.parameters['slab']['max_miller']))
+
             # A way to append `tosubmit`, but specialized for adslab relaxations
             if self.calctype == 'slab+adsorbate':
                 fpd_structs = pickle.load(open(self.input().fn, 'rb'))
