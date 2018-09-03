@@ -1376,7 +1376,16 @@ class EnumerateAlloys(luigi.WrapperTask):
             struct = result['structure']
             sga = SpacegroupAnalyzer(struct, symprec=0.1)
             structure = sga.get_conventional_standard_structure()
-            miller_list = get_symmetrically_distinct_miller_indices(structure, self.max_index)
+            try:
+                miller_list = get_symmetrically_distinct_miller_indices(structure, self.max_index)
+            # We get some TypeErrors when pymatgen/spglib can't find surfaces.
+            # The try/except catches those. The error message check is to try to
+            # make sure we catch only that one specific error.
+            except TypeError as error:
+                if str(error) == "'NoneType' object is not subscriptable":
+                    miller_list = []
+                else:
+                    raise
             # pickle.dump(structure, open('./bulks/%s.pkl'%result['task_id'], 'w'))
             return [[result['task_id'], x] for x in miller_list]
 
