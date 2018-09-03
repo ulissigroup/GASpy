@@ -394,10 +394,6 @@ def multimap(function, inputs, chunked=False, processes=32,
     gc.collect()
     pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
 
-    # We set pickle recursion to false so that we don't accidentally pass unneccessary information
-    # to each thread
-    pickle.settings['recurse'] = False
-
     # Use multiprocessing to perform the calculations. We use imap instead of map so that
     # we get an iterator, which we need for tqdm (the progress bar) to work.
     if not chunked:
