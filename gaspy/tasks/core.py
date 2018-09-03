@@ -4,6 +4,9 @@ submitted to Fireworks. This is intended to be used in conjunction with a bash s
 file.
 '''
 
+__authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
+__email__ = 'ktran@andrew.cmu.edu'
+
 import copy
 import math
 from datetime import datetime
@@ -32,7 +35,7 @@ from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from .. import defaults, utils, gasdb
 from .. import fireworks_helper_scripts as fwhs
 
-GASdb_path = utils.read_rc()['gasdb_path']
+GASdb_path = utils.read_rc('gasdb_path')
 DEFAULT_XC = defaults.XC
 MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 MAX_SURFACE_SIZE = defaults.MAX_NUM_SURFACE_ATOMS
@@ -187,7 +190,8 @@ class UpdateEnumerations(luigi.Task):
                                                    'slabrepeat': config['slabrepeat'],
                                                    'relaxed': False,
                                                    'adsorbate': config['adsorbate'],
-                                                   'shift': config['shift']}}
+                                                   'shift': config['shift'],
+                                                   'adsorption_site': config['adsorption_site']}}
             slabadsdoc['processed_data'] = processed_data
             doclist.append(slabadsdoc)
 

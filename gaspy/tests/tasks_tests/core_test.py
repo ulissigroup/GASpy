@@ -1,4 +1,4 @@
-''' Tests for the `utils` submodule '''
+''' Tests for the `gaspy.tasks.core` submodule '''
 
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
