@@ -583,7 +583,7 @@ def save_luigi_task_run_results(task, output):
             pickle.dump(output, file_handle)
 
 
-def evaluate_luigi_task(task, purge_cache = False):
+def evaluate_luigi_task(task, purge_cache=False):
     '''
     This follow luigi logic to evaluate a task by recursively evaluating all requirements.
     This is useful for executing tasks that are typically independent of other tasks,
@@ -602,10 +602,10 @@ def evaluate_luigi_task(task, purge_cache = False):
             if isinstance(task_req, Iterable):
                 for req in task.requires():
                     if not(req.complete()) or purge_cache:
-                        luigi_task_eval(req, purge_cache)
+                        evaluate_luigi_task(req, purge_cache)
             else:
                 if not(task_req.complete()) or purge_cache:
-                    luigi_task_eval(task_req,purge_cache)
+                    evaluate_luigi_task(task_req, purge_cache)
         if purge_cache and not(task.complete()):
             os.remove(task.output().fn)
 
