@@ -63,7 +63,23 @@
             "user": "user",
             "password": "pw"
             },
+        "relaxed_bulk_catalog":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
         "catalog_readonly":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "unit_testing_atoms":{
             "host": "host.name",
             "port": "99999",
             "database": "database",
@@ -79,6 +95,14 @@
             "user": "user",
             "password": "pw"
             },
+        "unit_testing_surface_energy":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
         "unit_testing_catalog":{
             "host": "host.name",
             "port": "99999",
@@ -87,7 +111,7 @@
             "user": "user",
             "password": "pw"
             },
-        "unit_testing_surface_energy":{
+        "unit_testing_catalog_readonly":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

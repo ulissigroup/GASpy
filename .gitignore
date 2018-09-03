@@ -26,13 +26,12 @@
 *.log
 *.sql
 *.sqlite
-*.pkl
-*.traj
 *.token
 *.db
 *.out
 *.error
 *.out
+*.cache
 .pytest_cache/
 
 # OS generated files #

@@ -7,10 +7,6 @@
 export LUIGI_PORT="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("luigi_port"))')"
 export LPAD_PATH="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad_path"))')"
 
-# GASdb website login info
-export GASDB_WEB_USER="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gasdb_server.username"))')"
-export GASDB_WEB_PW="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("gasdb_server.password"))')"
-
 # FireWorks info
 export FW_HOST="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.host"))')"
 export FW_DB="$(python -c 'import gaspy.readrc; print(gaspy.readrc.read_rc("lpad.name"))')"

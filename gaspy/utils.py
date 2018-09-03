@@ -5,7 +5,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 import pdb  # noqa: F401
 from pprint import pprint
-import dill as pickle
+import pickle
 import numpy as np
 from multiprocess import Pool
 import gc
@@ -19,8 +19,7 @@ import tqdm
 from . import defaults, readrc
 from luigi.parameter import _FrozenOrderedDict
 from luigi.target import FileAlreadyExists
-import collections
-from collections import OrderedDict
+from collections import OrderedDict, Iterable
 import uuid
 import ase.io
 import os
@@ -395,10 +394,6 @@ def multimap(function, inputs, chunked=False, processes=32,
     gc.collect()
     pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
 
-    # We set pickle recursion to false so that we don't accidentally pass unneccessary information
-    # to each thread
-    pickle.settings['recurse'] = False
-
     # Use multiprocessing to perform the calculations. We use imap instead of map so that
     # we get an iterator, which we need for tqdm (the progress bar) to work.
     if not chunked:
@@ -485,8 +480,11 @@ def unfreeze_dict(frozen_dict):
 
 def encode_atoms_to_hex(atoms):
     '''
-    Encode an atoms object into a hex string. Useful when trying to
-    store atoms objects into jsons.
+    Encode an atoms object into a hex string.
+    Useful when trying to store atoms objects into jsons.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in GASdb (AKA AuxDB), *not* the FireWorks DB.
     '''
     atoms_bytes = pickle.dumps(atoms)
     atoms_hex = atoms_bytes.hex()
@@ -495,11 +493,14 @@ def encode_atoms_to_hex(atoms):
 
 def decode_hex_to_atoms(atoms_hex):
     '''
-    Decode a hex string into an atoms object. Useful when trying to
-    read atoms objects from jsons.
+    Decode a hex string into an atoms object.
+    Useful when trying to read atoms objects from jsons.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in GASdb (AKA AuxDB), *not* the FireWorks DB.
     '''
     atoms_bytes = bytes.fromhex(atoms_hex)
-    atoms = pickle.loads(atoms_bytes)
+    atoms = pickle.loads(atoms_bytes, encoding='latin-1')
     return atoms
 
 
@@ -508,6 +509,9 @@ def encode_atoms_to_trajhex(atoms):
     Encode a trajectory-formatted atoms object into a hex string.
     Differs from `encode_atoms_to_hex` since this method is hex-encoding
     the trajectory, not an atoms object.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
 
     Arg:
         atoms   ase.Atoms object to encode
@@ -531,6 +535,9 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     '''
     Decode a trajectory-formatted atoms object into a hex string.
 
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
+
     Arg:
         hex_    A hex-encoded string of a trajectory of atoms objects.
         index   Trajectories can contain multiple atoms objects.
@@ -552,7 +559,31 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     return atoms
 
 
-def luigi_task_eval(task,purge_cache=False):
+def save_luigi_task_run_results(task, output):
+    '''
+    This function is a light wrapper to save a luigi task's output. Instead of
+    writing the output directly onto the output file, we write onto a temporary
+    file and then atomically move the temporary file onto the output file.
+
+    This defends against situations where we may have accidentally queued
+    multiple instances of a task; if this happens and both tasks try to write
+    to the same file, then the file gets corrupted. But if both of these tasks
+    simply write to separate files and then each perform an atomic move, then
+    the final output file remains uncorrupted.
+
+    Doing this for more or less every single task in GASpy gots annoying, so
+    we wrapped it.
+
+    Args:
+        task    Instance of a luigi task whose output you want to write to
+        output  Whatever object that you want to save
+    '''
+    with task.output().temporary_path() as task.temp_output_path:
+        with open(task.temp_output_path, 'wb') as file_handle:
+            pickle.dump(output, file_handle)
+
+
+def evaluate_luigi_task(task, purge_cache = False):
     '''
     This follow luigi logic to evaluate a task by recursively evaluating all requirements.
     This is useful for executing tasks that are typically independent of other tasks,
@@ -563,10 +594,12 @@ def luigi_task_eval(task,purge_cache=False):
     '''
     if task.complete() and not(purge_cache):
         return
+
+    # Execute prerequisite tasks (& recur)
     else:
         task_req = task.requires()
         if task_req:
-            if isinstance(task_req, collections.Iterable):
+            if isinstance(task_req, Iterable):
                 for req in task.requires():
                     if not(req.complete()) or purge_cache:
                         luigi_task_eval(req, purge_cache)
@@ -575,6 +608,8 @@ def luigi_task_eval(task,purge_cache=False):
                     luigi_task_eval(task_req,purge_cache)
         if purge_cache and not(task.complete()):
             os.remove(task.output().fn)
+
+        # Run the task after prerequisites are done
         try:
             task.run()
         except FileAlreadyExists:

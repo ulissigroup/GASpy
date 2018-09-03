@@ -3,31 +3,112 @@
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
+# Modify the python path so that we find/use the .gaspyrc.json in the testing
+# folder instead of the main folder
+import os
+os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
+
 # Things we're testing
-from ..utils import find_adsorption_sites, \
+from ..utils import fingerprint_atoms, \
+    find_adsorption_sites, \
     unfreeze_dict, \
     encode_atoms_to_hex, \
     decode_hex_to_atoms, \
     encode_atoms_to_trajhex, \
-    decode_trajhex_to_atoms
+    decode_trajhex_to_atoms, \
+    save_luigi_task_run_results, \
+    evaluate_luigi_task
 
 # Things we need to do the tests
+import pytest
+import pickle
+import json
 import numpy as np
 import numpy.testing as npt
+import luigi
 from luigi.parameter import _FrozenOrderedDict
-from .baselines import get_standard_atoms
-from .learning_tests.pymatgen_test import _get_sites_for_standard_structure
+from . import test_cases
+from ..utils import read_rc, defaults
+from ..mongo import make_atoms_from_doc
+from ..gasdb import get_mongo_collection
+
+REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/utils/'
+TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path')
 
 
-def test_find_adsorption_sites():
+@pytest.mark.baseline
+@pytest.mark.parametrize('collection_tag', ['catalog', 'adsorption'])
+def test_to_create_fingerprints(collection_tag):
+    # Get and fingerprint the documents
+    with get_mongo_collection(collection_tag) as collection:
+        docs = list(collection.find())
+    fingerprints = []
+    for doc in docs:
+        atoms = make_atoms_from_doc(doc)
+        fingerprint = fingerprint_atoms(atoms)
+        fingerprints.append(fingerprint)
+
+    # Save them
+    cache_location = REGRESSION_BASELINES_LOCATION + 'fingerprints_of_%s' % collection_tag + '.json'
+    with open(cache_location, 'w') as file_handle:
+        json.dump(fingerprints, file_handle)
+
+
+@pytest.mark.parametrize('collection_tag', ['catalog', 'adsorption'])
+def test_fingerprint_atoms(collection_tag):
+    # Load the cache of baseline answers
+    cache_location = REGRESSION_BASELINES_LOCATION + 'fingerprints_of_%s' % collection_tag + '.json'
+    with open(cache_location, 'r') as file_handle:
+        expected_fingerprints = json.load(file_handle)
+
+    # Get and fingerprint the documents, then test
+    with get_mongo_collection(collection_tag) as collection:
+        docs = list(collection.find())
+    for doc, expected_fingerprint in zip(docs, expected_fingerprints):
+        atoms = make_atoms_from_doc(doc)
+        fingerprint = fingerprint_atoms(atoms)
+        assert fingerprint == expected_fingerprint
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('slab_atoms_name',
+                         ['AlAu2Cu_210.traj',
+                          'CoSb2_110.traj',
+                          'Cu_211.traj',
+                          'FeNi_001.traj',
+                          'Ni4W_001.traj',
+                          'Pt12Si5_110.traj'])
+def test_to_create_adsorption_sites(slab_atoms_name):
+    atoms = test_cases.get_slab_atoms(slab_atoms_name)
+    sites = find_adsorption_sites(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'sites_for_' + slab_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(sites, file_handle)
+    assert True
+
+
+@pytest.mark.parametrize('slab_atoms_name',
+                         ['AlAu2Cu_210.traj',
+                          'CoSb2_110.traj',
+                          'Cu_211.traj',
+                          'FeNi_001.traj',
+                          'Ni4W_001.traj',
+                          'Pt12Si5_110.traj'])
+def test_find_adsorption_sites(slab_atoms_name):
     '''
     Check out `.learning_tests.pymatgen_test._get_sites_for_standard_structure`
     to see what pymatgen gives us. Our `gaspy.utils.find_adsorption_sites` simply gives us
     the value of that object when the key is 'all'.
     '''
-    standard_sites = _get_sites_for_standard_structure()['all']
-    sites = find_adsorption_sites(get_standard_atoms())
-    npt.assert_allclose(np.array(sites), np.array(standard_sites), rtol=1e-5, atol=-1e-7)
+    atoms = test_cases.get_slab_atoms(slab_atoms_name)
+    sites = find_adsorption_sites(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'sites_for_' + slab_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_sites = pickle.load(file_handle)
+
+    npt.assert_allclose(np.array(sites), np.array(expected_sites), rtol=1e-5, atol=1e-7)
 
 
 def test_unfreeze_dict():
@@ -35,7 +116,7 @@ def test_unfreeze_dict():
                                      sub_dict0=_FrozenOrderedDict(),
                                      sub_dict1=_FrozenOrderedDict(great='googly moogly'))
     unfrozen_dict = unfreeze_dict(frozen_dict)
-    _look_for_type_in_dict(_FrozenOrderedDict, unfrozen_dict)
+    _look_for_type_in_dict(type_=_FrozenOrderedDict, dict_=unfrozen_dict)
 
 
 def _look_for_type_in_dict(type_, dict_):
@@ -59,42 +140,193 @@ def _look_for_type_in_dict(type_, dict_):
             pass
 
 
-def test_encode_atoms_to_hex():
-    atoms = get_standard_atoms()
-    atoms_hex = encode_atoms_to_hex(atoms)
-    standard_atoms_hex = _get_standard_atoms_hex()
-    assert atoms_hex == standard_atoms_hex
-
-
-def test_decode_hex_to_atoms():
-    atoms_hex = _get_standard_atoms_hex()
-    atoms = decode_hex_to_atoms(atoms_hex)
-    standard_atoms = get_standard_atoms()
-    assert atoms == standard_atoms
-
-
-def _get_standard_atoms_hex():
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_encode_atoms_to_hex(adslab_atoms_name):
     '''
-    This is the hex string that is supposed to be created when encoding our standard atoms object.
+    This actually tests GASpy's ability to both encode and decode,
+    because what we really care about is being able to successfully decode whatever
+    we encode.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
     '''
-    standard_atoms_hex = '8003636173652e61746f6d730a41746f6d730a7100298171017d710228580600000061727261797371037d71042858070000006e756d6265727371056364696c6c2e5f64696c6c0a5f6765745f617474720a71066364696c6c2e5f64696c6c0a5f696d706f72745f6d6f64756c650a710758150000006e756d70792e636f72652e6d756c74696172726179710885710952710a580c0000005f7265636f6e737472756374710b86710c52710d636e756d70790a6e6461727261790a710e4b0085710f4301627110877111527112284b014b01857113636e756d70790a64747970650a71145802000000693871154b004b01877116527117284b0358010000003c71184e4e4e4affffffff4affffffff4b00747119628943081d00000000000000711a74711b625809000000706f736974696f6e73711c680d680e4b0085711d681087711e52711f284b014b014b0386712068145802000000663871214b004b01877122527123284b0368184e4e4e4affffffff4affffffff4b00747124628943180000000000000000000000000000000000000000000000007125747126627558050000005f63656c6c7127680d680e4b00857128681087712952712a284b014b034b0386712b68238943480000000000000000e17a14ae47e1fc3fe17a14ae47e1fc3fe17a14ae47e1fc3f0000000000000000e17a14ae47e1fc3fe17a14ae47e1fc3fe17a14ae47e1fc3f0000000000000000712c74712d6258090000005f63656c6c64697370712e680d680e4b0085712f6810877130527131284b014b034b018671326823894318000000000000000000000000000000000000000000000000713374713462580c0000005f636f6e73747261696e747371355d713658040000005f7062637137680d680e4b00857138681087713952713a284b014b0385713b681458020000006231713c4b004b0187713d52713e284b0358010000007c713f4e4e4e4affffffff4affffffff4b00747140628943030101017141747142625804000000696e666f71437d714458050000005f63616c6371454e75622e'
-    return standard_atoms_hex
+    expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
 
-
-def test_encode_atoms_to_trajhex():
-    atoms = get_standard_atoms()
-    atoms_trajhex = encode_atoms_to_trajhex(atoms)
-    expected_atoms_trajhex = _get_standard_trajhex()
-    assert atoms_trajhex == expected_atoms_trajhex
-
-
-def test_decode_trajhex_to_atoms():
-    atoms_trajhex = _get_standard_trajhex()
-    atoms = decode_trajhex_to_atoms(atoms_trajhex)
-    expected_atoms = get_standard_atoms()
+    hex_ = encode_atoms_to_hex(expected_atoms)
+    atoms = decode_hex_to_atoms(hex_)
     assert atoms == expected_atoms
 
 
-def _get_standard_trajhex():
-    trajhex = '2d206f6620556c6d4153452d5472616a6563746f7279202003000000000000000100000000000000300000000000000058000000000000001d00000000000000000000000000000000000000000000000000000000000000ec000000000000007b2276657273696f6e223a20312c20226173655f76657273696f6e223a2022332e31362e32222c2022706263223a205b747275652c20747275652c20747275655d2c20226e756d626572732e223a207b226e646172726179223a205b5b315d2c2022696e743634222c2035365d7d2c2022706f736974696f6e732e223a207b226e646172726179223a205b5b312c20335d2c2022666c6f61743634222c2036345d7d2c202263656c6c223a205b5b302e302c20312e3830352c20312e3830355d2c205b312e3830352c20302e302c20312e3830355d2c205b312e3830352c20312e3830352c20302e305d5d7d'
-    return trajhex
+def test_decode_hex_to_atoms():
+    '''
+    This is a regression test to make sure that we can keep reading old hex strings
+    and turning them into the appropriate atoms objects.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    expected_atoms = defaults.adsorbates_dict()['CO']
+
+    # Example hex from GASpy v0.1
+    hex_ = '63636f70795f7265670a5f7265636f6e7374727563746f720a70310a28636173652e61746f6d730a41746f6d730a70320a635f5f6275696c74696e5f5f0a6f626a6563740a70330a4e745270340a286470350a5327696e666f270a70360a286470370a7353275f63656c6c64697370270a70380a636e756d70792e636f72652e6d756c746961727261790a5f7265636f6e7374727563740a70390a28636e756d70790a6e6461727261790a7031300a2849300a74532762270a74527031310a2849310a2849330a49310a74636e756d70790a64747970650a7031320a2853276638270a49300a49310a74527031330a2849330a53273c270a4e4e4e492d310a492d310a49300a74624930300a53275c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c783030270a74627353275f63616c63270a7031340a4e735327617272617973270a7031350a28647031360a5327706f736974696f6e73270a7031370a67390a286731300a2849300a74532762270a74527031380a2849310a2849320a49330a746731330a4930300a53275c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830303333333333335c7866333f270a74627353276e756d62657273270a7031390a67390a286731300a2849300a74532762270a74527032300a2849310a2849320a746731320a2853276938270a49300a49310a74527032310a2849330a53273c270a4e4e4e492d310a492d310a49300a74624930300a53275c7830365c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830385c7830305c7830305c7830305c7830305c7830305c7830305c783030270a7462737353275f706263270a7032320a67390a286731300a2849300a74532762270a74527032330a2849310a2849330a746731320a2853276231270a49300a49310a74527032340a2849330a53277c270a4e4e4e492d310a492d310a49300a74624930300a53275c7830305c7830305c783030270a74627353275f63656c6c270a7032350a67390a286731300a2849300a74532762270a74527032360a2849310a2849330a49330a746731330a4930300a53275c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c7830305c783030270a74627353275f636f6e73747261696e7473270a7032370a286c7032380a73622e'
+    atoms = decode_hex_to_atoms(hex_)
+    assert atoms == expected_atoms
+
+    # Example hex from GASpy v0.2
+    hex_ = '8003636173652e61746f6d730a41746f6d730a7100298171017d7102285804000000696e666f71037d710458090000005f63656c6c646973707105636e756d70792e636f72652e6d756c746961727261790a5f7265636f6e7374727563740a7106636e756d70790a6e6461727261790a71074b00857108430162710987710a52710b284b014b034b0186710c636e756d70790a64747970650a710d58020000006638710e4b004b0187710f527110284b0358010000003c71114e4e4e4affffffff4affffffff4b007471126289431800000000000000000000000000000000000000000000000071137471146258050000005f63616c6371154e580600000061727261797371167d7117285809000000706f736974696f6e737118680668074b00857119680987711a52711b284b014b024b0386711c681089433000000000000000000000000000000000000000000000000000000000000000000000000000000000333333333333f33f711d74711e6258070000006e756d62657273711f680668074b008571206809877121527122284b014b02857123680d5802000000693871244b004b01877125527126284b0368114e4e4e4affffffff4affffffff4b0074712762894310060000000000000008000000000000007128747129627558040000005f706263712a680668074b0085712b680987712c52712d284b014b0385712e680d58020000006231712f4b004b01877130527131284b0358010000007c71324e4e4e4affffffff4affffffff4b007471336289430300000071347471356258050000005f63656c6c7136680668074b008571376809877138527139284b014b034b0386713a6810894348000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000713b74713c62580c0000005f636f6e73747261696e7473713d5d713e75622e'
+    atoms = decode_hex_to_atoms(hex_)
+    assert atoms == expected_atoms
+
+
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_encode_atoms_to_trajhex(adslab_atoms_name):
+    '''
+    This actually tests GASpy's ability to both encode and decode,
+    because what we really care about is being able to successfully decode whatever
+    we encode.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+
+    trajhex = encode_atoms_to_trajhex(expected_atoms)
+    atoms = decode_trajhex_to_atoms(trajhex)
+    assert atoms == expected_atoms
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_to_create_atoms_trajhex_encoding(adslab_atoms_name):
+    '''
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+    hex_ = encode_atoms_to_trajhex(atoms)
+
+    file_name = REGRESSION_BASELINES_LOCATION + 'trajhex_for_' + adslab_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(hex_, file_handle)
+    assert True
+
+
+@pytest.mark.parametrize('adslab_atoms_name',
+                         ['CO_dissociate_Pt12Si5_110.traj',
+                          'CO_top_Cu_211.traj',
+                          'C_hollow_AlAu2Cu_210.traj',
+                          'OH_desorb_CoSb2_110.traj',
+                          'OOH_dissociate_Ni4W_001.traj',
+                          'OOH_hollow_FeNi_001.traj'])
+def test_decode_trajhex_to_atoms(adslab_atoms_name):
+    '''
+    This is a regression test to make sure that we can keep reading old hex strings
+    and turning them into the appropriate atoms objects.
+
+    This is hard-coded for adslabs. It should be able to work on bulks and slabs, too.
+    Feel free to update it.
+    '''
+    file_name = REGRESSION_BASELINES_LOCATION + 'trajhex_for_' + adslab_atoms_name.split('.')[0] + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        trajhex = pickle.load(file_handle)
+    atoms = decode_trajhex_to_atoms(trajhex)
+
+    expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
+    assert atoms == expected_atoms
+
+
+def test_save_luigi_task_run_results():
+    '''
+    Instead of actually testing this function, we perform a rough
+    learning test on Luigi.
+    '''
+    assert 'temporary_path' in dir(luigi.LocalTarget)
+
+
+def test_evaluate_luigi_task():
+    '''
+    We made some test tasks and try to execute them here. Then we verify
+    the output results of the tasks.
+    '''
+    # Define where/what the outputs should be
+    output_file_names = ['BranchTestTask/BranchTestTask_False_1_ca4048d8e6.pkl',
+                         'BranchTestTask/BranchTestTask_False_42_fedcdcbd62.pkl',
+                         'BranchTestTask/BranchTestTask_True_7_498ea8eed2.pkl',
+                         'RootTestTask/RootTestTask__99914b932b.pkl']
+    output_file_names = [TASKS_OUTPUTS_LOCATION + '/pickles/' + file_name
+                         for file_name in output_file_names]
+    expected_outputs = [1, 42, 7, 'We did it!']
+
+    # Run the tasks
+    try:
+        evaluate_luigi_task(RootTestTask())
+
+        # Test that each task executed correctly
+        for output_file_name, expected_output in zip(output_file_names, expected_outputs):
+            with open(output_file_name, 'rb') as file_handle:
+                output = pickle.load(file_handle)
+            assert output == expected_output
+
+        # Clean up, regardless of what happened during testing
+        __delete_files(output_file_names)
+    except: # noqa: 722
+        __delete_files(output_file_names)
+        raise
+
+
+def __delete_files(file_names):
+    ''' Helper function to try and delete some files '''
+    for file_name in file_names:
+        try:
+            os.remove(file_name)
+        except OSError:
+            pass
+
+
+class RootTestTask(luigi.Task):
+    def requires(self):
+        return [BranchTestTask(task_result=1),
+                BranchTestTask(task_result=7, branch_again=True)]
+
+    def run(self):
+        save_luigi_task_run_results(self, 'We did it!')
+
+    def output(self):
+        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
+                                 % (type(self).__name__, self.task_id))
+
+
+class BranchTestTask(luigi.Task):
+    task_result = luigi.IntParameter(42)
+    branch_again = luigi.BoolParameter(False)
+
+    def requires(self):
+        if self.branch_again:
+            return BranchTestTask()
+        else:
+            return
+
+    def run(self):
+        save_luigi_task_run_results(self, self.task_result)
+
+    def output(self):
+        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
+                                 % (type(self).__name__, self.task_id))

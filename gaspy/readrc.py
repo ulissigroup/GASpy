@@ -30,6 +30,7 @@ def read_rc(query=None):
 
     # Initializating our search for the .gaspyrc file
     rc_file = '.gaspyrc.json'
+    rc_template = '.gaspyrc_template.json'
     found_config = False
     # Search our PYTHONPATH one-by-one
     for path in python_paths:
@@ -38,11 +39,11 @@ def read_rc(query=None):
                 rc_file = join(root, rc_file)
                 found_config = True
                 break
-        # Stop looking through the files if we've found it
+            # Warn the user if they haven't made a .gaspyrc.json file yet
+            if rc_template in files:
+                raise EnvironmentError('You have not yet made an appropriate .gaspyrc.json configuration file yet.')
         if found_config:
             break
-    if not found_config:
-        raise EnvironmentError('Could not find .gaspyrc.json; please add it to your PYTHONPATH')
 
     # Now that we've found it, open it up and read from it
     with open(rc_file, 'r') as rc:

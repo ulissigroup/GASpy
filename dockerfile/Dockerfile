@@ -20,7 +20,7 @@ RUN rm bashrc_additions.sh
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
 RUN mkdir -p $GASPY_HOME
-ENV PYTHONPATH $GASPY_HOME/GASpy_feedback:$PYTHONPATH
+ENV PYTHONPATH $GASPY_HOME/GASpy_feedback
 ENV PYTHONPATH $GASPY_HOME/GASpy_regressions:$PYTHONPATH
 ENV PYTHONPATH $GASPY_HOME:$PYTHONPATH
 
@@ -51,8 +51,6 @@ RUN source activate GASpy_conda && conda install \
 # Data management packages
 RUN source activate GASpy_conda && conda install \
     pandas \
-    dill \
-    gspread \
     pymongo
 # Visualization packages
 RUN source activate GASpy_conda && conda install \
@@ -62,24 +60,40 @@ RUN source activate GASpy_conda && conda install \
 # CS packages
 RUN source activate GASpy_conda && conda install \
     multiprocess \
+    pytest \
     jupyter \
     luigi
 # Scientific packages
 RUN source activate GASpy_conda && conda install \
     scikit-learn \
     ase
+RUN source activate GASpy_conda && conda install -c lmmentel \
+    mendeleev
 # LBL packages
 RUN source activate GASpy_conda && conda install -c matsci \
     fireworks \
     pymatgen
+# TPOT dependencies
+RUN source activate GASpy_conda && conda install \
+    deap \
+    update_checker \
+    tqdm \
+    stopit \
+    xgboost
 
 # Pip packages
-RUN source activate GASpy_conda && pip install pytest
 RUN source activate GASpy_conda && pip install tpot
 RUN source activate GASpy_conda && pip install git+https://github.com/rossant/ipycache.git
 
-# Make sure numpy is up-to-date. This is a hack to fix some building errors.
-RUN source activate GASpy_conda && conda update numpy
+# Things to customize Jupyter for... well, me.
+RUN source activate GASpy_conda && conda install jupyter_contrib_nbextensions
+RUN source activate GASpy_conda && \
+    mkdir -p $(jupyter --data-dir)/nbextensions && \
+    cd $(jupyter --data-dir)/nbextensions && \
+    git clone https://github.com/lambdalisue/jupyter-vim-binding vim_binding && \
+    chmod -R go-w vim_binding
+RUN source activate GASpy_conda && conda install jupyterthemes && jt -t oceans16 -vim
+RUN chown user -R /home && chgrp group -R /home
 
 # The $HOME mount is so that you can pass your `~/.ssh` folder
 # into the container, which will allow you to ssh wherever.
