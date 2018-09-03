@@ -552,7 +552,7 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     return atoms
 
 
-def luigi_task_eval(task):
+def luigi_task_eval(task,purge_cache=False):
     '''
     This follow luigi logic to evaluate a task by recursively evaluating all requirements.
     This is useful for executing tasks that are typically independent of other tasks,
@@ -561,18 +561,20 @@ def luigi_task_eval(task):
     Arg:
         task    Class instance of a luigi task
     '''
-    if task.complete():
+    if task.complete() and not(purge_cache):
         return
     else:
         task_req = task.requires()
         if task_req:
             if isinstance(task_req, collections.Iterable):
                 for req in task.requires():
-                    if not(req.complete()):
-                        luigi_task_eval(req)
+                    if not(req.complete()) or purge_cache:
+                        luigi_task_eval(req, purge_cache)
             else:
-                if not(task_req.complete()):
-                    luigi_task_eval(task_req)
+                if not(task_req.complete()) or purge_cache:
+                    luigi_task_eval(task_req,purge_cache)
+        if purge_cache and not(task.complete()):
+            os.remove(task.output().fn)
         try:
             task.run()
         except FileAlreadyExists:

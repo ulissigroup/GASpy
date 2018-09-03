@@ -155,6 +155,7 @@ class UpdateAllDB(luigi.WrapperTask):
                         print('Reached the maximum number of processes, %s' % self.max_processes)
                         break
                     yield DumpToAdsorptionDB(parameters)
+           
 
 
 class UpdateEnumerations(luigi.Task):
@@ -167,17 +168,31 @@ class UpdateEnumerations(luigi.Task):
 
     def requires(self):
         ''' Get the generated adsorbate configurations '''
-        return FingerprintUnrelaxedAdslabs(self.parameters)
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == 'relaxed_bulk':
+            return [FingerprintUnrelaxedAdslabs(self.parameters),
+                    SubmitToFW(calctype='bulk',
+                               parameters={'bulk': self.parameters['bulk']})]
+        else:
+            return [FingerprintUnrelaxedAdslabs(self.parameters)]
 
     def run(self):
 
         # Find the unique configurations based on the fingerprint of each site
-        configs = pickle.load(open(self.input().fn, 'rb'))
+        configs = pickle.load(open(self.input()[0].fn, 'rb'))
         unq_configs, unq_inds = np.unique([str([x['shift'],
                                                 x['fp']['coordination'],
                                                 x['fp']['neighborcoord']]) for x in
                                            configs],
                                           return_index=True)
+
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == 'relaxed_bulk':
+            bulk = pickle.load(open(self.input()[1].fn, 'rb'))
+            bulkmin = np.argmin([x['results']['energy'] for x in bulk])
+            FW_info = bulk[bulkmin]['fwid']
+            vasp_settings = bulk[bulkmin]['fwname']['vasp_settings']
+        else:
+            FW_info=''
+            vasp_settings=''
 
         # For each configuration, write a doc to the database
         doclist = []
@@ -195,12 +210,19 @@ class UpdateEnumerations(luigi.Task):
                                                    'slabrepeat': config['slabrepeat'],
                                                    'relaxed': False,
                                                    'adsorbate': config['adsorbate'],
-                                                   'shift': config['shift']}}
+                                                   'shift': config['shift']},
+                               'vasp_settings':vasp_settings,
+                               'FW_info':{'bulk':FW_info}}
+            
             slabadsdoc['processed_data'] = processed_data
             doclist.append(slabadsdoc)
 
-        with gasdb.get_mongo_collection('catalog') as collection:
-            collection.insert_many(doclist)
+        if ('unrelaxed' in self.parameters) and self.parameters['unrelaxed']=='relaxed_bulk':
+            with gasdb.get_mongo_collection('relaxed_bulk_catalog') as collection:
+                collection.insert_many(doclist)
+        else:
+            with gasdb.get_mongo_collection('catalog') as collection:
+                collection.insert_many(doclist)
 
         # Write a token file to indicate this task has been completed and added to the DB
         with self.output().temporary_path() as self.temp_output_path:
@@ -766,10 +788,9 @@ class SubmitToFW(luigi.Task):
                 print('Just submitted the following Fireworks: ')
                 for fw in tosubmit:
                     utils.print_dict(fw.name, indent=1)
-                return Exception('SubmitToFW unable to complete, waiting on a FW')
-
+                raise Exception('SubmitToFW unable to complete, waiting on a FW')
             else:
-                return Exception('SubmitToFW unable to complete and nothing to submit')
+                raise Exception('SubmitToFW unable to complete and nothing to submit')
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
@@ -823,14 +844,22 @@ class GenerateSlabs(luigi.Task):
         If the bulk does not need to be relaxed, we simply pull it from Materials Project using
         the `Bulk` class. If it needs to be relaxed, then we submit it to Fireworks.
         '''
-        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']==True:
             return GenerateBulk(parameters={'bulk': self.parameters['bulk']})
+        elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed']=='relaxed_bulk':
+            return SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
         else:
             return SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
 
     def run(self):
         # Preparation work with ASE and PyMatGen before we start creating the slabs
-        bulk_doc = pickle.load(open(self.input().fn, 'rb'))[0]
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']==True:
+            bulk_doc = pickle.load(open(self.input().fn, 'rb'))[0]
+        else:
+            bulk_docs = pickle.load(open(self.input().fn, 'rb'))
+            bulkmin = np.argmin([x['results']['energy'] for x in bulk_docs])
+            bulk_doc=bulk_docs[bulkmin]
+
         # Pull out the fwid of the relaxed bulk (if there is one)
         if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
             bulk_fwid = bulk_doc['fwid']
@@ -930,13 +959,14 @@ class GenerateSiteMarkers(luigi.Task):
         to create the bulk and surfaces. If the system should be relaxed, then we need to
         submit the bulk and the slab to Fireworks.
         '''
-        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
+        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']==True:
             return [GenerateSlabs(parameters=OrderedDict(unrelaxed=True,
                                                          bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
                     GenerateBulk(parameters={'bulk': self.parameters['bulk']})]
         elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == 'relaxed_bulk':
-            return [GenerateSlabs(parameters=OrderedDict(bulk=self.parameters['bulk'],
+            return [GenerateSlabs(parameters=OrderedDict(unrelaxed=self.parameters['unrelaxed'],
+                                                         bulk=self.parameters['bulk'],
                                                          slab=self.parameters['slab'])),
                     SubmitToFW(calctype='bulk',
                                parameters={'bulk': self.parameters['bulk']})]
@@ -1192,11 +1222,10 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
         '''
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
-        param_slab = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-        param_slab['adsorption']['adsorbates'] = \
-            [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
-        return [GenerateAdSlabs(self.parameters),
-                GenerateAdSlabs(parameters=param_slab)]
+        #param_slab = utils.unfreeze_dict(copy.deepcopy(self.parameters))
+        #param_slab['adsorption']['adsorbates'] = \
+        #    [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
+        return [GenerateAdSlabs(self.parameters)]
 
     def run(self):
         # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the
@@ -1327,7 +1356,8 @@ class EnumerateAlloys(luigi.WrapperTask):
     whitelist = luigi.ListParameter()
     max_to_submit = luigi.IntParameter(1000)
     dft = luigi.BoolParameter(False)
-
+    dft_settings = luigi.Parameter('rpbe')
+    max_atoms = luigi.IntParameter(130)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -1377,8 +1407,8 @@ class EnumerateAlloys(luigi.WrapperTask):
             return [[result['task_id'], x] for x in miller_list]
 
         # Generate all facets for each material in parallel
-        all_miller = utils.multimap(processStruc, results)
-
+        all_miller = utils.multimap(processStruc, [result for result in results if len(result['structure'])<=self.max_atoms])
+        
         print('Total # of matching surfaces in MP: %d' % (np.sum([len(x) for x in all_miller])))
 
         tasks_to_submit = []
@@ -1386,19 +1416,19 @@ class EnumerateAlloys(luigi.WrapperTask):
             for facet in facets:
                 if not(self.dft):
                     task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=50),
+                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=self.max_atoms),
                                                                      slab=defaults.slab_parameters(facet[1], True, 0),
                                                                      gas=defaults.gas_parameters('CO'),
                                                                      adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24)))
                 else:
-                    task = FingerprintUnrelaxedAdslabs(parameters=OrderedDict(unrelaxed='relaxed_bulk',
-                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=50, settings='rpbe'),
-                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings='rpbe'),
-                                                                              gas=defaults.gas_parameters('CO', settings='rpbe'),
+                    task = UpdateEnumerations(parameters=OrderedDict(unrelaxed='relaxed_bulk',
+                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=self.max_atoms, settings=self.dft_settings),
+                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings=self.dft_settings),
+                                                                              gas=defaults.gas_parameters('CO', settings=self.dft_settings),
                                                                               adsorption=defaults.adsorption_parameters('U',
-                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings='rpbe')))
-                if not(task.complete()):
-                    tasks_to_submit.append(task)
+                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings=self.dft_settings)))
+                #if not(task.complete()):
+                tasks_to_submit.append(task)
 
         random.shuffle(tasks_to_submit)
 
@@ -1414,7 +1444,8 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
     '''
     whitelist = luigi.ListParameter()
     max_to_submit = luigi.IntParameter(1000)
-
+    dft_settings = luigi.Parameter('rpbe')
+    max_atoms = luigi.IntParameter(120)
     def requires(self):
         """
         Luigi automatically runs the `requires` method whenever we tell it to execute a
@@ -1456,9 +1487,10 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
 
         tasks_to_submit = []
         for result in results:
-            task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=50, settings='rpbe')))
-            if not(task.complete()):
-                tasks_to_submit.append(task)
+            if len(result['structure']) < self.max_atoms:
+                task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=self.max_atoms, settings=self.dft_settings)))
+                if not(task.complete()):
+                    tasks_to_submit.append(task)
 
         random.shuffle(tasks_to_submit)
 
@@ -1527,7 +1559,7 @@ class CalculateSlabSurfaceEnergy(luigi.Task):
             param_to_submit['slab']['natoms'] = len(slab)
 
             # Print a warning if the slab is thicker than 80, which means it may not run
-            if len(slab) > 80:
+            if len(slab) > self.parameters['bulk']['max_atoms']:
                 print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'
                       % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller'], self.parameters['slab']['shift']))
                 print('aborting!')
