@@ -3,26 +3,24 @@
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
-import pdb  # noqa: F401
-from pprint import pprint
+import os
 import pickle
-import numpy as np
+import uuid
+from collections import OrderedDict, Iterable
 from multiprocess import Pool
+import numpy as np
 import gc
+import tqdm
+from luigi.parameter import _FrozenOrderedDict
+from luigi.target import FileAlreadyExists
+import ase.io
 from ase import Atoms
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
-import tqdm
-from . import defaults, readrc
-from luigi.parameter import _FrozenOrderedDict
-from luigi.target import FileAlreadyExists
-from collections import OrderedDict, Iterable
-import uuid
-import ase.io
-import os
+from . import readrc
 
 
 def read_rc(key=None):
@@ -141,12 +139,13 @@ def ads_dict(adsorbate):
     try:
         atoms = Atoms(adsorbate)
     except ValueError:
-        pprint("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..."
-               % adsorbate)
+        print("Not able to create %s with ase.Atoms. Attempting to look in GASpy's dictionary..."
+              % adsorbate)
 
         # If that doesn't work, then look for the adsorbate in our library of adsorbates
         try:
-            atoms = defaults.adsorbates_dict()[adsorbate]
+            from .defaults import adsorbates_dict   # Import locally to avoid import errors
+            atoms = adsorbates_dict()[adsorbate]
         except KeyError:
             print('%s is not is GASpy library of adsorbates. You need to add it to the adsorbates_dict function in gaspy.defaults'
                   % adsorbate)
@@ -583,34 +582,39 @@ def save_luigi_task_run_results(task, output):
             pickle.dump(output, file_handle)
 
 
-def evaluate_luigi_task(task, purge_cache=False):
+def evaluate_luigi_task(task, force=False):
     '''
-    This follow luigi logic to evaluate a task by recursively evaluating all requirements.
-    This is useful for executing tasks that are typically independent of other tasks,
-    e.g., populating a catalog of sites.
+    This follows luigi logic to evaluate a task by recursively evaluating all
+    requirements. This is useful for executing tasks that are typically
+    independent of other tasks, e.g., populating a catalog of sites.
 
     Arg:
         task    Class instance of a luigi task
+        force   A boolean indicating whether or not you want to forcibly
+                evaluate the task and all the upstream requirements.
+                Useful for re-doing tasks that you know have already been
+                completed.
     '''
-    if task.complete() and not(purge_cache):
+    # Don't do anything if it's already done and we're not redoing
+    if task.complete() and not(force):
         return
 
-    # Execute prerequisite tasks (& recur)
     else:
-        task_req = task.requires()
-        if task_req:
-            if isinstance(task_req, Iterable):
-                for req in task.requires():
-                    if not(req.complete()) or purge_cache:
-                        evaluate_luigi_task(req, purge_cache)
+        # Execute prerequisite task[s] recursively
+        requirements = task.requires()
+        if requirements:
+            if isinstance(requirements, Iterable):
+                for req in requirements:
+                    if not(req.complete()) or force:
+                        evaluate_luigi_task(req, force)
             else:
-                if not(task_req.complete()) or purge_cache:
-                    evaluate_luigi_task(task_req, purge_cache)
-        if purge_cache and not(task.complete()):
+                if not(requirements.complete()) or force:
+                    evaluate_luigi_task(requirements, force)
+
+        # Luigi will yell at us if we try to overwrite output files.
+        # So if we're foricbly redoing tasks, we need to delete the old outputs.
+        if force:
             os.remove(task.output().fn)
 
-        # Run the task after prerequisites are done
-        try:
-            task.run()
-        except FileAlreadyExists:
-            return
+        # After prerequisites are done, run the task
+        task.run()

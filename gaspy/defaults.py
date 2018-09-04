@@ -7,7 +7,6 @@ import copy
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
-from .utils import encode_atoms_to_hex
 
 XC = 'rpbe'
 MAX_NUM_BULK_ATOMS = 80
@@ -408,6 +407,7 @@ def adsorption_parameters(adsorbate,
         atoms = adsorbate
         name = adsorbate.get_chemical_formula()
 
+    from .utils import encode_atoms_to_hex  # Import locally to avoid import errors
     return OrderedDict(numtosubmit=2,
                        min_xy=4.5,
                        relaxed=True,

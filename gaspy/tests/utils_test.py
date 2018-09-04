@@ -9,15 +9,15 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ..utils import fingerprint_atoms, \
-    find_adsorption_sites, \
-    unfreeze_dict, \
-    encode_atoms_to_hex, \
-    decode_hex_to_atoms, \
-    encode_atoms_to_trajhex, \
-    decode_trajhex_to_atoms, \
-    save_luigi_task_run_results, \
-    evaluate_luigi_task
+from ..utils import (fingerprint_atoms,
+                     find_adsorption_sites,
+                     unfreeze_dict,
+                     encode_atoms_to_hex,
+                     decode_hex_to_atoms,
+                     encode_atoms_to_trajhex,
+                     decode_trajhex_to_atoms,
+                     save_luigi_task_run_results,
+                     evaluate_luigi_task)
 
 # Things we need to do the tests
 import pytest
@@ -28,7 +28,8 @@ import numpy.testing as npt
 import luigi
 from luigi.parameter import _FrozenOrderedDict
 from . import test_cases
-from ..utils import read_rc, defaults
+from .. import defaults
+from ..utils import read_rc
 from ..mongo import make_atoms_from_doc
 from ..gasdb import get_mongo_collection
 
@@ -284,6 +285,18 @@ def test_evaluate_luigi_task():
             with open(output_file_name, 'rb') as file_handle:
                 output = pickle.load(file_handle)
             assert output == expected_output
+
+        # Test that when the "force" argument is `False`, tasks ARE NOT rerun
+        file_creation_times = [os.path.getmtime(output_file) for output_file in output_file_names]
+        evaluate_luigi_task(RootTestTask(), force=False)
+        for output_file, expected_ctime in zip(output_file_names, file_creation_times):
+            ctime = os.path.getmtime(output_file)
+            assert ctime == expected_ctime
+        # Test that when the "force" argument is `True`, tasks ARE rerun
+        evaluate_luigi_task(RootTestTask(), force=True)
+        for output_file, old_ctime in zip(output_file_names, file_creation_times):
+            ctime = os.path.getmtime(output_file)
+            assert ctime > old_ctime
 
         # Clean up, regardless of what happened during testing
         __delete_files(output_file_names)
