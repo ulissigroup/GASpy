@@ -15,18 +15,18 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ..gasdb import get_mongo_collection, \
-    ConnectableCollection, \
-    get_adsorption_docs, \
-    _clean_up_aggregated_docs, \
-    get_catalog_docs, \
-    get_surface_docs, \
-    get_unsimulated_catalog_docs, \
-    _get_attempted_adsorption_docs, \
-    _hash_docs, \
-    _hash_doc, \
-    get_low_coverage_docs_by_surface, \
-    remove_duplicates_in_adsorption_collection
+from ..gasdb import (get_mongo_collection,
+                     ConnectableCollection,
+                     get_adsorption_docs,
+                     _clean_up_aggregated_docs,
+                     get_catalog_docs,
+                     get_surface_docs,
+                     get_unsimulated_catalog_docs,
+                     _get_attempted_adsorption_docs,
+                     _hash_docs,
+                     _hash_doc,
+                     get_low_coverage_docs_by_surface,
+                     remove_duplicates_in_adsorption_collection)
 
 # Things we need to do the tests
 import pytest
@@ -65,7 +65,7 @@ def test_ConnectableCollection(collection_tag):
     is still a Collection class and has the appropriate methods
     '''
     # Login info
-    mongo_info = read_rc()['mongo_info'][collection_tag]
+    mongo_info = read_rc('mongo_info.%s' % collection_tag)
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']

@@ -9,7 +9,9 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ..utils import (fingerprint_atoms,
+from ..utils import (read_rc,
+                     _find_rc_file,
+                     fingerprint_atoms,
                      find_adsorption_sites,
                      unfreeze_dict,
                      encode_atoms_to_hex,
@@ -29,12 +31,65 @@ import luigi
 from luigi.parameter import _FrozenOrderedDict
 from . import test_cases
 from .. import defaults
-from ..utils import read_rc
 from ..mongo import make_atoms_from_doc
 from ..gasdb import get_mongo_collection
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/utils/'
 TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path')
+
+
+@pytest.mark.parametrize('query',
+                         [None,
+                          'gasdb_path',
+                          'lpad.host',
+                          'mongo_info.atoms.port'])
+def test_read_rc(query):
+    rc_contents = read_rc(query)
+
+    # Nearly identical to the `read_rc` function's method
+    # of getting the content, but without the fluff and hardcoded
+    with open('/home/GASpy/gaspy/tests/.gaspyrc.json', 'r') as file_handle:
+        expected_rc_contents = json.load(file_handle)
+    if query:
+        keys = query.split('.')
+        for key in keys:
+            expected_rc_contents = expected_rc_contents[key]
+
+    assert rc_contents == expected_rc_contents
+
+
+def test_read_rc_exception():
+    '''
+    The `read_rc` function should be raising a specific exception when users
+    provide the wrong keys. This is the test to make sure that happens.
+    '''
+    try:
+        _ = read_rc(query='this.should.not.work')  # noqa: F841
+
+        # If there are no errors at all, something went wrong
+        assert False
+
+    # If there was a KeyError but it wasn't the one it was supposed to be,
+    # then something went wrong
+    except KeyError as error:
+        if str(error) != "'Check the spelling/capitalization of the key/values you are looking for'":
+            assert False
+
+        # Pass if the message is correct
+        else:
+            assert True
+
+
+def test__find_rc_file():
+    '''
+    This test assumes that you have already inserted the
+    /home/GASpy/tests/ folder to the front of your PYTHONPATH,
+    which should mean that the rc file that it finds should be the
+    one in the testing folder.
+    '''
+    rc_file = _find_rc_file()
+    expected_rc_file = '/home/GASpy/gaspy/tests/.gaspyrc.json'
+    assert rc_file == expected_rc_file
 
 
 @pytest.mark.baseline

@@ -6,6 +6,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 import os
 import pickle
 import uuid
+import json
 from collections import OrderedDict, Iterable
 from multiprocess import Pool
 import numpy as np
@@ -19,23 +20,66 @@ from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
-from . import readrc
 
 
-def read_rc(key=None):
+def read_rc(query=None):
     '''
-    This function will pull out keys from the .gaspyrc file for you.
-    Note that this is really only here as a pointer so that the user can look for
-    the function in both this module and the native module, `readrc`
+    This function will pull out keys from the .gaspyrc file for you
 
     Input:
-        keys    [Optional] The string indicating the configuration you want
+        query   [Optional] The string indicating the configuration you want.
+                If you're looking for nested information, use the syntax
+                "foo.bar.key"
     Output:
-        configs A dictionary whose keys are the input keys and whose values
-                are the values that we found in the .gaspyrc file
+        rc_contents  A dictionary whose keys are the input keys and whose values
+                     are the values that we found in the .gaspyrc file
     '''
-    configs = readrc.read_rc(key)
-    return configs
+    rc_file = _find_rc_file()
+    with open(rc_file, 'r') as file_handle:
+        rc_contents = json.load(file_handle)
+
+    # Return out the keys you asked for. If the user did not specify the key, then return it all
+    if query:
+        keys = query.split('.')
+        for key in keys:
+            try:
+                rc_contents = rc_contents[key]
+            except KeyError as error:
+                raise KeyError('Check the spelling/capitalization of the key/values you are looking for').with_traceback(error.__traceback__)
+
+    return rc_contents
+
+
+def _find_rc_file():
+    '''
+    This function will search your PYTHONPATH and look for the location of
+    your .gaspyrc.json file.
+
+    Returns:
+        rc_file     A string indicating the full path to the first .gaspyrc.json
+                    file it finds in your PYTHONPATH.
+    '''
+    # Pull out the PYTHONPATH environment variable
+    # so that we know where to look for the .gaspyrc file
+    try:
+        python_paths = os.environ['PYTHONPATH'].split(os.pathsep)
+    except KeyError:
+        raise EnvironmentError('You do not have the PYTHONPATH environment variable. You need to add GASpy to it')
+
+    # Search our PYTHONPATH one-by-one
+    rc_file = '.gaspyrc.json'
+    for path in python_paths:
+        for root, dirs, files in os.walk(path):
+            if rc_file in files:
+                rc_file = os.path.join(root, rc_file)
+                return rc_file
+
+            # If we can find the .gaspyrc_template.json file but not
+            # a .gaspyrc.json file yet, then the user probably
+            # has their PYTHONPATH set up correctly, but not their
+            # .gaspyrc.json file set up, yet.
+            if '.gaspyrc_template.json' in files:
+                raise EnvironmentError('You have not yet made an appropriate .gaspyrc.json configuration file yet.')
 
 
 def print_dict(d, indent=0):
