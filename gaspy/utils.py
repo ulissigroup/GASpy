@@ -12,7 +12,6 @@ import numpy as np
 import gc
 import tqdm
 from luigi.parameter import _FrozenOrderedDict
-from luigi.target import FileAlreadyExists
 import ase.io
 from ase import Atoms
 from ase.constraints import FixAtoms
@@ -367,9 +366,7 @@ def find_max_movement(atoms_initial, atoms_final):
 def multimap(function, inputs, chunked=False, processes=32,
              maxtasksperchild=1, chunksize=1, n_calcs=None):
     '''
-    This function is a wrapper to parallelize a function. Note that we set the pickling
-    recursion option to `False` to prevent passing along huge instances of objects,
-    which can bottleneck multiprocessing.
+    This function is a wrapper to parallelize a function.
 
     Inputs:
         function        The function you want to execute
@@ -391,19 +388,19 @@ def multimap(function, inputs, chunked=False, processes=32,
     # Collect garbage before we begin multiprocessing to make sure we don't pass things we don't
     # need to
     gc.collect()
-    pool = Pool(processes=processes, maxtasksperchild=maxtasksperchild)
 
-    # Use multiprocessing to perform the calculations. We use imap instead of map so that
-    # we get an iterator, which we need for tqdm (the progress bar) to work.
-    if not chunked:
-        iterator = pool.imap(function, inputs, chunksize=chunksize)
-    # If our function expects chunks, then we have to unpack our inputs appropriately
-    else:
-        iterator = pool.imap(function, (list(arg) for arg in inputs), chunksize=chunksize)
-    outputs = list(tqdm.tqdm(iterator, total=n_calcs))
+    with Pool(processes=processes, maxtasksperchild=maxtasksperchild) as pool:
+        # Use multiprocessing to perform the calculations. We use imap instead of map so that
+        # we get an iterator, which we need for tqdm (the progress bar) to work.
+        # imap also requires less disk memory, which can be an issue for some of our large
+        # systems.
+        if not chunked:
+            iterator = pool.imap(function, inputs, chunksize=chunksize)
+        # If our function expects chunks, then we have to unpack our inputs appropriately
+        else:
+            iterator = pool.imap(function, (list(arg) for arg in inputs), chunksize=chunksize)
+        outputs = list(tqdm.tqdm(iterator, total=n_calcs))
 
-    # Clean up and output
-    pool.terminate()
     return outputs
 
 

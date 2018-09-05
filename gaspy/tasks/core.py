@@ -789,9 +789,9 @@ class SubmitToFW(luigi.Task):
                 print('Just submitted the following Fireworks: ')
                 for fw in tosubmit:
                     utils.print_dict(fw.name, indent=1)
-                raise Exception('SubmitToFW unable to complete, waiting on a FW')
+                raise RuntimeError('SubmitToFW unable to complete, waiting on a FW')
             else:
-                raise Exception('SubmitToFW unable to complete and nothing to submit')
+                raise RuntimeError('SubmitToFW unable to complete because there is nothing to submit')
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
@@ -1353,8 +1353,8 @@ class EnumerateAlloys(luigi.WrapperTask):
     '''
     This class is meant to be called by Luigi to begin relaxations of a database of alloys
     '''
-    max_index = luigi.IntParameter(1)
     whitelist = luigi.ListParameter()
+    max_index = luigi.IntParameter(1)
     max_to_submit = luigi.IntParameter(1000)
     dft = luigi.BoolParameter(False)
     dft_settings = luigi.Parameter('rpbe')
@@ -1433,11 +1433,10 @@ class EnumerateAlloys(luigi.WrapperTask):
                                                                      adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24)))
                 else:
                     task = UpdateEnumerations(parameters=OrderedDict(unrelaxed='relaxed_bulk',
-                                                                              bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC),
-                                                                              slab=defaults.slab_parameters(facet[1], True, 0, settings=DEFAULT_XC),
-                                                                              gas=defaults.gas_parameters('CO', settings=DEFAULT_XC),
-                                                                              adsorption=defaults.adsorption_parameters('U',
-                                                                                                                        '[3.36 1.16 24.52]', '(1, 1)', 24, settings=DEFAULT_XC)))
+                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC),
+                                                                     slab=defaults.slab_parameters(facet[1], True, 0, settings=DEFAULT_XC),
+                                                                     gas=defaults.gas_parameters('CO', settings=DEFAULT_XC),
+                                                                     adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24, settings=DEFAULT_XC)))
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
