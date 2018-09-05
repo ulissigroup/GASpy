@@ -1,30 +1,21 @@
-#!/bin/sh -l
+#!/bin/sh
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=32
 #SBATCH --time=24:00:00
 #SBATCH --partition=regular
+#SBATCH --qos=premium
 #SBATCH --job-name=enumerate_catalog
 #SBATCH --output=enumerate_catalog-%j.out
 #SBATCH --error=enumerate_catalog-%j.error
 #SBATCH --constraint=haswell
+#SBATCH --volume="/global/project/projectdirs/m2755/GASpy_kt:/home/GASpy"
+#SBATCH --image=docker:ulissigroup/gaspy:dev 
 
-# Load GASpy environment & variables
-. ~/GASpy/.load_env.sh
-
-
+# Stop numpy/scipy from trying to parallelize over all the cores,
+# because we are already parallelizing them ourselves in the Python script.
 export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export OMP_NUM_THREADS=1
 
-# Tell Luigi to do the enumeration
-
-PYTHONPATH=$PYTHONPATH luigi \
-    --module gaspy.tasks UpdateRelaxedBulkCatalog \
-    --max-to-submit 3000 \
-    --whitelist '["Pd", "Cu", "Au", "Ag", "Pt", "Rh", "Re", "Ni", "Co", "Ir", "W", "Al", "Ga", "In", "H", "N", "Os", "Fe", "V", "Si", "Sn", "Sb", "Mo", "Mn", "Cr", "Ti", "Zn", "Ge", "As",  "Ru", "Pb", "Nb", "Ca", "Na"]' \
-    --scheduler-host $LUIGI_PORT \
-    --workers=32 \
-    --log-level=WARNING \
-    --parallel-scheduling \
-    --worker-timeout 300
+shifter python /global/project/projectdirs/m2755/GASpy_kt/scripts/enumerate_dft_catalog_manually.py
