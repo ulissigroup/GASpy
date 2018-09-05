@@ -170,7 +170,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
 def get_catalog_docs():
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
-    collection that's tagged `catalog`.
+    collection that's tagged `relaxed_bulk_catalog`.
 
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
@@ -182,7 +182,7 @@ def get_catalog_docs():
 
     # Get the documents and clean them up
     pipeline = [group]
-    with get_mongo_collection(collection_tag='catalog_readonly') as collection:
+    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
         print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
