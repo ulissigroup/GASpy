@@ -18,4 +18,4 @@ export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export OMP_NUM_THREADS=1
 
-shifter python /global/project/projectdirs/m2755/GASpy_kt/scripts/enumerate_dft_catalog_manually.py
+shifter python /home/GASpy/scripts/enumerate_dft_catalog_manually.py
