@@ -1,20 +1,13 @@
 ''' These tools form gaspy's API to its databases '''
 
 import warnings
-import pickle
-import glob
 import copy
 from collections import defaultdict
-from itertools import islice
-from bson.objectid import ObjectId
-from multiprocessing import Pool
 import numpy as np
 import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from ase.io.png import write_png
 from . import defaults, utils
-from .mongo import make_atoms_from_doc
 
 
 def get_mongo_collection(collection_tag):
@@ -503,115 +496,3 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
             extra_mongo_ids = doc['mongo_ids'][:-1]
             for id_ in extra_mongo_ids:
                 collection.delete_one({'_id': id_})
-
-
-# TODO:  Comment and clean up everything below here
-ads_dict = defaults.adsorbates_dict()
-del ads_dict['']
-del ads_dict['U']
-ads_to_run = ads_dict.keys()
-ads_to_run = ['CO', 'H']
-dump_dir = '/global/cscratch1/sd/zulissi/GASpy_DB/images/'
-databall_template = {'CO': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/CO2RR_predictions_TPOT_FEATURES_coordatoms_chemfp0_neighbors_chemfp0_RESPONSES_energy_BLOCKS_adsorbate.pkl',
-                     'H': '/project/projectdirs/m2755/GASpy/GASpy_regressions/cache/predictions/HER_predictions_TPOT_FEATURES_coordatoms_chemfp0_neighbors_chemfp0_RESPONSES_energy_BLOCKS_adsorbate.pkl'}
-
-
-def writeImages(input):
-    doc, adsorbate = input
-    atoms = make_atoms_from_doc(doc)
-    slab = atoms.copy()
-    ads_pos = slab[0].position
-    del slab[0]
-    ads = ads_dict[adsorbate].copy()
-    ads.set_constraint()
-    ads.translate(ads_pos)
-    adslab = ads + slab
-    adslab.cell = slab.cell
-    adslab.pbc = [True, True, True]
-    adslab.set_constraint()
-    adslab = utils.constrain_slab(adslab)
-    size = adslab.positions.ptp(0)
-    i = size.argmin()
-    # rotation = ['-90y', '90x', ''][i]
-    # rotation = ''
-    size[i] = 0.0
-    scale = min(25, 100 / max(1, size.max()))
-    write_png(dump_dir + 'catalog/'+str(doc['_id']) + '-' + adsorbate + '.png',
-              adslab, show_unit_cell=1, scale=scale)
-    write_png(dump_dir + 'catalog/' + str(doc['_id']) + '-' + adsorbate + '-side.png',
-              adslab, show_unit_cell=1, rotation='90y, 90z', scale=scale)
-
-
-def writeAdsorptionImages(doc):
-    atoms = make_atoms_from_doc(doc)
-    adslab = atoms.copy()
-    size = adslab.positions.ptp(0)
-    i = size.argmin()
-    # rotation = ['-90y', '90x', ''][i]
-    # rotation = ''
-    size[i] = 0.0
-    scale = min(25, 100 / max(1, size.max()))
-    write_png(dump_dir + 'adsorption/'+str(doc['_id']) + '.png', adslab, show_unit_cell=1, scale=scale)
-    write_png(dump_dir + 'adsorption/'+str(doc['_id']) + '-side.png', adslab, show_unit_cell=1,
-              rotation='90y, 90z', scale=scale)
-
-
-def chunks(iterable, size=10):
-    iterator = iter(iterable)
-    for first in iterator:    # stops when iterator is depleted
-        def chunk():          # construct generator for next chunk
-            yield first       # yield element from for loop
-            for more in islice(iterator, size-1):
-                yield more    # yield more elements from the iterator
-        yield chunk()         # in outer generator, yield next chunkdef chunks(iterable, size=10):
-    iterator = iter(iterable)
-
-
-def MakeImages(todo, collection, completed_images):
-    pool = Pool(32)
-    k = 0
-    for chunk in chunks(todo, 1000):
-        chunk = list(chunk)
-        ids, adsorbates = zip(*chunk)
-        uniques, inverse = np.unique(ids, return_inverse=True)
-        docs = np.array([collection.find_one({"_id": ObjectId(id)}) for id in uniques])
-        to_run = zip(docs[inverse], adsorbates)
-        pool.map(writeImages, to_run)
-        k += 1
-        print('%d/%d' % (k*len(to_run), len(todo)))
-        completed_images += chunk
-        pickle.dump(completed_images, open(dump_dir+'completed_images.pkl', 'w'))
-    pool.close()
-
-
-def MakeImagesAdsorption(todo, collection, completed_images):
-    pool = Pool(32)
-    k = 0
-    for chunk in chunks(todo, 1000):
-        ids = list(chunk)
-        uniques, inverse = np.unique(ids, return_inverse=True)
-        docs = np.array([collection.find_one({"_id": ObjectId(id)}) for id in uniques])
-        to_run = docs[inverse]
-        pool.map(writeAdsorptionImages, to_run)
-        k += 1
-        print('%d/%d' % (k*len(to_run), len(todo)))
-        completed_images += ids
-        pickle.dump(completed_images, open(dump_dir+'completed_images.pkl', 'w'))
-    pool.close()
-
-
-def dump_images():
-    if len(glob.glob(dump_dir+'completed_images.pkl')) > 0:
-        completed_images = pickle.load(open(dump_dir+'completed_images.pkl'))
-    else:
-        completed_images = []
-
-    for adsorbate in ['CO', 'H']:
-        results = pickle.load(open(databall_template[adsorbate]))
-        dft_ids = [a[0]['mongo_id'] for a in results[0]]
-        todo = list(set(dft_ids) - set(completed_images))
-        MakeImagesAdsorption(todo, get_mongo_collection('adsorption').db.adsorption, completed_images)
-
-        dft_ids = [(a[0]['mongo_id'], adsorbate) for a in results[1]]
-        todo = list(set(dft_ids) - set(completed_images))
-        MakeImages(todo, get_mongo_collection('catalog_readonly').db.catalog, completed_images)

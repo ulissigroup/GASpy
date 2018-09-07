@@ -1,3 +1,11 @@
+'''
+This submodule contains various functions that help us manage
+and interact with FireWorks.
+'''
+
+__author__ = 'Zachary W. Ulissi'
+__email__ = 'zulissi@andrew.cmu.edu'
+
 from collections import OrderedDict
 import getpass
 import numpy as np

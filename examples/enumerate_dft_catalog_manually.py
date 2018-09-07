@@ -6,6 +6,13 @@ Luigi spends more time handling overhead than it does actually running things.
 
 So we use this script to enumerate faster at the risk of doing redundant jobs.
 We're ok with the risk because we don't plan to enumerate sites often.
+
+WARNING:  You may want to run these bash commands prior to running this script:
+    export MKL_NUM_THREADS=1
+    export NUMEXPR_NUM_THREADS=1
+    export OMP_NUM_THREADS=1
+They will stop numpy/scipy from trying to parallelize over all the cores,
+which will slow us down since we are already parallelizing via multiprocess.
 '''
 
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']

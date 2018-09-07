@@ -41,16 +41,18 @@ MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 MAX_SURFACE_SIZE = defaults.MAX_NUM_SURFACE_ATOMS
 
 
-def run_tasks(tasks):
+def run_tasks(tasks, workers=1):
     '''
     This light wrapping function will execute any tasks you want through
     the Luigi host that is listed in the `.gaspyrc.json` file.
 
     Arg:
         tasks   An iterable of luigi task instances
+        workers An integer indicating how many processes/workers
+                you want executing the tasks and prerequisite tasks.
     '''
     luigi_host = utils.read_rc('luigi_host')
-    luigi.build(tasks, scheduler_host=luigi_host)
+    luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
 
 
 class UpdateAllDB(luigi.WrapperTask):
