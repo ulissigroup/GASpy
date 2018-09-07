@@ -7,7 +7,8 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # flake8: noqa
-from .mongo_utils import (create_and_populate_all_unit_testing_collections,
+from .mongo_utils import (get_testing_mongo_collection,
+                          create_and_populate_all_unit_testing_collections,
                           create_and_populate_unit_testing_collection,
                           create_unit_testing_collection,
                           populate_unit_testing_collection,

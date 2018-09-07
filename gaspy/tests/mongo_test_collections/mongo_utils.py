@@ -71,7 +71,7 @@ def get_testing_mongo_collection(collection_tag):
                     tag you specified, but with `__enter__` and `__exit__` methods.
     '''
     # Login info
-    mongo_info = read_testing_rc('mongo_info.%' % collection_tag)
+    mongo_info = read_testing_rc('mongo_info.%s' % collection_tag)
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']
