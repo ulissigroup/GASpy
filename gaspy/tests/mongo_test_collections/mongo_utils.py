@@ -184,7 +184,7 @@ def get_and_push_doc(mongo_id, collection_tag):
         collection_tag  A string indicating the collection you want to pull from
     '''
     doc = get_doc(mongo_id, collection_tag)
-    push_doc(doc, 'unit_testing_' + collection_tag)
+    push_doc(doc, collection_tag)
 
 
 def get_doc(mongo_id, collection_tag):
