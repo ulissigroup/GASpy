@@ -41,6 +41,18 @@ MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 MAX_SURFACE_SIZE = defaults.MAX_NUM_SURFACE_ATOMS
 
 
+def run_tasks(tasks):
+    '''
+    This light wrapping function will execute any tasks you want through
+    the Luigi host that is listed in the `.gaspyrc.json` file.
+
+    Arg:
+        tasks   An iterable of luigi task instances
+    '''
+    luigi_host = utils.read_rc('luigi_host')
+    luigi.build(tasks, scheduler_host=luigi_host)
+
+
 class UpdateAllDB(luigi.WrapperTask):
     '''
     First, dump from the Primary database to the Auxiliary database.
@@ -208,6 +220,7 @@ class UpdateEnumerations(luigi.Task):
                                'vasp_settings': vasp_settings,
                                'FW_info': {'bulk': FW_info}}
             slabadsdoc['processed_data'] = processed_data
+            slabadsdoc['predictions'] = {'adsorption_energy': {}}
             doclist.append(slabadsdoc)
 
         if ('unrelaxed' in self.parameters) and self.parameters['unrelaxed'] == 'relaxed_bulk':
