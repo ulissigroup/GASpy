@@ -7,9 +7,8 @@
 jupyter="${1:-0}"
 
 
-# Go home and load GASpy environment and variables
+source activate GASpy_conda
 cd
-source ~/GASpy/.load_env.sh
 
 # Tunnel to the Mongo server
 mkdir -p /home/logs
@@ -20,7 +19,6 @@ ssh -nNT -4 \
 
 # Open Jupyter
 if [ $jupyter = "jupyter" ]; then
-    source activate GASpy_conda
     jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''
 fi
 
