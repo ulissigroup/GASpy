@@ -16,7 +16,7 @@ from ..core import FingerprintRelaxedAdslab
 
 DEFAULT_ENCUT = defaults.ENCUT
 DEFAULT_XC = defaults.XC
-DEFAULT_MAX_ADSLAB_SIZE = defaults.MAX_NUM_ADSLAB_ATOMS
+DEFAULT_MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 DEFAULT_MAX_ROCKETS = 20
 
 
@@ -35,8 +35,8 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
         xc              A string indicating the cross-correlational you want to use.
         encut           A float indicating the energy cutoff you want to be used for
                         the corresponding bulk relaxation.
-        max_atoms       A positive integer indicating the maximum number of atoms you want
-                        present in the simulation
+        max_bulk_atoms  A positive integer indicating the maximum number of atoms you want
+                        present in the bulk relaxation.
         max_rockets     A positive integer indicating the maximum number of sites you want to
                         submit to FireWorks. If the number of possible site/adsorbate
                         combinations is greater than the maximum number of submissions, then
@@ -47,7 +47,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
     miller_list = luigi.ListParameter()
     xc = luigi.Parameter(DEFAULT_XC)
     encut = luigi.FloatParameter(DEFAULT_ENCUT)
-    max_atoms = luigi.IntParameter(DEFAULT_MAX_ADSLAB_SIZE)
+    max_bulk_atoms = luigi.IntParameter(DEFAULT_MAX_BULK_SIZE)
     max_rockets = luigi.IntParameter(DEFAULT_MAX_ROCKETS)
 
     def requires(self):
@@ -73,7 +73,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
                                                                   encut=self.encut,
                                                                   xc=self.xc,
-                                                                  max_atoms=self.max_atoms)
+                                                                  max_atoms=self.max_bulk_atoms)
                     parameters_list.append(parameters)
 
         tasks = _make_relaxation_tasks_from_parameters(parameters_list, max_rockets=self.max_rockets)
@@ -102,30 +102,31 @@ def _standardize_miller(miller):
 def _make_adslab_parameters_from_doc(doc, adsorbates,
                                      encut=DEFAULT_ENCUT,
                                      xc=DEFAULT_XC,
-                                     max_atoms=DEFAULT_MAX_ADSLAB_SIZE):
+                                     max_bulk_atoms=DEFAULT_MAX_BULK_SIZE):
     '''
     This function creates the `parameters` dictionary that many of the
     gaspy tasks need to create/submit FireWorks rockets.
 
     Args:
-        doc         A dictionary with the following keys:  'mpid',
-                    'miller', 'top', 'shift', and 'adsorption_site'.
-                    Should probably come from `gaspy.gasdb.get_catalog_docs`
-                    or something like that.
-        adsorbates  A list of strings indicating which adsorbates you
-                    want to simulate the adsorption of.
-        encut       The energy cutoff you want to specify for the bulk
-                    relaxation that corresponds to the rocket you're trying
-                    to make parameters for.
-        xc          The exchange correlational you want to use.
-        max_atoms   The maximum number of atoms in the system you want
-                    to make a rocket/calculation for.
+        doc             A dictionary with the following keys:  'mpid',
+                        'miller', 'top', 'shift', and 'adsorption_site'.
+                        Should probably come from `gaspy.gasdb.get_catalog_docs`
+                        or something like that.
+        adsorbates      A list of strings indicating which adsorbates you
+                        want to simulate the adsorption of.
+        encut           The energy cutoff you want to specify for the bulk
+                        relaxation that corresponds to the rocket you're trying
+                        to make parameters for.
+        xc              The exchange correlational you want to use.
+        max_bulk_atoms  The maximum number of atoms in the corresponding bulk
+                        relaxation of system you want to make a
+                        rocket/calculation for.
     '''
     parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
                                                   encut=encut,
                                                   settings=xc,
-                                                  max_atoms=max_atoms)
+                                                  max_atoms=max_bulk_atoms)
     parameters['slab'] = defaults.slab_parameters(miller=doc['miller'],
                                                   top=doc['top'],
                                                   shift=doc['shift'],
