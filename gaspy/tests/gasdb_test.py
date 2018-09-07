@@ -402,12 +402,11 @@ def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
     This test checks that the surfaces we find are correct.
     '''
     low_coverage_docs = get_low_coverage_docs_by_surface(adsorbates, model_tag)
+    surfaces = set(low_coverage_docs.keys())
 
     adsorption_docs = get_adsorption_docs(adsorbates)
     catalog_docs = get_unsimulated_catalog_docs(adsorbates)
-
-    surfaces = set(low_coverage_docs.keys())
-    expected_surfaces = set((doc['mpid'], str(doc['miller']))
+    expected_surfaces = set((doc['mpid'], str(doc['miller']), doc['shift'], doc['top'])
                             for doc in adsorption_docs + catalog_docs)
     assert surfaces == expected_surfaces
 
@@ -437,7 +436,7 @@ def test_docs_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
     # Organize/bucket the documents by surface
     docs_by_surface = defaultdict(list)
     for doc in adsorption_docs + catalog_docs:
-        surface = (doc['mpid'], str(doc['miller']))
+        surface = (doc['mpid'], str(doc['miller']), doc['shift'], doc['top'])
         docs_by_surface[surface].append(doc)
 
     # Find the lower covearge documents ourselves and then compare them to

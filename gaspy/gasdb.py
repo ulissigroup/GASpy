@@ -415,13 +415,14 @@ def get_low_coverage_docs_by_surface(adsorbates, model_tag='model0'):
                     documents for valid inputs. Note that these keys
                     are created by the `GASpy_regressions` submodule.
     Returns:
-        low_coverage_docs_by_surface    A dictionary whose keys are 2-tuples
-                                        of the MPID and miller index of a surface
-                                        and whose values are the aggregated
-                                        documents we get from either
-                                        `get_adsorption_docs` or `get_catalog_docs`
+        low_coverage_docs_by_surface    A dictionary whose keys are 4-tuples
+                                        of the MPID, miller index, shift,
+                                        and top/bottom of a surface and whose
+                                        values are the aggregated documents we
+                                        get from either `get_adsorption_docs`
+                                        or `get_catalog_docs`
     '''
-    # Get the documents, and then copy the predicted energies into the appropriate key
+    # Get the documents, and then copy the latest predicted energies into the appropriate key
     adsorption_docs = get_adsorption_docs(adsorbates)
     catalog_docs = get_unsimulated_catalog_docs(adsorbates)
     for doc in catalog_docs:
@@ -435,7 +436,7 @@ def get_low_coverage_docs_by_surface(adsorbates, model_tag='model0'):
     # Fetch each document and organize/bucket them by surface
     docs_by_surface = defaultdict(list)
     for doc in adsorption_docs + catalog_docs:
-        surface = (doc['mpid'], str(doc['miller']))
+        surface = (doc['mpid'], str(doc['miller']), doc['shift'], doc['top'])
         docs_by_surface[surface].append(doc)
 
     # Initialize output
