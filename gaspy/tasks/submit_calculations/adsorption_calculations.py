@@ -1,5 +1,5 @@
 '''
-This submodule contains various tasks that are meant to be used to make
+This submodule contains various Luigi tasks that are meant to be used to make
 FireWorks rockets for adsorptions---i.e., start DFT relaxations
 of slab+adsorbate systems.
 '''
@@ -17,6 +17,7 @@ from ..core import FingerprintRelaxedAdslab
 DEFAULT_ENCUT = defaults.ENCUT
 DEFAULT_XC = defaults.XC
 DEFAULT_MAX_ADSLAB_SIZE = defaults.MAX_NUM_ADSLAB_ATOMS
+DEFAULT_MAX_ROCKETS = 20
 
 
 class AllSitesOnSurfaces(luigi.WrapperTask):
@@ -31,8 +32,9 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
         mpid_list       A list of strings indicating the mpid numbers you want to simulate
         miller_list     A list of lists of integers indicating the miller indices you want
                         to simulate.
-        xc              A string indicating the cross-correlational you want to use. As of now,
-                        it can only be `rpbe` or `beef-vdw`
+        xc              A string indicating the cross-correlational you want to use.
+        encut           A float indicating the energy cutoff you want to be used for
+                        the corresponding bulk relaxation.
         max_atoms       A positive integer indicating the maximum number of atoms you want
                         present in the simulation
         max_rockets     A positive integer indicating the maximum number of sites you want to
@@ -46,7 +48,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
     xc = luigi.Parameter(DEFAULT_XC)
     encut = luigi.FloatParameter(DEFAULT_ENCUT)
     max_atoms = luigi.IntParameter(DEFAULT_MAX_ADSLAB_SIZE)
-    max_rockets = luigi.IntParameter(20)
+    max_rockets = luigi.IntParameter(DEFAULT_MAX_ROCKETS)
 
     def requires(self):
         '''
@@ -68,22 +70,14 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                 # Create the simulation parameters from the site if the site falls
                 # within the set of mpid and millers we are looking for.
                 if doc['mpid'] in mpids_set and _standardize_miller(doc['miller']) in millers_set:
-                    parameters = _make_rocket_parameters_from_doc(doc, adsorbates,
+                    parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
                                                                   encut=self.encut,
                                                                   xc=self.xc,
                                                                   max_atoms=self.max_atoms)
                     parameters_list.append(parameters)
 
-        # Pick the parameters/sites that we'll be using to create rockets.
-        # EAFP in case we have less rockets to make than `max_rockets`
-        try:
-            parameters_list = random.sample(parameters_list, self.max_rockets)
-        except ValueError:
-            random.shuffle(parameters_list)
-
-        # Create the rockets
-        for parameters in parameters_list:
-            yield FingerprintRelaxedAdslab(parameters=parameters)
+        tasks = _make_relaxation_tasks_from_parameters(parameters_list, max_rockets=self.max_rockets)
+        return tasks
 
 
 def _standardize_miller(miller):
@@ -105,7 +99,7 @@ def _standardize_miller(miller):
     return standard_miller
 
 
-def _make_rocket_parameters_from_doc(doc, adsorbates,
+def _make_adslab_parameters_from_doc(doc, adsorbates,
                                      encut=DEFAULT_ENCUT,
                                      xc=DEFAULT_XC,
                                      max_atoms=DEFAULT_MAX_ADSLAB_SIZE):
@@ -141,3 +135,37 @@ def _make_rocket_parameters_from_doc(doc, adsorbates,
                                                               settings=xc)
     parameters['gas'] = defaults.gas_parameters(adsorbates[0], settings=xc)
     return parameters
+
+
+def _make_relaxation_tasks_from_parameters(parameters_list, max_rockets=DEFAULT_MAX_ROCKETS):
+    '''
+    This function will turn a list of parameters into a generator that
+    yields a `FingerprintRelaxedAdslab` task for each set of parameters.
+    We execute the fingerprinting task because that requires a relaxation,
+    and thus the creation/submission of a FireWorks rocket.
+
+    Args:
+        parameters_list A list of OrderedDictionaries whose
+                        keys are 'bulk', 'slab', 'adsorption', and 'gas'.
+                        The values should be the parameters returned
+                        by `gaspy.defaults.*_parameters`.
+        max_rockets     An integer indicating the maximum number of
+                        rockets that you want to submit at a time.
+    Returns:
+        tasks   A list of `FingerprintRelaxedAdslab` instances,
+                where each element corresponds to each set of
+                parameters you've passed as arguments.
+    '''
+    # Pick the parameters/sites that we'll be using to create rockets.
+    # EAFP in case we have less rockets to make than `max_rockets`
+    try:
+        parameters_list = random.sample(parameters_list, max_rockets)
+    except ValueError:
+        random.shuffle(parameters_list)
+
+    # Create the rockets
+    tasks = []
+    for parameters in parameters_list:
+        task = FingerprintRelaxedAdslab(parameters=parameters)
+        tasks.append(task)
+    return tasks
