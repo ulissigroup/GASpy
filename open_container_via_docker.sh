@@ -28,12 +28,12 @@ if [ $jupyter = "jupyter" ]; then
         -p 8888:8888 \
         -v $ssh_mounting_config \
         -v $gaspy_mounting_config \
-        ulissigroup/gaspy:dev \
+        ulissigroup/gaspy:v0.20 \
         jupyter
 else
     docker run -it --rm -w "/home" \
         -v $ssh_mounting_config \
         -v $gaspy_mounting_config \
-        ulissigroup/gaspy:dev \
+        ulissigroup/gaspy:v0.20 \
         /bin/bash
 fi
