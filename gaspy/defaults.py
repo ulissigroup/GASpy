@@ -86,6 +86,7 @@ def catalog_fingerprints():
                     'coordination': '$processed_data.fp_init.coordination',
                     'neighborcoord': '$processed_data.fp_init.neighborcoord',
                     'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
+                    'adsorption_site': '$processed_data.calculation_info.adsorption_site',
                     'predictions': '$predictions'}
     return fingerprints
 
