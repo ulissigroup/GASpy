@@ -32,22 +32,22 @@ def test__standardize_miller(miller):
     assert ' ' not in standardized_miller
 
 
-@pytest.mark.parametrize('doc,adsorbates,encut,xc,max_atoms',
+@pytest.mark.parametrize('doc,adsorbates,encut,xc,max_bulk_atoms',
                          [({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 500., 'rpbe', 80),
                           ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 'rpbe', 80),
                           ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 'rpbe', 80),
                           ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['CO'], 350., 'rpbe', 80),
                           ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['H'], 350., 'rpbe', 80)])
-def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, xc, max_atoms):
+def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, xc, max_bulk_atoms):
     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
                                                   encut=encut, xc=xc,
-                                                  max_atoms=max_atoms)
+                                                  max_bulk_atoms=max_bulk_atoms)
 
     expected_parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     expected_parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
                                                            encut=encut,
                                                            settings=xc,
-                                                           max_atoms=max_atoms)
+                                                           max_atoms=max_bulk_atoms)
     expected_parameters['slab'] = defaults.slab_parameters(miller=doc['miller'],
                                                            top=doc['top'],
                                                            shift=doc['shift'],
