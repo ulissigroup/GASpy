@@ -106,7 +106,7 @@ def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
     pipeline = [match, group]
     with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling adsorption documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
@@ -177,7 +177,7 @@ def get_catalog_docs():
     pipeline = [group]
     with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
         print('Now pulling catalog documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
@@ -225,7 +225,7 @@ def get_surface_docs(extra_fingerprints=None, filters=None):
     pipeline = [match, group]
     with get_mongo_collection(collection_tag='surface_energy') as collection:
         print('Now pulling surface documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
@@ -309,7 +309,7 @@ def _get_attempted_adsorption_docs(adsorbates=None):
     pipeline = [match, group]
     with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling adsorption documents for sites we have attempted...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True)
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
     docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
@@ -488,7 +488,7 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
     # `docs` will have one entry per FWID that happens to have multiple documents
     pipeline = [{'$group': group}, {'$match': match}]
     with get_mongo_collection(collection_tag=collection_tag) as collection:
-        docs = list(collection.aggregate(pipeline=pipeline, allowDiskUse=True, useCursor=True))
+        docs = list(collection.aggregate(pipeline=pipeline, allowDiskUse=True))
 
         # For each FWID that has duplicates, keep only the last document.
         # Delete the rest.

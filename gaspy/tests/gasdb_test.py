@@ -53,7 +53,7 @@ def test_get_mongo_collection(collection_tag):
 
     # Make sure it's connected and authenticated by counting the documents
     try:
-        _ = collection.count()  # noqa: F841
+        _ = collection.count_documents({})  # noqa: F841
     except OperationFailure:
         assert False
 
@@ -466,7 +466,7 @@ def test_remove_duplicates_in_adsorption_collection():
 
         # Verify that removal worked
         with get_mongo_collection(collection_tag=collection_tag) as collection:
-            current_doc_count = collection.count()
+            current_doc_count = collection.count_documents({})
         assert current_doc_count == starting_doc_count
 
     # Clean up the extra document if the function failed to delete it
