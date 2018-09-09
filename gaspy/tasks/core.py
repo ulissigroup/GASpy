@@ -640,7 +640,7 @@ class SubmitToFW(luigi.Task):
 
             # A way to append `tosubmit`, but specialized for slab relaxations
             if self.calctype == 'slab':
-                slab_docs = pickle.load(open(self.input().fn, 'rb'))
+                slab_docs = pickle.load(open(self.input()[0].fn, 'rb'))
                 atoms_list = [make_atoms_from_doc(slab_doc) for slab_doc in slab_docs
                               if float(np.round(slab_doc['tags']['shift'], 2)) ==
                               float(np.round(self.parameters['slab']['shift'], 2)) and
