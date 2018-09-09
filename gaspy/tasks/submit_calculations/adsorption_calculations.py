@@ -73,7 +73,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
                                                                   encut=self.encut,
                                                                   xc=self.xc,
-                                                                  max_atoms=self.max_bulk_atoms)
+                                                                  max_bulk_atoms=self.max_bulk_atoms)
                     parameters_list.append(parameters)
 
         tasks = _make_relaxation_tasks_from_parameters(parameters_list, max_rockets=self.max_rockets)
@@ -94,7 +94,7 @@ def _standardize_miller(miller):
         standard_miller A string-formatted version of the Miller indices
                         with no spaces, e.g., '[1,1,1]'
     '''
-    miller = str(miller)
+    miller = str(list(miller))
     standard_miller = ''.join(miller.split())
     return standard_miller
 
