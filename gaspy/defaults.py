@@ -12,8 +12,11 @@ XC = 'rpbe'
 MAX_NUM_BULK_ATOMS = 80
 MAX_NUM_ADSLAB_ATOMS = 80
 MAX_NUM_SURFACE_ATOMS = 110
-ENCUT = 350.
 BULK_ENCUT = 500.
+SLAB_ENCUT = 350.
+ADSLAB_ENCUT = 350.
+PP_VERSION = '5.4'  # Vasp pseudopotential version
+
 
 def adsorption_fingerprints():
     '''
@@ -62,7 +65,7 @@ def adsorption_filters():
     filters['processed_data.movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
     filters['processed_data.movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': slab_move_max}
-    _calc_settings = calc_settings()
+    _calc_settings = calc_settings(ADSLAB_ENCUT)
     filters['processed_data.vasp_settings.gga'] = _calc_settings['gga']
 
     return filters
@@ -128,7 +131,7 @@ def surface_filters():
     # Distribute filters into mongo-readable form
     filters['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    _calc_settings = calc_settings()
+    _calc_settings = calc_settings(SLAB_ENCUT)
     filters['processed_data.vasp_settings.gga'] = _calc_settings['gga']
 
     return filters
@@ -181,22 +184,25 @@ def exchange_correlational_settings():
     return xc_settings
 
 
-def calc_settings(xc=XC):
+def calc_settings(encut, xc=XC, pp_version=PP_VERSION):
     '''
     The default calculational settings for GASpy to use.
 
     Arg:
-        xc  A string indicating which exchange correlational to use. This argument
-            is used to pick which settings to use within the
-            `gaspy.defaults.exchange_correlational_settings()` dictionary, so
-            refer to that for valid settings of `xc`.
+        encut       Float for the energy cutoff (in eV) to use for DFT.
+        xc          A string indicating which exchange correlational to use.
+                    This argument is used to pick which settings to use within the
+                    `gaspy.defaults.exchange_correlational_settings()` dictionary, so
+                    refer to that for valid settings of `xc`.
+        pp_version  A string indicating which version of VASP
+                    pseudopotentials to use.
     Returns:
         settings    An OrderedDict containing the default energy cutoff,
                     VASP pseudo-potential version number (pp_version), and
                     exchange-correlational settings.
     '''
     # Standard settings to use regardless of exchange correlational
-    settings = OrderedDict({'encut': ENCUT, 'pp_version': '5.4'})
+    settings = OrderedDict({'encut': encut, 'pp_version': pp_version})
 
     # Call on the xc_settings function to define the rest of the settings
     xc_settings = exchange_correlational_settings()
@@ -206,21 +212,22 @@ def calc_settings(xc=XC):
     return settings
 
 
-def gas_parameters(gasname, settings=XC):
+def gas_parameters(gasname, settings=XC, encut=ADSLAB_ENCUT, pp_version=PP_VERSION):
     '''
     Generate some default parameters for a gas and expected relaxation settings
 
     Args:
         gasname     A string containing the name of the gas
-        settings    A string that's identical to one of the keys found in
-                    `gaspy.defaults.exchange_correlational_settings()`.
-                    This tells our DFT calculator what calculation
-                    settings to use.
+        settings    A string indicating which exchange correlational to use.
+                    This argument is used to pick which settings to use within the
+                    `gaspy.defaults.exchange_correlational_settings()` dictionary, so
+                    refer to that for valid settings of `xc`.
+        encut       Float for the energy cutoff (in eV) to use for DFT.
+        pp_version  A string indicating which version of VASP
+                    pseudopotentials to use.
     '''
-    # calc_settings returns a default set of calculational settings, but only if
-    # the `settings` argument is a string.
     if isinstance(settings, str):
-        settings = calc_settings(settings)
+        settings = calc_settings(encut=encut, xc=settings, pp_version=pp_version)
 
     return OrderedDict(gasname=gasname,
                        relaxed=True,
@@ -232,26 +239,32 @@ def gas_parameters(gasname, settings=XC):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings=XC, encut=BULK_ENCUT, max_atoms=MAX_NUM_BULK_ATOMS):
+def bulk_parameters(mpid, settings=XC, encut=BULK_ENCUT, pp_version=PP_VERSION, max_atoms=MAX_NUM_BULK_ATOMS):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
     Args:
-        gasname     A string containing the name of the gas
-        settings    A string that's identical to one of the keys found in
+        mpid        The materials project ID of the bulk you're making.
+        xc          A string that's identical to one of the keys found in
                     `gaspy.defaults.exchange_correlational_settings()`.
                     This tells our DFT calculator what calculation
-                    settings to use.
-        encut       The energy cut-off
+                    settings to use. You can also make and pass your own
+                    dictionary of settings, if you want.
+        encut       The energy cut-off (in eV) to use for DFT. Only works
+                    when the `xc` argument is a string. If you set
+                    `xc` yourself manually, then include encut there.
+        pp_version  A string indicating which version of VASP you want to use.
+                    Only works when the `xc` argument is a string. If you set
+                    `xc` yourself manually, then include encut there.
+        max_atoms   The maximum number of atoms you are willing to simulate.
     '''
     # calc_settings returns a default set of calculational settings, but only if
     # the `settings` argument is a string.
     if isinstance(settings, str):
-        settings = calc_settings(settings)
+        settings = calc_settings(encut=encut, xc=settings, pp_version=pp_version)
 
     # We're getting a handle to a dictionary, so need to copy before modifying
     settings = copy.deepcopy(settings)
-    settings['encut'] = encut
     return OrderedDict(mpid=mpid,
                        relaxed=True,
                        max_atoms=max_atoms,
@@ -265,7 +278,7 @@ def bulk_parameters(mpid, settings=XC, encut=BULK_ENCUT, max_atoms=MAX_NUM_BULK_
                                                  **settings))
 
 
-def slab_parameters(miller, top, shift, settings=XC):
+def slab_parameters(miller, top, shift, settings=XC, encut=SLAB_ENCUT, pp_version=PP_VERSION):
     '''
     Generate some default parameters for a slab and expected relaxation settings
 
@@ -277,12 +290,17 @@ def slab_parameters(miller, top, shift, settings=XC):
         settings    A string that's identical to one of the keys found in
                     `gaspy.defaults.exchange_correlational_settings()`.
                     This tells our DFT calculator what calculation
-                    settings to use.
+                    settings to use. You can also make and pass your own
+                    dictionary settings, if you want.
+        encut       The energy cut-off (in eV) to use for DFT. Only works
+                    when the `xc` argument is a string. If you set
+                    `xc` yourself manually, then include encut there.
+        pp_version  A string indicating which version of VASP you want to use.
+                    Only works when the `xc` argument is a string. If you set
+                    `xc` yourself manually, then include encut there.
     '''
-    # calc_settings returns a default set of calculational settings, but only if
-    # the `settings` argument is a string.
     if isinstance(settings, str):
-        settings = calc_settings(settings)
+        settings = calc_settings(encut=encut, xc=settings, pp_version=pp_version)
 
     return OrderedDict(miller=miller,
                        top=top,
@@ -375,7 +393,7 @@ def adsorption_parameters(adsorbate,
                           adsorption_site=None,
                           slabrepeat='(1, 1)',
                           num_slab_atoms=0,
-                          settings='rpbe'):
+                          settings=XC, encut=ADSLAB_ENCUT, pp_version=PP_VERSION):
     '''
     Generate some default parameters for an adsorption configuration and expected
     relaxation settings
@@ -385,19 +403,29 @@ def adsorption_parameters(adsorbate,
                         default dictionary of adsorbates. If it is not in the default
                         dictionary, then this function will assume that you have passed
                         it an ase.Atoms object and then act accordingly.
-        adsorption_site The cartesian coordinates of the binding atom in the adsorbate
+        adsorption_site A list of size 3 of the cartesian coordinates of the
+                        binding atom in the adsorbate.
         slabrepeat      The number of times the basic slab has been repeated
         numb_slab_atoms The number of atoms in the slab. We use this number to help
                         differentiate slab and adsorbate atoms (later on).
         settings        A string that's identical to one of the keys found in
                         `gaspy.defaults.exchange_correlational_settings()`.
                         This tells our DFT calculator what calculation
-                        settings to use.
+                        settings to use. You can also make and pass your own
+                        dictionary settings, if you want.
+        encut           The energy cut-off (in eV) to use for DFT. Only works
+                        when the `xc` argument is a string. If you set
+                        `xc` yourself manually, then include encut there.
+        pp_version      A string indicating which version of VASP you want to use.
+                        Only works when the `xc` argument is a string. If you set
+                        `xc` yourself manually, then include encut there.
     '''
-    # calc_settings returns a default set of calculational settings, but only if
-    # the `settings` argument is a string.
+    # Python doesn't like mutable defaults, so we set it here
+    if isinstance(adsorption_site, type(None)):
+        adsorption_site = []
+
     if isinstance(settings, str):
-        settings = calc_settings(settings)
+        settings = calc_settings(encut=encut, xc=settings, pp_version=pp_version)
 
     # Use EAFP to figure out if the adsorbate that the user passed is in the
     # dictionary of default adsorbates, or if the user supplied an atoms object

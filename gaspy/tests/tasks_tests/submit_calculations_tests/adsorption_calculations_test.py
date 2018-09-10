@@ -34,30 +34,43 @@ def test__standardize_miller(miller):
     assert standardized_miller == '[1,1,1]'
 
 
-@pytest.mark.parametrize('doc,adsorbates,encut,xc,max_bulk_atoms',
-                         [({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 500., 'rpbe', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 'rpbe', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 'rpbe', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['CO'], 350., 'rpbe', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['H'], 350., 'rpbe', 80)])
-def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, xc, max_bulk_atoms):
+@pytest.mark.parametrize('doc,adsorbates,encut,bulk_encut,slab_encut,xc,pp_version,max_bulk_atoms',
+                         [({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 350., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['H'], 350., 500., 350., 'rpbe', '5.4', 80)])
+def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, slab_encut,
+                                          xc, pp_version, max_bulk_atoms):
     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
-                                                  encut=encut, xc=xc,
+                                                  encut=encut,
+                                                  bulk_encut=bulk_encut,
+                                                  slab_encut=slab_encut,
+                                                  xc=xc,
+                                                  pp_version=pp_version,
                                                   max_bulk_atoms=max_bulk_atoms)
 
     expected_parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     expected_parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
-                                                           encut=encut,
                                                            settings=xc,
+                                                           encut=bulk_encut,
+                                                           pp_version=pp_version,
                                                            max_atoms=max_bulk_atoms)
     expected_parameters['slab'] = defaults.slab_parameters(miller=doc['miller'],
                                                            top=doc['top'],
                                                            shift=doc['shift'],
-                                                           settings=xc)
+                                                           settings=xc,
+                                                           encut=slab_encut,
+                                                           pp_version=pp_version)
     expected_parameters['adsorption'] = defaults.adsorption_parameters(adsorbate=adsorbates[0],
                                                                        adsorption_site=doc['adsorption_site'],
-                                                                       settings=xc)
-    expected_parameters['gas'] = defaults.gas_parameters(adsorbates[0], settings=xc)
+                                                                       settings=xc,
+                                                                       encut=encut,
+                                                                       pp_version=pp_version)
+    expected_parameters['gas'] = defaults.gas_parameters(adsorbates[0],
+                                                         settings=xc,
+                                                         encut=encut,
+                                                         pp_version=pp_version)
     assert parameters == expected_parameters
 
 
