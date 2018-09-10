@@ -37,15 +37,15 @@ ENV PATH /miniconda3/bin:$PATH
 RUN conda config --prepend channels matsci
 RUN conda config --prepend channels conda-forge
 RUN conda install \
-    numpy scipy \
-    pytest \
-    mongodb pymongo \
-    multiprocess \
-    ase \
-    pymatgen \
-    fireworks \
-    luigi \
-    statsmodels
+    numpy=1.15.1    scipy=1.1.0 \
+    pytest=3.8.0 \
+    mongodb=4.0.2   pymongo=3.7.1 \
+    multiprocess=0.70.5 \
+    ase=3.16.2 \
+    pymatgen=2018.9.1 \
+    fireworks=1.7.1 \
+    luigi=2.7.8 \
+    statsmodels=0.9.0
 
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
 # We do this near the end because we can't modify mounted folders after
