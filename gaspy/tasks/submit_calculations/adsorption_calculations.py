@@ -88,14 +88,32 @@ def _standardize_miller(miller):
     can therefore be queried against each other consistently.
 
     Arg:
-        miller  Either a string of Miller indices or a list of integers,
-                e.g., '[1, 1, 1]', '[1,1, 1]', or [1, 1, 1]
+        miller  Either a string, list, or tuple of Miller index integers,
+                e.g., '[1, 1, 1]', '[1,1, 1]', [1, 1, 1], (1, 1, 1), or '(1, 1,1)'
     Returns:
         standard_miller A string-formatted version of the Miller indices
                         with no spaces, e.g., '[1,1,1]'
     '''
-    miller = str(list(miller))
-    standard_miller = ''.join(miller.split())
+    # Turn the argument into a string
+    if isinstance(miller, list) or isinstance(miller, tuple):
+        miller = str(list(miller))
+    elif isinstance(miller, str):
+        pass
+    else:
+        raise TypeError('The miller index you provided is not a list, tuple, or string.')
+
+    # Turn parentheses into brackets
+    characters = []
+    for character in list(miller):
+        if character == '(':
+            character = '['
+        elif character == ')':
+            character = ']'
+        characters.append(character)
+
+    # Get rid of spaces
+    standard_miller = ''.join(character for character in characters if character != ' ')
+
     return standard_miller
 
 
