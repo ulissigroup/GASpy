@@ -25,11 +25,13 @@ from ....gasdb import get_catalog_docs
                          [[1, 1, 1],
                           '[1, 1, 1]',
                           '[1,1,1]',
-                          '[1,1, 1]'])
+                          '[1,1, 1]',
+                          (1, 1, 1),
+                          '(1, 1, 1)',
+                          '(1, 1,1)'])
 def test__standardize_miller(miller):
     standardized_miller = _standardize_miller(miller)
-    assert isinstance(standardized_miller, str)
-    assert ' ' not in standardized_miller
+    assert standardized_miller == '[1,1,1]'
 
 
 @pytest.mark.parametrize('doc,adsorbates,encut,xc,max_bulk_atoms',
