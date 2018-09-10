@@ -14,23 +14,6 @@
         "port": "99999"
         },
     "mongo_info":{
-        "tunneling":{
-            "username": "user",
-            "host": "host.address"},
-        "host_server":{
-            "host": "host.name",
-            "port": "99999",
-            "database": "database",
-            "user": "user",
-            "password": "pw"
-            },
-        "host_server_readonly":{
-            "host": "host.name",
-            "port": "99999",
-            "database": "database",
-            "user": "user",
-            "password": "pw"
-            },
         "atoms":{
             "host": "host.name",
             "port": "99999",
