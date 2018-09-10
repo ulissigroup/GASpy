@@ -36,9 +36,7 @@ from .. import defaults, utils, gasdb
 from .. import fireworks_helper_scripts as fwhs
 
 GASdb_path = utils.read_rc('gasdb_path')
-DEFAULT_XC = defaults.XC
 MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
-MAX_SURFACE_SIZE = defaults.MAX_NUM_SURFACE_ATOMS
 
 
 def run_tasks(tasks, workers=1):
@@ -107,7 +105,7 @@ class UpdateAllDB(luigi.WrapperTask):
                     if key in doc['fwname']['vasp_settings']:
                         settings[key] = doc['fwname']['vasp_settings'][key]
                 # Create the nested dictionary of information that we will store in the Aux DB
-                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings, max_atoms=MAX_SURFACE_SIZE),
+                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings),
                               'slab': defaults.slab_parameters(miller=miller,
                                                                shift=shift,
                                                                top=True,
@@ -821,7 +819,7 @@ class GenerateBulk(luigi.Task):
 
     def run(self):
         # Connect to the Materials Project database
-        with MPRester(utils.read_rc()['matproj_api_key']) as m:
+        with MPRester(utils.read_rc('matproj_api_key')) as m:
             # Pull out the PyMatGen structure and convert it to an ASE atoms object
             structure = m.get_structure_by_material_id(self.parameters['bulk']['mpid'])
             atoms = AseAtomsAdaptor.get_atoms(structure)
@@ -1372,7 +1370,6 @@ class EnumerateAlloys(luigi.WrapperTask):
     max_index = luigi.IntParameter(1)
     max_to_submit = luigi.IntParameter(1000)
     dft = luigi.BoolParameter(False)
-    dft_settings = luigi.Parameter('rpbe')
     max_atoms = luigi.IntParameter(130)
 
     def requires(self):
@@ -1401,7 +1398,7 @@ class EnumerateAlloys(luigi.WrapperTask):
 
         # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
         # restricted elements
-        with MPRester("MGOdX3P4nI18eKvE") as m:
+        with MPRester(utils.read_rc('matproj_api_key')) as m:
             results = m.query({"elements": {"$nin": restricted_elements},
                                "e_above_hull": {"$lt": 0.1},
                                "formation_energy_per_atom": {"$lte": 0.0}},
@@ -1433,25 +1430,26 @@ class EnumerateAlloys(luigi.WrapperTask):
             return [[result['task_id'], x] for x in miller_list]
 
         # Generate all facets for each material in parallel
-        all_miller = utils.multimap(processStruc, [result for result in results if len(result['structure']) <= self.max_atoms])
-
+        all_miller = utils.multimap(processStruc, [result for result in results
+                                                   if len(result['structure']) <= self.max_atoms])
         print('Total # of matching surfaces in MP: %d' % (np.sum([len(x) for x in all_miller])))
 
         tasks_to_submit = []
         for facets in reversed(all_miller):
             for facet in facets:
+                parameters = OrderedDict(unrelaxed=None,
+                                         bulk=defaults.bulk_parameters(mpid=facet[0]),
+                                         slab=defaults.slab_parameters(miller=facet[1], top=True, shift=0),
+                                         gas=defaults.gas_parameters('CO'),
+                                         adsorption=defaults.adsorption_parameters(adsorbate='U',
+                                                                                   adsorption_site='[3.36 1.16 24.52]',
+                                                                                   slabrepeat='(1, 1)',
+                                                                                   nub_slab_atoms=24))
                 if not(self.dft):
-                    task = UpdateEnumerations(parameters=OrderedDict(unrelaxed=True,
-                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE),
-                                                                     slab=defaults.slab_parameters(facet[1], True, 0),
-                                                                     gas=defaults.gas_parameters('CO'),
-                                                                     adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24)))
+                    parameters['unrelaxed'] = True
                 else:
-                    task = UpdateEnumerations(parameters=OrderedDict(unrelaxed='relaxed_bulk',
-                                                                     bulk=defaults.bulk_parameters(facet[0], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC),
-                                                                     slab=defaults.slab_parameters(facet[1], True, 0, settings=DEFAULT_XC),
-                                                                     gas=defaults.gas_parameters('CO', settings=DEFAULT_XC),
-                                                                     adsorption=defaults.adsorption_parameters('U', '[3.36 1.16 24.52]', '(1, 1)', 24, settings=DEFAULT_XC)))
+                    parameters['unrelaxed'] = 'relaxed_bulk'
+                task = UpdateEnumerations(parameters=parameters)
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
@@ -1469,8 +1467,7 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
     '''
     whitelist = luigi.ListParameter()
     max_to_submit = luigi.IntParameter(1000)
-    dft_settings = luigi.Parameter('rpbe')
-    max_atoms = luigi.IntParameter(120)
+    max_atoms = luigi.IntParameter(MAX_BULK_SIZE)
 
     def requires(self):
         """
@@ -1498,7 +1495,7 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
 
         # Query MP for all alloys that are stable, near the lower hull, and don't have one of the
         # restricted elements
-        with MPRester("MGOdX3P4nI18eKvE") as m:
+        with MPRester(utils.read_rc('matproj_api_key')) as m:
             results = m.query({"elements": {"$nin": restricted_elements},
                                "e_above_hull": {"$lt": 0.1},
                                "formation_energy_per_atom": {"$lte": 0.0}},
@@ -1514,7 +1511,8 @@ class EnumerateAlloyBulks(luigi.WrapperTask):
         tasks_to_submit = []
         for result in results:
             if len(result['structure']) < MAX_BULK_SIZE:
-                task = SubmitToFW(calctype='bulk', parameters=OrderedDict(bulk=defaults.bulk_parameters(result['task_id'], max_atoms=MAX_BULK_SIZE, settings=DEFAULT_XC)))
+                parameters = OrderedDict(bulk=defaults.bulk_parameters(mpid=result['task_id']))
+                task = SubmitToFW(calctype='bulk', parameters=parameters)
                 if not(task.complete()):
                     tasks_to_submit.append(task)
 
