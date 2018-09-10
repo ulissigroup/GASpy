@@ -5,12 +5,23 @@
 
 cd
 
+# Load the FireWorks information from our .gaspyrc.json file
+MONGO_HOST="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.host_server.host"))')"
+MONGO_PORT="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.host_server.port"))')"
+LOCAL_HOST="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.adsorption.host"))')"
+LOCAL_PORT="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.adsorption.port"))')"
+MONGO_HOST_READONLY="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.host_server.host"))')"
+MONGO_PORT_READONLY="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.host_server.port"))')"
+LOCAL_HOST_READONLY="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.adsorption.host"))')"
+LOCAL_PORT_READONLY="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.adsorption.port"))')"
+USER="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.tunneling.username"))')"
+HOST="$(python -c 'from gaspy.utils import read_rc; print(read_rc("mongo_info.tunneling.host"))')"
+
 # Tunnel to the Mongo server
-mkdir -p /home/logs
 ssh -nNT -4 \
-    -L $LOCAL_AUX_HOST:$LOCAL_AUX_PORT:$AUX_HOST:$AUX_PORT \
-    -L $LOCAL_AUX_HOST_READONLY:$LOCAL_AUX_PORT_READONLY:$AUX_HOST_READONLY:$AUX_PORT_READONLY \
-    $MONGO_TUNNEL_USER@$MONGO_TUNNEL_HOST >> /home/logs/tunnel.log 2>&1 &
+    -L $LOCA_HOST:$LOCAL_PORT:$MONGO_HOST:$MONGO_PORT \
+    -L $LOCA_HOST_READONLY:$LOCAL_PORT_READONLY:$MONGO_HOST_READONLY:$MONGO_PORT_READONLY \
+    $USER@$HOST
 
 # Docker will close the container when it's out of things to do.
 # This line will tell the container to do whatever else we tell it to do.

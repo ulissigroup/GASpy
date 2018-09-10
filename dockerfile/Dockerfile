@@ -9,7 +9,6 @@ RUN mkdir -p $HOME
 RUN groupadd -r group && \
     useradd -r -g group -d $HOME -s /sbin/nologin -c "Default user" user
 RUN cp /root/.bashrc $HOME
-RUN chown -R user:group $HOME
 
 # Add some things to the .bashrc file to make life easier.
 COPY bashrc_additions.sh .
@@ -20,50 +19,39 @@ RUN rm bashrc_additions.sh
 # their working version of GASpy to the container.
 ENV GASPY_HOME=$HOME/GASpy
 RUN mkdir -p $GASPY_HOME
-ENV PYTHONPATH $GASPY_HOME:$PYTHONPATH
+ENV PYTHONPATH $GASPY_HOME
 
 # Install packages that we need to install other packages
 RUN apt-get update
 RUN apt-get dist-upgrade -y
-RUN apt-get install -y wget git
+RUN apt-get install -y wget
 
 # Install Conda
 RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
 RUN echo -e "\nyes\n/miniconda3\nyes\n" | /bin/bash Miniconda3-4.5.4-Linux-x86_64.sh
 RUN rm Miniconda3-4.5.4-Linux-x86_64.sh $HOME/.bashrc-miniconda3.bak
 ENV PATH /miniconda3/bin:$PATH
-# Install Python
-RUN conda create -n GASpy python
-RUN echo "source activate GASpy" >> $HOME/.bashrc
 
 # Install conda packages. First we add the matsci and conda-forge channels
-# to the conda, where conda-forge is the default
-RUN source activate GASpy && conda config --prepend channels matsci
-RUN source activate GASpy && conda config --prepend channels conda-forge
-RUN source activate GASpy && conda install numpy scipy
-RUN source activate GASpy && conda install pytest
-RUN source activate GASpy && conda install mongodb pymongo
-RUN source activate GASpy && conda install multiprocess
-RUN source activate GASpy && conda install ase
-RUN source activate GASpy && conda install -c matsci pymatgen
-RUN source activate GASpy && conda install -c matsci fireworks
-RUN source activate GASpy && conda install luigi
-RUN source activate GASpy && conda install statsmodels
+# to the conda, where conda-forge is the default.
+RUN conda config --prepend channels matsci
+RUN conda config --prepend channels conda-forge
+RUN conda install \
+    numpy scipy \
+    pytest \
+    mongodb pymongo \
+    multiprocess \
+    ase \
+    pymatgen \
+    fireworks \
+    luigi \
+    statsmodels
 
-# The $HOME mount is so that you can pass your `~/.ssh` folder
-# into the container, which will allow you to ssh wherever.
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
 # We do this near the end because we can't modify mounted folders after
 # declaring them as volumes.
-VOLUME $HOME $GASPY_HOME
+VOLUME $GASPY_HOME
 
-# Open the tunnel to the Mongo server through a startup script.
-# If the user passes the argument "jupyter" to the script, then Jupyter
-# will be started. The user should connect to the 0.0.0.0:8888 port
-# of the container to access the Jupyter interace.
-COPY --chown=user:group startup.sh /home/startup.sh
-ENTRYPOINT ["/home/startup.sh"]
-CMD ["0"]
-
-# Make the default user `user` instead of `root`
+# Make the default user `user` instead of `root`. Necessary when working with Shifter.
+RUN chown -R user:group $HOME
 USER user
