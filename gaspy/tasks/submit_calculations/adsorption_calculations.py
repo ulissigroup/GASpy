@@ -15,6 +15,7 @@ from ...gasdb import get_unsimulated_catalog_docs
 from ..core import FingerprintRelaxedAdslab
 
 DEFAULT_ENCUT = defaults.ENCUT
+DEFAULT_BULK_ENCUT = defaults.BULK_ENCUT
 DEFAULT_XC = defaults.XC
 DEFAULT_MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 DEFAULT_MAX_ROCKETS = 20
@@ -47,6 +48,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
     miller_list = luigi.ListParameter()
     xc = luigi.Parameter(DEFAULT_XC)
     encut = luigi.FloatParameter(DEFAULT_ENCUT)
+    bulk_encut = luigi.FloatParameter(DEFAULT_BULK_ENCUT)
     max_bulk_atoms = luigi.IntParameter(DEFAULT_MAX_BULK_SIZE)
     max_rockets = luigi.IntParameter(DEFAULT_MAX_ROCKETS)
 
@@ -72,6 +74,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                 if doc['mpid'] in mpids_set and _standardize_miller(doc['miller']) in millers_set:
                     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
                                                                   encut=self.encut,
+                                                                  bulk_encut=self.bulk_encut,
                                                                   xc=self.xc,
                                                                   max_bulk_atoms=self.max_bulk_atoms)
                     parameters_list.append(parameters)
@@ -101,6 +104,7 @@ def _standardize_miller(miller):
 
 def _make_adslab_parameters_from_doc(doc, adsorbates,
                                      encut=DEFAULT_ENCUT,
+                                     bulk_encut=DEFAULT_BULK_ENCUT,
                                      xc=DEFAULT_XC,
                                      max_bulk_atoms=DEFAULT_MAX_BULK_SIZE):
     '''
@@ -124,7 +128,7 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
     '''
     parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
-                                                  encut=encut,
+                                                  encut=bulk_encut,
                                                   settings=xc,
                                                   max_atoms=max_bulk_atoms)
     parameters['slab'] = defaults.slab_parameters(miller=doc['miller'],
