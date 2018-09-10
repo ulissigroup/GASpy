@@ -12,8 +12,8 @@ XC = 'rpbe'
 MAX_NUM_BULK_ATOMS = 80
 MAX_NUM_ADSLAB_ATOMS = 80
 MAX_NUM_SURFACE_ATOMS = 110
-ENCUT = 500.
-
+ENCUT = 350.
+BULK_ENCUT = 500.
 
 def adsorption_fingerprints():
     '''
@@ -196,7 +196,7 @@ def calc_settings(xc=XC):
                     exchange-correlational settings.
     '''
     # Standard settings to use regardless of exchange correlational
-    settings = OrderedDict({'encut': 350, 'pp_version': '5.4'})
+    settings = OrderedDict({'encut': ENCUT, 'pp_version': '5.4'})
 
     # Call on the xc_settings function to define the rest of the settings
     xc_settings = exchange_correlational_settings()
@@ -232,7 +232,7 @@ def gas_parameters(gasname, settings=XC):
                                                  **settings))
 
 
-def bulk_parameters(mpid, settings=XC, encut=ENCUT, max_atoms=MAX_NUM_BULK_ATOMS):
+def bulk_parameters(mpid, settings=XC, encut=BULK_ENCUT, max_atoms=MAX_NUM_BULK_ATOMS):
     '''
     Generate some default parameters for a bulk and expected relaxation settings
 
