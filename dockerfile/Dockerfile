@@ -32,10 +32,9 @@ RUN echo -e "\nyes\n/miniconda3\nyes\n" | /bin/bash Miniconda3-4.5.4-Linux-x86_6
 RUN rm Miniconda3-4.5.4-Linux-x86_64.sh $HOME/.bashrc-miniconda3.bak
 ENV PATH /miniconda3/bin:$PATH
 
-# Install conda packages. First we add the matsci and conda-forge channels
-# to the conda, where conda-forge is the default.
-RUN conda config --prepend channels matsci
+# Install conda packages
 RUN conda config --prepend channels conda-forge
+RUN conda config --append channels matsci
 RUN conda install \
     numpy=1.15.1    scipy=1.1.0 \
     pytest=3.8.0 \
@@ -43,9 +42,11 @@ RUN conda install \
     multiprocess=0.70.5 \
     ase=3.16.2 \
     pymatgen=2018.9.1 \
-    fireworks=1.7.1 \
+    fireworks=1.7.2 \
     luigi=2.7.8 \
-    statsmodels=0.9.0
+    statsmodels=0.9.0 \
+    ipykernel=4.9.0 \
+    tqdm=4.24.0
 
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
 # We do this near the end because we can't modify mounted folders after
