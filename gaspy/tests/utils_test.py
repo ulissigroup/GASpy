@@ -169,7 +169,7 @@ def test_find_adsorption_sites(slab_atoms_name):
 
 
 def test_unfreeze_dict():
-    frozen_dict = _FrozenOrderedDict(foo='bar', bar='foo',
+    frozen_dict = _FrozenOrderedDict(foo='bar', bar=('foo', 'bar'),
                                      sub_dict0=_FrozenOrderedDict(),
                                      sub_dict1=_FrozenOrderedDict(foo=['']),
                                      sub_dict2=dict(foo=True,

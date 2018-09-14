@@ -516,7 +516,11 @@ def unfreeze_dict(frozen_dict):
         for key, value in unfrozen_dict.items():
             unfrozen_dict[key] = unfreeze_dict(value)
 
-    # Recur on the object if it's a non-string iterable
+    # Recur on the object if it's a tuple
+    elif isinstance(frozen_dict, tuple):
+        unfrozen_dict = (unfreeze_dict(element) for element in frozen_dict)
+
+    # Recur on the object if it's a mutable iterable
     elif isinstance(frozen_dict, Iterable) and not isinstance(frozen_dict, str):
         unfrozen_dict = frozen_dict
         for i, element in enumerate(unfrozen_dict):
