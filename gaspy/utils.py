@@ -7,12 +7,11 @@ import os
 import pickle
 import uuid
 import json
-from collections import OrderedDict, Iterable
+from collections import OrderedDict, Iterable, Mapping
 from multiprocess import Pool
 import numpy as np
 import gc
 import tqdm
-from luigi.parameter import _FrozenOrderedDict
 import ase.io
 from ase import Atoms
 from ase.constraints import FixAtoms
@@ -506,15 +505,27 @@ def unfreeze_dict(frozen_dict):
 
     Arg:
         frozen_dict     Instance of a luigi.parameter._FrozenOrderedDict
-    Output:
+    Returns:
         dict_   Ordered dictionary
     '''
-    # Unfreeze
-    unfrozen_dict = OrderedDict(frozen_dict)
-    # Recur
-    for key, value in unfrozen_dict.items():
-        if isinstance(value, _FrozenOrderedDict):
+    # If the argument is a dictionary, then unfreeze it
+    if isinstance(frozen_dict, Mapping):
+        unfrozen_dict = OrderedDict(frozen_dict)
+
+        # Recur
+        for key, value in unfrozen_dict.items():
             unfrozen_dict[key] = unfreeze_dict(value)
+
+    # Recur on the object if it's a non-string iterable
+    elif isinstance(frozen_dict, Iterable) and not isinstance(frozen_dict, str):
+        unfrozen_dict = frozen_dict
+        for i, element in enumerate(unfrozen_dict):
+            unfrozen_dict[i] = unfreeze_dict(element)
+
+    # If the argument is neither mappable nor iterable, we'rpe probably at a leaf
+    else:
+        unfrozen_dict = frozen_dict
+
     return unfrozen_dict
 
 

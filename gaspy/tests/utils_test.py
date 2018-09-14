@@ -24,6 +24,7 @@ from ..utils import (read_rc,
 # Things we need to do the tests
 import pytest
 import pickle
+import collections
 import json
 import numpy as np
 import numpy.testing as npt
@@ -168,9 +169,12 @@ def test_find_adsorption_sites(slab_atoms_name):
 
 
 def test_unfreeze_dict():
-    frozen_dict = _FrozenOrderedDict(foo='bar', alpha='omega',
+    frozen_dict = _FrozenOrderedDict(foo='bar', bar='foo',
                                      sub_dict0=_FrozenOrderedDict(),
-                                     sub_dict1=_FrozenOrderedDict(great='googly moogly'))
+                                     sub_dict1=_FrozenOrderedDict(foo=['']),
+                                     sub_dict2=dict(foo=True,
+                                                    bar=_FrozenOrderedDict(foo=1.0),
+                                                    array=['foo', _FrozenOrderedDict(foo='bar')]))
     unfrozen_dict = unfreeze_dict(frozen_dict)
     _look_for_type_in_dict(type_=_FrozenOrderedDict, dict_=unfrozen_dict)
 
@@ -179,21 +183,26 @@ def _look_for_type_in_dict(type_, dict_):
     '''
     Recursive function that checks if there is any object type inside any branch
     of a dictionary. It does so by performing an `assert` check on every single
-    value in the dictionary.
+    value in the dictionary. Note that we could use EAFP instead of if/then checking,
+    but that ended up being very illegible.
 
     Args:
         type_   An object type (e.g, int, float, str, etc) that you want to look for
         dict_   A dictionary that you want to parse. Can really be any object with
                 the `items` method.
     '''
-    # Check the current layer's values
-    for key, value in dict_.items():
-        assert type(value) != type_
-        # Recur
-        try:
+    # Check this part of the dictionary branch
+    assert not isinstance(dict_, type_)
+
+    # If this branch is a dictionary, then recur on the values of the dictionary
+    if isinstance(dict_, collections.Mapping):
+        for key, value in dict_.items():
             _look_for_type_in_dict(type_, value)
-        except AttributeError:
-            pass
+
+    # If this branch is iterable, then recur on each element in the iterable
+    elif isinstance(dict_, collections.Iterable) and not isinstance(dict_, str):
+        for element in dict_:
+            _look_for_type_in_dict(type_, element)
 
 
 @pytest.mark.parametrize('adslab_atoms_name',
