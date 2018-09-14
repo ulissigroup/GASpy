@@ -260,7 +260,10 @@ def get_unsimulated_catalog_docs(adsorbates):
                                                                'energy',
                                                                'adsorbates',
                                                                'adslab_calculation_date'])
-    hashes_catalog = _hash_docs(docs_catalog, ignore_keys=['mongo_id', 'formula'])
+    hashes_catalog = _hash_docs(docs_catalog, ignore_keys=['mongo_id',
+                                                           'formula',
+                                                           'adsorption_site',
+                                                           'predictions'])
     hashes_unsimulated = set(hashes_catalog) - set(hashes_simulated)
 
     docs = []

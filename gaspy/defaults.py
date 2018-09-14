@@ -20,8 +20,9 @@ PP_VERSION = '5.4'  # Vasp pseudopotential version
 
 def adsorption_fingerprints():
     '''
-    WARNING:  A lot of code depends on this. Do not take anything out without thinking
-    very hard about it.
+    WARNING:  A lot of code depends on this. Do not add or remove anything out without
+    thinking very hard about it. If you do add something, consider changing
+    the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
 
     Returns a dictionary that is meant to be passed to mongo aggregators to create
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
@@ -73,8 +74,9 @@ def adsorption_filters():
 
 def catalog_fingerprints():
     '''
-    WARNING:  A lot of code depends on this. Do not take anything out without thinking
-    very hard about it.
+    WARNING:  A lot of code depends on this. Do not add or remove anything out without
+    thinking very hard about it. If you do add something, consider changing
+    the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
 
     Returns a dictionary that is meant to be passed to mongo aggregators to create
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
