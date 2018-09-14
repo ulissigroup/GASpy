@@ -593,7 +593,7 @@ class SubmitToFW(luigi.Task):
                 parameters_copy = utils.unfreeze_dict(copy.deepcopy(self.parameters))
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
-
+                parameters_copy['unrelaxed']='relaxed_bulk'
                 return FingerprintUnrelaxedAdslabs(parameters_copy)
 
             if self.calctype == 'bulk':
