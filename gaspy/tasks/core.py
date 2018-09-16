@@ -89,6 +89,10 @@ class UpdateAllDB(luigi.WrapperTask):
             surface_fwids = [doc['processed_data']['FW_info'].values() for doc in collection.find()]
         surface_fwids = dict.fromkeys([item for sublist in surface_fwids for item in sublist])
 
+        # We are also going to save the doc info for each submitted calc so that we can purge long-standing problems
+        self.surface_energy_docs = []
+        self.ads_docs = []
+
         # For each adsorbate/configuration and surface energy calc, make a task to write the results to the output
         # database. We also start a counter, `i`, for how many tasks we've processed.
         i = 0
@@ -118,6 +122,9 @@ class UpdateAllDB(luigi.WrapperTask):
                 if i >= self.max_processes and self.max_processes > 0:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
                     break
+                
+                #Save the doc for introspection later
+                self.surface_energy_docs.append(doc)
 
                 yield DumpToSurfaceEnergyDB(parameters)
 
@@ -161,7 +168,13 @@ class UpdateAllDB(luigi.WrapperTask):
                     if i >= self.max_processes and self.max_processes > 0:
                         print('Reached the maximum number of processes, %s' % self.max_processes)
                         break
+
+                    #save the doc for introspection later
+                    self.ads_docs.append(doc)
+
                     yield DumpToAdsorptionDB(parameters)
+
+           
 
 
 class UpdateEnumerations(luigi.Task):
