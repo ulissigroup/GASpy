@@ -14,13 +14,6 @@ from ... import defaults
 from ...gasdb import get_unsimulated_catalog_docs
 from ..core import FingerprintRelaxedAdslab
 
-DEFAULT_ENCUT = defaults.ADSLAB_ENCUT
-DEFAULT_BULK_ENCUT = defaults.BULK_ENCUT
-DEFAULT_SLAB_ENCUT = defaults.SLAB_ENCUT
-DEFAULT_ADSLAB_ENCUT = defaults.ADSLAB_ENCUT
-DEFAULT_XC = defaults.XC
-DEFAULT_PP_VERSION = defaults.PP_VERSION
-DEFAULT_MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 DEFAULT_MAX_ROCKETS = 20
 
 
@@ -51,12 +44,12 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
     adsorbates_list = luigi.ListParameter()
     mpid_list = luigi.ListParameter()
     miller_list = luigi.ListParameter()
-    xc = luigi.Parameter(DEFAULT_XC)
-    encut = luigi.FloatParameter(DEFAULT_ENCUT)
-    bulk_encut = luigi.FloatParameter(DEFAULT_BULK_ENCUT)
-    slab_encut = luigi.FloatParameter(DEFAULT_SLAB_ENCUT)
-    pp_version = luigi.Parameter(DEFAULT_PP_VERSION)
-    max_bulk_atoms = luigi.IntParameter(DEFAULT_MAX_BULK_SIZE)
+    xc = luigi.Parameter(defaults.XC)
+    encut = luigi.FloatParameter(defaults.ADSLAB_ENCUT)
+    bulk_encut = luigi.FloatParameter(defaults.BULK_ENCUT)
+    slab_encut = luigi.FloatParameter(defaults.SLAB_ENCUT)
+    pp_version = luigi.Parameter(defaults.PP_VERSION)
+    max_bulk_atoms = luigi.IntParameter(defaults.MAX_NUM_BULK_ATOMS)
     max_rockets = luigi.IntParameter(DEFAULT_MAX_ROCKETS)
 
     def requires(self):
@@ -130,12 +123,12 @@ def _standardize_miller(miller):
 
 
 def _make_adslab_parameters_from_doc(doc, adsorbates,
-                                     encut=DEFAULT_ENCUT,
-                                     bulk_encut=DEFAULT_BULK_ENCUT,
-                                     slab_encut=DEFAULT_SLAB_ENCUT,
-                                     xc=DEFAULT_XC,
-                                     pp_version=DEFAULT_PP_VERSION,
-                                     max_bulk_atoms=DEFAULT_MAX_BULK_SIZE):
+                                     encut=defaults.ADSLAB_ENCUT,
+                                     bulk_encut=defaults.BULK_ENCUT,
+                                     slab_encut=defaults.SLAB_ENCUT,
+                                     xc=defaults.XC,
+                                     pp_version=defaults.PP_VERSION,
+                                     max_bulk_atoms=defaults.MAX_NUM_BULK_ATOMS):
     '''
     This function creates the `parameters` dictionary that many of the
     gaspy tasks need to create/submit FireWorks rockets.

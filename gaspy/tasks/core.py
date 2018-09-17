@@ -593,7 +593,7 @@ class SubmitToFW(luigi.Task):
                 parameters_copy = utils.unfreeze_dict(copy.deepcopy(self.parameters))
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
-                parameters_copy['unrelaxed']='relaxed_bulk'
+                parameters_copy['unrelaxed'] = 'relaxed_bulk'
                 return FingerprintUnrelaxedAdslabs(parameters_copy)
 
             if self.calctype == 'bulk':
@@ -1236,9 +1236,6 @@ class FingerprintUnrelaxedAdslabs(luigi.Task):
         We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
         '''
         # Make a copy of `parameters` for our slab, but then we take off the adsorbate
-        #param_slab = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-        #param_slab['adsorption']['adsorbates'] = \
-        #    [OrderedDict(name='', atoms=utils.encode_atoms_to_hex(Atoms('')))]
         return [GenerateAdSlabs(self.parameters)]
 
     def run(self):
