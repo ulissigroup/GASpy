@@ -1,41 +1,33 @@
 # GASpy:  Generalized Adsorption Simulator for Python
 
-# Purpose
-To use Density Functional Theory (DFT) to calculate adsorption energies of
-adsorbates onto slabs, but to do it in a general way such that we may perform
-these calculations for an arbitrary number of configurations (e.g., slab
-materials, adsorbate types, adsorption sites, percent coverages, etc.).
+We use Density Functional Theory (DFT) to calculate adsorption energies of
+adsorbates onto slabs, but we try to do it in a general way such that we may
+perform these calculations for an arbitrary number of configurations---e.g.,
+different bulk materials, facets, adsorption sites, adsorbates, etc.
 
 # Overview
-GASpy is written in Python, and we use various tools that enable us to begin
-DFT relaxations on "arbitrarily large" sample pools.
 
-## Tools
-[ASE](https://wiki.fysik.dtu.dk/ase/about.html)
+GASpy is written in [Python 3](https://www.python.org/), and we use various tools
+(below) that enable to perform DFT relaxations on sample pools of
+near-arbitrary size. You can find a full list of our dependencies in our
+[Dockerfile](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile).
 
-[PyMatGen](http://pymatgen.org/)
+[ASE](https://wiki.fysik.dtu.dk/ase/about.html),
+[VASP](https://www.vasp.at/index.php/about-vasp/59-about-vasp),
+[PyMatGen](http://pymatgen.org/),
+[FireWorks](https://pythonhosted.org/FireWorks/index.html), [Materials
+Project](https://materialsproject.org/), [Docker](https://www.docker.com/),
+[Luigi](https://github.com/spotify/luigi), [MongoDB](https://www.mongodb.com/)
 
-[Luigi](https://github.com/spotify/luigi)
-
-[FireWorks](https://pythonhosted.org/FireWorks/index.html)
-
-[VASP](https://www.vasp.at/index.php/about-vasp/59-about-vasp)
-
-[VASP.py](https://github.com/jkitchin/vasp)
-
-[Materials Project](https://materialsproject.org/)
-
-[MongoDB](https://www.mongodb.com/)
-
-## Infrastructure
-We created various Python classes (AKA "tasks") to automate adsorption energy
-calculations; these tasks live inside `gaspy/tasks.py`. For example:  We have a
-task to fetch bulk structures from the Materials Projec and then turn them into
-ASE atoms objects; we have a task that uses PyMatGen to cut slabs out of these
-bulk structures; we have a task that use PyMatGen to enumerate adsorption sites
-on these slabs; we have a task to add adsorbates onto these sites; and we have
-a task to calculate adsorption energies from slab, adsorbate, and
-slab+adsorbate relaxations.
+We created various Python classes (referred to as
+[tasks](https://github.com/ulissigroup/GASpy/tree/master/gaspy/tasks) by
+[Luigi](https://github.com/spotify/luigi)) to automate adsorption energy
+calculations. For example:  We have a task to fetch bulk structures from the
+Materials Projec and then turn them into ASE atoms objects; we have a task that
+uses PyMatGen to cut slabs out of these bulk structures; we have a task that
+use PyMatGen to enumerate adsorption sites on these slabs; we have a task to
+add adsorbates onto these sites; and we have a task to calculate adsorption
+energies from slab, adsorbate, and slab+adsorbate relaxations.
 
 We use Luigi to manage the dependencies between these tasks (e.g., our slab
 cutting class requires that we have already fetched the bulk structure), and we
@@ -45,89 +37,128 @@ Pt", and it automatically performs all of the necessary steps (e.g., fetch Pt
 from Materials Project; cut slabs; relax the slabs; add CO onto the slab and
 then relax; then calculate the adsorption energy).
 
-Note also that there is a `gaspy` package with various helper functions that
-may (and should) be used in tasks, where appropriate. For example:
-`gaspy.gasdb.get_docs` is useful for pulling mongo documents from our database.
+To submit calculations, we create wrapper tasks that call on the appropriate
+sub-tasks, and then use either Luigi our our Python wrapping functions to
+execute the classes that you made. For
+[example](https://github.com/ulissigroup/GASpy/blob/master/examples/calculate_all_adsorptions_on_surfaces.py):
 
-# Use
-We recommend using [submodules](https://git-scm.com/docs/git-submodule) to
-create/execute your own custom tasks or to analyze data that is created by
-GASpy. If you are interested in seeing a submodule but do not have access,
-simply request access from a GASpy owner.
+    from gaspy.tasks import run_tasks
+    from gaspy.tasks.submit_calculations.adsorption_calculations import AllSitesOnSurfaces
+    
+    
+    rocket_builder = AllSitesOnSurfaces(adsorbates_list=[['CO'], ['H']],
+                                        mpid_list=['mp-2', 'mp-30'],
+                                        miller_list=[[1, 1, 1], [1, 0, 0]],
+                                        max_rockets=20)
+    tasks = [rocket_builder]
+    
+    run_tasks(tasks)
 
-To submit calculations, create Luigi tasks that call on the appropriate tasks
-in `tasks.py`, and then use Luigi to execute the classes that you made. Luigi
-will automatically submit your calculations to the FireWorks Launchpad. Follow
-the example in `scripts/update_db.sh`.
+This snippet will calculate up to 20 CO and H adsorption energies of sites on
+the (1, 1, 1) and (1, 0, 0) facets of
+[Pt](https://materialsproject.org/materials/mp-2/) and
+[Cu](https://materialsproject.org/materials/mp-30/).
 
-And while we're on the subject:  We recommend running `scripts/update_db.sh` on
-a cron to keep the databases up-to-date.
+# Installation
 
-## Installation
-GASpy has only been tested on Linux or Linux-gnu so far. You will need to clone
-this repo (which should take only a minute or two) and then add it your python
-path:
-```
-export PYTHONPATH="/path/to/GASpy:${PYTHONPATH}"
-```
-This will let GASpy read the `.gaspyrc.json` and import the module from
-anywhere. Speaking of which:  You will need to create a `.gaspyrc.json` file
-and put it in the root directory of this repository. A template,
-`.gaspyrc_template.json`, is included. You'll need to set up a
-[FireWorks](https://pythonhosted.org/FireWorks/index.html) database, a
-[MongoDB](https://www.mongodb.com/) database, and a
-[Luigi](https://github.com/spotify/luigi) daemon. The consequential login
-information should be stored in the `gaspyrc.json`.
+You will need five main things to run GASpy:
 
-Our scripts also assume that you have the `GASpy/` repository either in your
-home directory or symlinked to it. If you want to symlink it, then do a:
-```
-cd
-ln -s /path/to/GASpy GASpy/
-```
+1. a locally cloned version of this repository,
 
-### Software versions
-Here are the software versions we are currently using for GASpy. Software
-dependencies are omitted for brevity. Due to our poor record keeping and lack
-of unit testing (which we hope to remedy soon), we make no claims on the
-stability of GASpy on any other versions of these packages. If you have
-installed all of these packages at the specificed version and are still unable
-to run GASpy, then please submit an issue.
-```
-anaconda-client           1.6.3
-ase                       3.14.1
-conda                     4.5.0
-conda-env                 2.6.0
-dill                      0.2.7.1
-FireWorks                 1.5.0
-luigi                     2.6.1
-multiprocess              0.70.5
-numpy                     1.12.1
-pathos                    0.2.1
-pip                       9.0.1
-pixman                    0.34.0
-pymatgen                  2017.7.
-pymongo                   3.3.0
-python                    2.7.13
-scipy                     0.19.1
-tqdm                      4.14.0
-vasp                      0.1
-```
-Note that we plan to load these requirements into a
-[Docker](https://www.docker.com/) image soon. This way, users don't have to
-worry about OS requirements or installing all of the necessary packages; they
-can simply load the image and start running.
+2. [Docker](https://www.docker.com/),
 
-# Under the hood
-Since we are performing a (very) large number of DFT simulations, we need to
-store the data somewhere. Our Primary, "blessed" database is a MongoDB that is
-managed by our FireWorks launchpad.
+3. a [MongoDB](https://www.mongodb.com/) server,
 
-But our Primary, FireWorks-mananged database is not friendly with our Luigi
-dependency-mananger.  It is also not able to hold any post-processing
-information that we want to create (e.g., coordination numbers). So we create
-an Auxiliary vasp.mongo database where we dump all of our data from our Primary
-database, but in a "good" format. GASpy then does its administrative work on
-the Auxiliary vasp.mongo database and then submits jobs to the Primary
-FireWorks database. The user specifies when to update the Auxiliary database
-from the Primary database (via `udpate_db.sh`).
+4. [FireWorks](https://pythonhosted.org/FireWorks/index.html) set up on your
+   computing cluster(s), and
+
+5. A properly configured
+   [`.gaspyrc.json`](https://github.com/ulissigroup/GASpy/blob/master/.gaspyrc_template.json)
+   file placed in your local GASpy folder.
+
+## Docker
+
+Our
+image---[ulissigroup/gaspy](https://hub.docker.com/r/ulissigroup/gaspy/)---contains
+the infrastructure that we use to run our code. Note that [this
+image](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile)
+does not actually contain the GASpy source code. If it did, we would need to
+constantly rebuild the image, because we are constantly changing and
+redeveloping GASpy. We instead mount our local repository to the container that
+we use to run our code: `docker run -v "/local/path/to/GASpy:/home/GASpy"
+ulissigroup/gaspy:latest foo` You can also see how we open an interactive
+Docker container
+[here](https://github.com/ulissigroup/GASpy/blob/master/open_container_via_docker.sh).
+
+## MongoDB
+
+You will need to set up your own Mongo database and then put the appropriate
+information into your
+[`.gaspyrc.json`](https://github.com/ulissigroup/GASpy/blob/master/.gaspyrc_template.json)
+file. You will need to make an `atoms` collection in your database, which will
+contain one document for every DFT calculation you run. You will also need an
+`adsorption` collection that will contain one document for every adsorption
+energy you calculate, and a `relaxed_bulk_catalog` collection that will contain
+one document for every adsorption site you enumerate using [this
+script](https://github.com/ulissigroup/GASpy/blob/master/examples/enumerate_dft_catalog_manually.py).
+
+We also have read-only mirrors to our catalog collections that allow for faster
+reading. If you do not want to set this up, simply re-enter your catalog
+collection's information into the readonly sections of the `.gaspyrc.json`
+file.
+
+The `surface_energy` collection is still under development; use at your
+own risk.
+
+## FireWorks
+
+GASpy only submits jobs to
+[FireWorks](https://materialsproject.github.io/fireworks/). You will need to
+set up your own FireWorks database and rocket launchers on your computing
+clusters. You will also need to enter the appropriate FireWorks data into the
+`lpad*` sections of your
+[`gaspyrc.json`](https://materialsproject.github.io/fireworks/) file.
+
+## .gaspyrc.json
+
+In addition to the aforementioned items you need to populate in your
+`.gaspyrc.json` file, you will also need to set up a few other things:
+
+- A dedicated folder to store the pickle files that Luigi will use to manage
+  the task dependencies. This folder should be put it the `gasdb_path` field.
+- A constantly running Luigi daemon. You can do this by simply running `nohup
+  docker run -v "/local/path/to/GASpy:/home/GASpy" ulissigorup/gaspy:latest
+  /miniconda3/bin/luigid &`. Then you enter the IP address of the machine that
+  you ran that command on into the `luigi_host` field.
+- You will need to get an API key from [The Materials
+  Project](https://materialsproject.org/) and then enter it into the
+  `matproj_api_key` field
+
+You may notice the `gasdb_server` field. We use that to interface with a
+web-based data viewing service that we still have under development. You will
+not need to populate this field.
+
+# Submodules
+
+You may notice that we have two submodules:
+[GASpy\_regressions](https://github.com/ulissigroup/GASpy_regressions) and
+[GASpy\_feedback](https://github.com/ulissigroup/GASpy_feedback). We use our
+regression submodule to analyze and perform regressions on our DFT data, and we
+use our feedback submodule to choose which calculations to \[automatically\]
+perform next.
+
+# Reference
+
+[Active learning across intermetallics to guide discovery of electrocatalysts
+for CO2 reduction and H2
+evolution](https://www.nature.com/articles/s41929-018-0142-1). Note that the
+repository which we reference in this paper is version 0.1 of GASpy, which can
+stil be found [here](https://github.com/ulissigroup/GASpy/tree/v0.1).
+
+# Versions
+
+Current GASpy version: 0.20
+
+For an up-to-date list of our software dependencies, you can simply check out
+how we build our docker image
+[here](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile).
