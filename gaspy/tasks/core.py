@@ -636,7 +636,7 @@ class SubmitToFW(luigi.Task):
                     atoms = make_atoms_from_doc(pickle.load(open(self.input().fn, 'rb'))[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        utils.unfreeze_dict(self.parameters['gas']['vasp_settings']),
-                                                       max_atoms=self.parameters['bulk']['max_atoms']))
+                                                       max_atoms=MAX_BULK_SIZE))
 
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
