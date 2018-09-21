@@ -3,6 +3,7 @@ This modules contains default settings for various function and queries used in 
 submodules.
 '''
 
+import warnings
 import copy
 from collections import OrderedDict
 from ase import Atoms
@@ -43,22 +44,47 @@ def adsorption_fingerprints():
     return fingerprints
 
 
-def adsorption_filters():
+def adsorption_filters(adsorbates):
     '''
     Not all of our adsorption calculations are "good" ones. Some end up in desorptions,
     dissociations, do not converge, or have ridiculous energies. These are the
     filters we use to sift out these "bad" documents.
+
+    Arg:
+        adsorbates  A list of the adsorbates that you need to
+                    be present in each document's corresponding atomic
+                    structure. Note that if you pass a list with two adsorbates,
+                    then you will only get matches for structures with *both*
+                    of those adsorbates; you will *not* get structures
+                    with only one of the adsorbates.
     '''
     filters = {}
 
     # Easy-to-read (and change) filters before we distribute them
     # into harder-to-read (but mongo-readable) structures
-    energy_min = -4.            # Minimum adsorption energy [eV]
-    energy_max = 4.             # Maximum adsorption energy [eV]
     f_max = 0.5                 # Maximum atomic force [eV/Ang]
     ads_move_max = 1.5          # Maximum distance the adsorbate can move [Ang]
     bare_slab_move_max = 0.5    # Maximum distance that any atom can move on bare slab [Ang]
     slab_move_max = 1.5         # Maximum distance that any slab atom can move after adsorption [Ang]
+    if adsorbates == ['CO']:
+        energy_min = -7.
+        energy_max = 5.
+    elif adsorbates == ['H']:
+        energy_min = -5.
+        energy_max = 5.
+    elif adsorbates == ['O']:
+        energy_min = -4.
+        energy_max = 9.
+    elif adsorbates == ['OH']:
+        energy_min = -3.5
+        energy_max = 4.
+    elif adsorbates == ['OOH']:
+        energy_min = 0.
+        energy_max = 9.
+    else:
+        energy_min = -50.
+        energy_max = 50.
+        warnings.warn('You are using adsorption document filters for a set of adsorbates that we have not yet established valid energy bounds for, yet. We are accepting anything in the range between %i and %i eV.' % (energy_min, energy_max))
 
     # Distribute filters into mongo-readable form
     filters['results.energy'] = {'$gt': energy_min, '$lt': energy_max}

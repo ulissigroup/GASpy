@@ -89,7 +89,7 @@ def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
     '''
     # Establish the information that'll be contained in the documents we'll be getting.
     # Also add anything the user asked for.
-    fingerprints = defaults.adsorption_fingerprints()
+    fingerprints = defaults.adsorption_fingerprints(adsorbates)
     if extra_fingerprints:
         for key, value in extra_fingerprints.items():
             fingerprints[key] = value
@@ -97,7 +97,7 @@ def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
 
     # Set the filtering criteria of the documents we'll be getting
     if not filters:
-        filters = defaults.adsorption_filters()
+        filters = defaults.adsorption_filters(adsorbates)
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
     match = {'$match': filters}
