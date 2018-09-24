@@ -122,7 +122,7 @@ class UpdateAllDB(luigi.WrapperTask):
                 if i >= self.max_processes and self.max_processes > 0:
                     print('Reached the maximum number of processes, %s' % self.max_processes)
                     break
-                
+
                 #Save the doc for introspection later
                 self.surface_energy_docs.append(doc)
 
@@ -173,8 +173,6 @@ class UpdateAllDB(luigi.WrapperTask):
                     self.ads_docs.append(doc)
 
                     yield DumpToAdsorptionDB(parameters)
-
-           
 
 
 class UpdateEnumerations(luigi.Task):

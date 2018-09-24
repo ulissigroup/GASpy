@@ -206,7 +206,7 @@ def get_surface_docs(extra_fingerprints=None, filters=None):
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_fingerprints`
                 and who meet the filtering criteria of
-                `gaspy.defaults.adsorption_filters`
+                `gaspy.defaults.surface_filters`
     '''
     # Establish the information that'll be contained in the documents we'll be getting
     # Also add anything the user asked for.
