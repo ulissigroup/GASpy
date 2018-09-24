@@ -499,3 +499,21 @@ def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
             extra_mongo_ids = doc['mongo_ids'][:-1]
             for id_ in extra_mongo_ids:
                 collection.delete_one({'_id': id_})
+
+
+def purge_adslab(fwid):
+    '''
+    This function will "purge" an adsorption calculation from our database
+    by removing it from our Mongo collections and defusing it within FireWorks.
+
+    Arg:
+        fwid    The FireWorks ID of the calculation in question
+    '''
+    lpad = utils.get_lpad()
+    lpad.defuse_fw(fwid)
+
+    with get_mongo_collection('atoms') as collection:
+        collection.delete_one({'fwid': fwid})
+
+    with get_mongo_collection('adsorption') as collection:
+        collection.delete_one({'processed_data.FW_info.slab+adsorbate': fwid})

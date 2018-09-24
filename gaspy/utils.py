@@ -16,6 +16,7 @@ import ase.io
 from ase import Atoms
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
+from fireworks.core.launchpad import LaunchPad
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
@@ -674,3 +675,14 @@ def evaluate_luigi_task(task, force=False):
 
         # After prerequisites are done, run the task
         task.run()
+
+
+def get_lpad():
+    '''
+    Gets the FireWorks launchpad object according to the login
+    information contained in the .gaspyrc.json file.
+    '''
+    lpad_info = read_rc('lpad')
+    lpad_info['port'] = int(lpad_info['port'])
+    lpad = LaunchPad(**lpad_info)
+    return lpad

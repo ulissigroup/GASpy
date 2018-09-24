@@ -19,7 +19,8 @@ from ..utils import (read_rc,
                      encode_atoms_to_trajhex,
                      decode_trajhex_to_atoms,
                      save_luigi_task_run_results,
-                     evaluate_luigi_task)
+                     evaluate_luigi_task,
+                     get_lpad)
 
 # Things we need to do the tests
 import pytest
@@ -30,6 +31,7 @@ import numpy as np
 import numpy.testing as npt
 import luigi
 from luigi.parameter import _FrozenOrderedDict
+from fireworks.core.launchpad import LaunchPad
 from . import test_cases
 from .. import defaults
 from ..mongo import make_atoms_from_doc
@@ -407,3 +409,14 @@ class BranchTestTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
                                  % (type(self).__name__, self.task_id))
+
+
+def test_get_lpad():
+    lpad = get_lpad()
+
+    assert isinstance(lpad, LaunchPad)
+
+    lpad_info = read_rc('lpad')
+    lpad_info['port'] = int(lpad_info['port'])
+    for key, expected_value in lpad_info.items():
+        assert getattr(lpad, key) == expected_value
