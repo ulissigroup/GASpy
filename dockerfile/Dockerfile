@@ -26,6 +26,9 @@ RUN apt-get update
 RUN apt-get dist-upgrade -y
 RUN apt-get install -y wget
 
+# Install less
+RUN apt-get install less
+
 # Install Conda
 RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
 RUN echo -e "\nyes\n/miniconda3\nyes\n" | /bin/bash Miniconda3-4.5.4-Linux-x86_64.sh
