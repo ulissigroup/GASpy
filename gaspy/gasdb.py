@@ -89,7 +89,7 @@ def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
     '''
     # Establish the information that'll be contained in the documents we'll be getting.
     # Also add anything the user asked for.
-    fingerprints = defaults.adsorption_fingerprints(adsorbates)
+    fingerprints = defaults.adsorption_fingerprints()
     if extra_fingerprints:
         for key, value in extra_fingerprints.items():
             fingerprints[key] = value
