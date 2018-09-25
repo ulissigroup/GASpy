@@ -770,7 +770,7 @@ class SubmitToFW(luigi.Task):
                             'shift': doc['shift'],
                             'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
                             'adsorption_site': doc['adsorption_site'],
-                            'adsorbate_rotation': doc['adsorbate_rotation'],
+                            'adsorbate_rotation': utils.unfreeze_dict(doc['adsorbate_rotation']),
                             'vasp_settings': utils.unfreeze_dict(self.parameters['adsorption']['vasp_settings']),
                             'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat': self.parameters['adsorption']['slabrepeat'],
@@ -1114,7 +1114,7 @@ class GenerateAdSlabs(luigi.Task):
             ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
  
             # Rotate the adsorbate into place
-            ads = ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
+            ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
 
             # Find the position of the marker/adsorbate and the number of slab atoms
             ads_pos = slab[-1].position
