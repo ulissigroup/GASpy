@@ -136,6 +136,7 @@ class UpdateAllDB(luigi.WrapperTask):
                 mpid = doc['fwname']['mpid']
                 miller = doc['fwname']['miller']
                 adsorption_site = doc['fwname']['adsorption_site']
+                adsorbate_rotation = doc['fwname']['adsorbate_rotation']
                 adsorbate = doc['fwname']['adsorbate']
                 top = doc['fwname']['top']
                 num_slab_atoms = doc['fwname']['num_slab_atoms']
@@ -157,6 +158,7 @@ class UpdateAllDB(luigi.WrapperTask):
                                                                            num_slab_atoms=num_slab_atoms,
                                                                            slabrepeat=slabrepeat,
                                                                            adsorption_site=adsorption_site,
+                                                                           adsorbate_rotation=adsorbate_rotation,
                                                                            settings=settings)}
 
                 # If we have duplicates, the FWID might trigger a DumpToAdsorptionDB
@@ -227,7 +229,8 @@ class UpdateEnumerations(luigi.Task):
                                                    'relaxed': False,
                                                    'adsorbate': config['adsorbate'],
                                                    'shift': config['shift'],
-                                                   'adsorption_site': config['adsorption_site']},
+                                                   'adsorption_site': config['adsorption_site'],
+                                                   'adsorbate_rotation':config['adsorbate_rotation']},
                                'vasp_settings': vasp_settings,
                                'FW_info': {'bulk': FW_info}}
             slabadsdoc['processed_data'] = processed_data
@@ -312,6 +315,8 @@ class DumpToAuxDB(luigi.Task):
                 # Initialize the mongo document, doc, and the populate it with the fw info
                 doc = make_doc_from_atoms(atoms)
                 doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
+
+
                 doc['fwname'] = fw.name
                 doc['fwid'] = fwid
                 doc['directory'] = fw.launches[-1].launch_dir
@@ -325,6 +330,8 @@ class DumpToAuxDB(luigi.Task):
                     doc['type'] = 'slab_surface_energy'
                 elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                     doc['type'] = 'slab+adsorbate'
+
+                    
 
                 # Convert the miller indices from strings to integers
                 if 'miller' in fw.name:
@@ -437,6 +444,7 @@ class DumpToAdsorptionDB(luigi.Task):
             slab_end = None
             ads_start = None
             ads_end = num_adsorbate_atoms
+
         # Get just the adslab's slab atoms in their initial and final state
         slab_initial = make_atoms_from_doc(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
         slab_final = best_sys[slab_start:slab_end]
@@ -558,6 +566,10 @@ class SubmitToFW(luigi.Task):
             if 'adsorption_site' in self.parameters['adsorption']['adsorbates'][0]:
                 search_strings['fwname.adsorption_site'] = \
                     self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
+            if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
+                for key in self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']:
+                    search_strings['fwname.adsorbate_rotation.%s'%key] = \
+                        self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'][key]
 
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
         if 'fwname.shift' in search_strings:
@@ -758,14 +770,15 @@ class SubmitToFW(luigi.Task):
                             'shift': doc['shift'],
                             'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
                             'adsorption_site': doc['adsorption_site'],
+                            'adsorbate_rotation': doc['adsorbate_rotation'],
                             'vasp_settings': utils.unfreeze_dict(self.parameters['adsorption']['vasp_settings']),
                             'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat': self.parameters['adsorption']['slabrepeat'],
                             'calculation_type': 'slab+adsorbate optimization'}
-                    # If there is no adsorbate, then the 'adsorption_site' key is irrelevant
+                    # If there is no adsorbate, then the 'adsorption_site' key is irrelevant, as is the rotation
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
-
+                        del name['adsorbate_rotation']
                     '''
                     This next paragraph (i.e., code until the next blank line) is a prototyping
                     skeleton for GASpy Issue #14
@@ -1099,6 +1112,10 @@ class GenerateAdSlabs(luigi.Task):
             # Load the atoms object for the slab and adsorbate
             slab = adsorbate_config['atoms']
             ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
+ 
+            # Rotate the adsorbate into place
+            ads = ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
+
             # Find the position of the marker/adsorbate and the number of slab atoms
             ads_pos = slab[-1].position
             # Delete the marker on the slab, and then put the slab under the adsorbate.
@@ -1128,6 +1145,7 @@ class GenerateAdSlabs(luigi.Task):
             # the correct atoms object adsorbate name.
             adsorbate_config['atoms'] = utils.constrain_slab(adslab)
             adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
+            adsorbate_config['adsorbate_rotation'] = self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']
 
         # Save the generated list of adsorbate configurations to a pkl file
         with self.output().temporary_path() as self.temp_output_path:

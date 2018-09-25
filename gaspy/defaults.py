@@ -383,15 +383,15 @@ def adsorbates_dict():
     adsorbates['CO'] = Atoms('CO', positions=[[0., 0., 0.],
                                               [0., 0., 1.2]])
     adsorbates['OH'] = Atoms('OH', positions=[[0., 0., 0.],
-                                              [0., 0., 0.96]])
+                                              [0.92, 0., 0.32]])
 
     ''' Triatomics '''
     # For OOH, we've found that most of our relaxations resulted in dissociation
     # of at least the hydrogen. As such, we put some hookean springs between
     # the atoms to keep the adsorbate together.
     ooh = Atoms('OOH', positions=[[0., 0., 0.],
-                                  [0., 0., 1.55],
-                                  [0, 0.94, 1.80]])
+                                  [1.28, 0., 0.67],
+                                  [1.44, -0.96, 0.81]])
     ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
                         ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
     adsorbates['OOH'] = ooh
@@ -410,6 +410,7 @@ def adsorbates_dict():
 
 def adsorption_parameters(adsorbate,
                           adsorption_site=None,
+                          adsorbate_rotation=None,
                           slabrepeat='(1, 1)',
                           num_slab_atoms=0,
                           settings=XC, encut=ADSLAB_ENCUT, pp_version=PP_VERSION):
@@ -443,6 +444,9 @@ def adsorption_parameters(adsorbate,
     if isinstance(adsorption_site, type(None)):
         adsorption_site = []
 
+    if isinstance(adsorbate_rotation, type(None)):
+        adsorbate_rotation = {'phi':0.0, 'theta':0.0, 'psi':0.0}
+
     if isinstance(settings, str):
         settings = calc_settings(encut=encut, xc=settings, pp_version=pp_version)
 
@@ -463,7 +467,8 @@ def adsorption_parameters(adsorbate,
                        slabrepeat=slabrepeat,
                        adsorbates=[OrderedDict(name=name,
                                                atoms=encode_atoms_to_hex(atoms),
-                                               adsorption_site=adsorption_site)],
+                                               adsorption_site=adsorption_site,
+                                               adsorbate_rotation=rotation)],
                        vasp_settings=OrderedDict(ibrion=2,
                                                  nsw=200,
                                                  isif=0,
