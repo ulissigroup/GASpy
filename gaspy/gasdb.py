@@ -232,7 +232,7 @@ def get_surface_docs(extra_fingerprints=None, filters=None):
     return cleaned_docs
 
 
-def get_unsimulated_catalog_docs(adsorbates):
+def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list = None):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out
     all items that also show up in `get_adsorption_docs`, i.e., gets the
@@ -251,7 +251,20 @@ def get_unsimulated_catalog_docs(adsorbates):
         docs    A list of dictionaries for various fingerprints.
     '''
     docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates)
-    docs_catalog = get_catalog_docs()
+    docs_catalog_no_rotation = get_catalog_docs()
+
+    #default the rotation_list to the zero rotation if none is passed in
+    if adsorbate_rotation_list == None:
+        adsorbate_rotation_list = [copy.deepcopy(defaults.ROTATION)]
+
+    # enumerate the catalog with the rotation information
+    docs_catalog = []
+    for adsorbate_rotation in adsorbate_rotation_list:
+        catalog_copy = copy.deepcopy(docs_catalog_no_rotation)
+        for doc in catalog_copy:
+            doc['adsorbate_rotation']=adsorbate_rotation
+        docs_catalog += catalog_copy
+
 
     # Identify unsimulated documents by comparing hashes
     # of catalog docs vs. simulated adsorption docs
@@ -300,6 +313,10 @@ def _get_attempted_adsorption_docs(adsorbates=None):
     fingerprints['coordination'] = '$processed_data.fp_init.coordination'
     fingerprints['neighborcoord'] = '$processed_data.fp_init.neighborcoord'
     fingerprints['nextnearestcoordination'] = '$processed_data.fp_init.nextnearestcoordination'
+
+    # add 'adsorbate_rotation' to fingerprints
+    fingerprints['adsorbate_rotation'] = '$processed_data.calculation_info.adsorbates.0.adsorbate_rotation'
+
     group = {'$group': {'_id': fingerprints}}
 
     # Get only the documents that have the specified adsorbates

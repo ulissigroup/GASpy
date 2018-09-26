@@ -10,6 +10,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 from collections import OrderedDict
 import random
 import luigi
+import copy
 from ... import defaults
 from ...gasdb import get_unsimulated_catalog_docs
 from ..core import FingerprintRelaxedAdslab
@@ -26,6 +27,10 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
     Luigi args:
         ads_list        A list of lists, where the lists contain strings of the adsorbates
                         you want to simulate.
+        adsorption_rotation_list 
+                        A list of dictionaries, each describing a rotation. Acceptable are
+                        [] which will default to no rotation, or a list of euler rotations
+                        such as [{'phi':0.0,'theta':0.0,'psi':0.0}]
         mpid_list       A list of strings indicating the mpid numbers you want to simulate
         miller_list     A list of lists of integers indicating the miller indices you want
                         to simulate.
@@ -42,6 +47,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                         submission priority is assigned randomly.
     '''
     adsorbates_list = luigi.ListParameter()
+    adsorbate_rotation_list = luigi.ListParameter()
     mpid_list = luigi.ListParameter()
     miller_list = luigi.ListParameter()
     xc = luigi.Parameter(defaults.XC)
@@ -58,6 +64,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
         specified in the arguments, and then queue a `FingerprintRelaxedAdslab`, which
         should eventually build/queue a rocket build for the adslab.
         '''
+
         # Turn the mpids and millers into sets because Luigi doesn't have set parameters.
         # Note that we standardize the miller indices to deal with variable syntax.
         mpids_set = set(self.mpid_list)
@@ -67,7 +74,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
         # because the unsimulated catalog of sites is different for each adsorbate
         parameters_list = []
         for adsorbates in self.adsorbates_list:
-            for doc in get_unsimulated_catalog_docs(adsorbates):
+            for doc in get_unsimulated_catalog_docs(adsorbates, self.adsorbate_rotation_list):
 
                 # Create the simulation parameters from the site if the site falls
                 # within the set of mpid and millers we are looking for.
@@ -152,6 +159,7 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
                         relaxation of system you want to make a
                         rocket/calculation for.
     '''
+
     parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
                                                   settings=xc,
@@ -166,6 +174,7 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
                                                   pp_version=pp_version)
     parameters['adsorption'] = defaults.adsorption_parameters(adsorbate=adsorbates[0],
                                                               adsorption_site=doc['adsorption_site'],
+                                                              adsorbate_rotation=doc['adsorbate_rotation'],
                                                               settings=xc,
                                                               encut=encut,
                                                               pp_version=pp_version)

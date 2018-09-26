@@ -229,8 +229,7 @@ class UpdateEnumerations(luigi.Task):
                                                    'relaxed': False,
                                                    'adsorbate': config['adsorbate'],
                                                    'shift': config['shift'],
-                                                   'adsorption_site': config['adsorption_site'],
-                                                   'adsorbate_rotation':config['adsorbate_rotation']},
+                                                   'adsorption_site': config['adsorption_site']},
                                'vasp_settings': vasp_settings,
                                'FW_info': {'bulk': FW_info}}
             slabadsdoc['processed_data'] = processed_data
