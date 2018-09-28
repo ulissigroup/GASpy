@@ -136,7 +136,10 @@ class UpdateAllDB(luigi.WrapperTask):
                 mpid = doc['fwname']['mpid']
                 miller = doc['fwname']['miller']
                 adsorption_site = doc['fwname']['adsorption_site']
-                adsorbate_rotation = doc['fwname']['adsorbate_rotation']
+                if 'adsorbate_rotation' in doc['fwname']:
+                    adsorbate_rotation = doc['fwname']['adsorbate_rotation']
+                else:
+                    adsorbate_rotation = copy.deepcopy(defaults.ROTATION)
                 adsorbate = doc['fwname']['adsorbate']
                 top = doc['fwname']['top']
                 num_slab_atoms = doc['fwname']['num_slab_atoms']
@@ -752,6 +755,14 @@ class SubmitToFW(luigi.Task):
                     else:
                         matching_docs = [doc for doc in fpd_structs]
 
+
+                #Now that we use the relaxed bulk catalog, multiple adslabs might come back with different
+                # shifts. We didn't have to check this before because the results were only
+                # for a very specific relaxed surface
+                matching_docs = [doc for doc in fpd_structs if 
+                                      np.abs(doc['shift']-self.parameters['slab']['shift'])<1e-4 and
+                                      doc['top']==self.parameters['slab']['top']]
+
                 # If there is no adsorbate, then trim the matching_docs to the first doc we found.
                 # Otherwise, trim the matching_docs to `numtosubmit`, a user-specified value that
                 # decides the maximum number of fireworks that we want to submit.
@@ -769,15 +780,16 @@ class SubmitToFW(luigi.Task):
                             'shift': doc['shift'],
                             'adsorbate': self.parameters['adsorption']['adsorbates'][0]['name'],
                             'adsorption_site': doc['adsorption_site'],
-                            'adsorbate_rotation': utils.unfreeze_dict(doc['adsorbate_rotation']),
                             'vasp_settings': utils.unfreeze_dict(self.parameters['adsorption']['vasp_settings']),
                             'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
                             'slabrepeat': self.parameters['adsorption']['slabrepeat'],
                             'calculation_type': 'slab+adsorbate optimization'}
+                    if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
+                        name['adsorbate_rotation'] = utils.unfreeze_dict(self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
                     # If there is no adsorbate, then the 'adsorption_site' key is irrelevant, as is the rotation
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
-                        del name['adsorbate_rotation']
+
                     '''
                     This next paragraph (i.e., code until the next blank line) is a prototyping
                     skeleton for GASpy Issue #14
@@ -1113,7 +1125,9 @@ class GenerateAdSlabs(luigi.Task):
             ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
  
             # Rotate the adsorbate into place
-            ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
+            #this check is needed if adsorbate = '', in which case there is no adsorbate_rotation
+            if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
+                ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
 
             # Find the position of the marker/adsorbate and the number of slab atoms
             ads_pos = slab[-1].position
@@ -1144,7 +1158,10 @@ class GenerateAdSlabs(luigi.Task):
             # the correct atoms object adsorbate name.
             adsorbate_config['atoms'] = utils.constrain_slab(adslab)
             adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
-            adsorbate_config['adsorbate_rotation'] = self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']
+
+            #this check is needed if adsorbate = '', in which case there is no adsorbate_rotation
+            if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
+                adsorbate_config['adsorbate_rotation'] = self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']
 
         # Save the generated list of adsorbate configurations to a pkl file
         with self.output().temporary_path() as self.temp_output_path:
