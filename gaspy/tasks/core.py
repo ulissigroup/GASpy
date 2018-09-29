@@ -108,8 +108,14 @@ class UpdateAllDB(luigi.WrapperTask):
                 for key in keys:
                     if key in doc['fwname']['vasp_settings']:
                         settings[key] = doc['fwname']['vasp_settings'][key]
+
+                #Set the bulk settings correctly, which will differ from the adslab settings
+                # only in the encut
+                settings_bulk = copy.deepcopy(settings)
+                settings_bulk['encut']=defaults.BULK_ENCUT
+
                 # Create the nested dictionary of information that we will store in the Aux DB
-                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings),
+                parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings_bulk),
                               'slab': defaults.slab_parameters(miller=miller,
                                                                shift=shift,
                                                                top=True,
