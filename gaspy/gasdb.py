@@ -7,6 +7,8 @@ import numpy as np
 import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
+import glob
+import pickle
 from . import defaults, utils
 
 
@@ -169,17 +171,29 @@ def get_catalog_docs():
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.catalog_fingerprints`
     '''
-    # Establish the information that'll be contained in the documents we'll be getting
-    fingerprints = defaults.catalog_fingerprints()
-    group = {'$group': {'_id': fingerprints}}
 
-    # Get the documents and clean them up
-    pipeline = [group]
-    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
-        print('Now pulling catalog documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+    catalog_cache_file = utils.read_rc('gasdb_path') + '/catalog_cache.pkl'
+
+    if len(glob.glob(catalog_cache_file))==0:
+
+        # Establish the information that'll be contained in the documents we'll be getting
+        fingerprints = defaults.catalog_fingerprints()
+
+        group = {'$group': {'_id': fingerprints}}
+    
+        # Get the documents and clean them up
+        pipeline = [group]
+        with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
+            print('Now pulling catalog documents...')
+            cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+            docs = [doc for doc in tqdm.tqdm(cursor)]
+        cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+
+        pickle.dump(cleaned_docs, open(catalog_cache_file,'wb'))
+
+    else:
+        #grab the pickle file
+        cleaned_docs = pickle.load(open(catalog_cache_file, 'rb'))
 
     return cleaned_docs
 
