@@ -771,9 +771,12 @@ class SubmitToFW(luigi.Task):
                 #Now that we use the relaxed bulk catalog, multiple adslabs might come back with different
                 # shifts. We didn't have to check this before because the results were only
                 # for a very specific relaxed surface
-                matching_docs = [doc for doc in fpd_structs if 
+                if not np.isnan(self.parameters['slab']['shift']):
+                    matching_docs = [doc for doc in fpd_structs if 
                                       np.abs(doc['shift']-self.parameters['slab']['shift'])<1e-4 and
                                       doc['top']==self.parameters['slab']['top']]
+                else:
+                    matching_docs = fpd_structs
 
                 # If there is no adsorbate, then trim the matching_docs to the first doc we found.
                 # Otherwise, trim the matching_docs to `numtosubmit`, a user-specified value that

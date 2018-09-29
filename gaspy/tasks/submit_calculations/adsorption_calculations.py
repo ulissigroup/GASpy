@@ -11,9 +11,10 @@ from collections import OrderedDict
 import random
 import luigi
 import copy
+import numpy as np
 from ... import defaults
 from ...gasdb import get_unsimulated_catalog_docs
-from ..core import FingerprintRelaxedAdslab
+from ..core import FingerprintRelaxedAdslab, SubmitToFW
 
 DEFAULT_MAX_ROCKETS = 20
 
@@ -163,7 +164,7 @@ class AllSitesOnSurfacesBlaster(luigi.WrapperTask):
                                                                   max_bulk_atoms=self.max_bulk_atoms)
                         parameters_list.append(parameters)
 
-        tasks = _make_relaxation_tasks_from_parameters(parameters_list, max_rockets=self.max_rockets)
+        tasks = [SubmitToFW(calctype = 'slab+adsorbate', parameters=parameters) for parameters in parameters_list]
         return tasks
 
 
@@ -297,7 +298,7 @@ def _make_adslab_parameters_for_blasting(mpid, miller, adsorbate_rotation, adsor
                                                   max_atoms=max_bulk_atoms)
     parameters['slab'] = defaults.slab_parameters(miller=miller,
                                                   top=True,
-                                                  shift=0.0,
+                                                  shift=np.nan,
                                                   settings=xc,
                                                   encut=slab_encut,
                                                   pp_version=pp_version)
