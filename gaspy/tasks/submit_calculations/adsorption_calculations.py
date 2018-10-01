@@ -29,7 +29,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                                     adsorbates you want to simulate.
         adsorption_rotation_list    A list of dictionaries, each describing a rotation. Acceptable
                                     are [] which will default to no rotation, or a list of euler
-                                    rotations such as [{'phi':0.0,'theta':0.0,'psi':0.0}]
+                                    rotations such as [{'phi': 0.0, 'theta': 0.0, 'psi': 0.0}]
         mpid_list                   A list of strings indicating the mpid numbers you want to
                                     simulate
         miller_list                 A list of lists of integers indicating the miller indices you
@@ -162,7 +162,6 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
                         relaxation of system you want to make a
                         rocket/calculation for.
     '''
-
     parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
                                                   settings=xc,

@@ -18,7 +18,7 @@ import pytest
 from collections import OrderedDict
 from .... import defaults
 from ....tasks import FingerprintRelaxedAdslab
-from ....gasdb import get_catalog_docs
+from ....gasdb import get_unsimulated_catalog_docs
 
 
 @pytest.mark.parametrize('miller',
@@ -35,11 +35,26 @@ def test__standardize_miller(miller):
 
 
 @pytest.mark.parametrize('doc,adsorbates,encut,bulk_encut,slab_encut,xc,pp_version,max_bulk_atoms',
-                         [({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 350., 350., 'rpbe', '5.4', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [0., 0., 0.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
-                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False, 'adsorption_site': [1., 1., 1.]}, ['H'], 350., 500., 350., 'rpbe', '5.4', 80)])
+                         [({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True,
+                            'adsorption_site': [0., 0., 0.],
+                            'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['CO'], 350., 350., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': True,
+                            'adsorption_site': [0., 0., 0.],
+                            'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False,
+                            'adsorption_site': [0., 0., 0.],
+                            'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False,
+                            'adsorption_site': [1., 1., 1.],
+                            'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['CO'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False,
+                            'adsorption_site': [1., 1., 1.],
+                            'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['H'], 350., 500., 350., 'rpbe', '5.4', 80)])
 def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, slab_encut,
                                           xc, pp_version, max_bulk_atoms):
     parameters = _make_adslab_parameters_from_doc(doc, adsorbates,
@@ -64,6 +79,7 @@ def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, sl
                                                            pp_version=pp_version)
     expected_parameters['adsorption'] = defaults.adsorption_parameters(adsorbate=adsorbates[0],
                                                                        adsorption_site=doc['adsorption_site'],
+                                                                       adsorbate_rotation=doc['adsorbate_rotation'],
                                                                        settings=xc,
                                                                        encut=encut,
                                                                        pp_version=pp_version)
@@ -74,8 +90,9 @@ def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, sl
     assert parameters == expected_parameters
 
 
-def test__make_relaxation_tasks_from_parameters():
-    docs = get_catalog_docs()
+@pytest.mark.parametrize('adsorbates', [['CO'], ['H']])
+def test__make_relaxation_tasks_from_parameters(adsorbates):
+    docs = get_unsimulated_catalog_docs(adsorbates)
     parameters_list = [_make_adslab_parameters_from_doc(doc, adsorbates=['CO']) for doc in docs]
     tasks = _make_relaxation_tasks_from_parameters(parameters_list)
 

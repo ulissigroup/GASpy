@@ -34,6 +34,7 @@ import copy
 import pickle
 import random
 import binascii
+import hashlib
 from collections import defaultdict
 import numpy as np
 from pymongo import MongoClient
@@ -88,7 +89,7 @@ def test_ConnectableCollection(collection_tag):
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates,extra_fingerprints',
+@pytest.mark.parametrize('adsorbates, extra_fingerprints',
                          [(None, None),
                           (['CO'], None),
                           (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
@@ -133,7 +134,7 @@ def __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fin
     return file_name
 
 
-@pytest.mark.parametrize('adsorbates,extra_fingerprints',
+@pytest.mark.parametrize('adsorbates, extra_fingerprints',
                          [(None, None),
                           (['CO'], None),
                           (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
@@ -268,23 +269,33 @@ def test_get_surface_docs(extra_fingerprints):
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates', [['H'], ['CO']])
-def test_to_create_unsimulated_catalog_docs(adsorbates):
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates)
+@pytest.mark.parametrize('adsorbates, adsorbate_rotation_list',
+                         [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
+                          (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
+                                    {'phi': 0., 'theta': 30., 'psi': 0.}])])
+def test_to_create_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list):
+    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
+                                        adsorbate_rotation_list=adsorbate_rotation_list)
 
-    file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_' + '_'.join(adsorbates) + '_catalog_docs' + '.pkl'
+    arg_hash = hashlib.sha224((str(adsorbates) + str(adsorbate_rotation_list)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_catalog_docs_%s' % arg_hash + '.pkl'
     with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-@pytest.mark.parametrize('adsorbates', [['H'], ['CO']])
-def test_get_unsimulated_catalog_docs(adsorbates):
-    file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_' + '_'.join(adsorbates) + '_catalog_docs' + '.pkl'
+@pytest.mark.parametrize('adsorbates, adsorbate_rotation_list',
+                         [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
+                          (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
+                                    {'phi': 0., 'theta': 30., 'psi': 0.}])])
+def test_get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list):
+    arg_hash = hashlib.sha224((str(adsorbates) + str(adsorbate_rotation_list)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_catalog_docs_%s' % arg_hash + '.pkl'
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
 
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates)
+    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
+                                        adsorbate_rotation_list=adsorbate_rotation_list)
     assert docs == expected_docs
 
 
@@ -393,7 +404,7 @@ def test__hash_doc(ignore_keys):
     assert string == expected_string
 
 
-@pytest.mark.parametrize('adsorbates,model_tag',
+@pytest.mark.parametrize('adsorbates, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
 def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
@@ -411,7 +422,7 @@ def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
     assert surfaces == expected_surfaces
 
 
-@pytest.mark.parametrize('adsorbates,model_tag',
+@pytest.mark.parametrize('adsorbates, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
 def test_docs_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
