@@ -17,7 +17,8 @@ BULK_ENCUT = 500.
 SLAB_ENCUT = 350.
 ADSLAB_ENCUT = 350.
 PP_VERSION = '5.4'  # Vasp pseudopotential version
-ROTATION = {'phi':0.0,'theta':0.0,'psi':0.0}
+ROTATION = {'phi': 0., 'theta': 0., 'psi': 0.}
+
 
 def adsorption_fingerprints():
     '''
@@ -441,10 +442,10 @@ def adsorption_parameters(adsorbate,
                         `xc` yourself manually, then include encut there.
     '''
     # Python doesn't like mutable defaults, so we set it here
-    if isinstance(adsorption_site, type(None)):
+    if adsorption_site is None:
         adsorption_site = []
 
-    if isinstance(adsorbate_rotation, type(None)):
+    if adsorbate_rotation is None:
         adsorbate_rotation = copy.deepcopy(ROTATION)
 
     if isinstance(settings, str):

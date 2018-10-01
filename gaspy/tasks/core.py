@@ -109,10 +109,10 @@ class UpdateAllDB(luigi.WrapperTask):
                     if key in doc['fwname']['vasp_settings']:
                         settings[key] = doc['fwname']['vasp_settings'][key]
 
-                #Set the bulk settings correctly, which will differ from the adslab settings
+                # Set the bulk settings correctly, which will differ from the adslab settings
                 # only in the encut
                 settings_bulk = copy.deepcopy(settings)
-                settings_bulk['encut']=defaults.BULK_ENCUT
+                settings_bulk['encut'] = defaults.BULK_ENCUT
 
                 # Create the nested dictionary of information that we will store in the Aux DB
                 parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings_bulk),
@@ -160,7 +160,7 @@ class UpdateAllDB(luigi.WrapperTask):
                 #Set the bulk settings correctly, which will differ from the adslab settings
                 # only in the encut
                 settings_bulk = copy.deepcopy(settings)
-                settings_bulk['encut']=defaults.BULK_ENCUT
+                settings_bulk['encut'] = defaults.BULK_ENCUT
 
                 # Create the nested dictionary of information that we will store in the Aux DB
                 parameters = {'bulk': defaults.bulk_parameters(mpid, settings=settings_bulk),
@@ -345,7 +345,7 @@ class DumpToAuxDB(luigi.Task):
                 elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                     doc['type'] = 'slab+adsorbate'
 
-                    
+
 
                 # Convert the miller indices from strings to integers
                 if 'miller' in fw.name:
@@ -582,7 +582,7 @@ class SubmitToFW(luigi.Task):
                     self.parameters['adsorption']['adsorbates'][0]['adsorption_site']
             if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
                 for key in self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']:
-                    search_strings['fwname.adsorbate_rotation.%s'%key] = \
+                    search_strings['fwname.adsorbate_rotation.%s' % key] = \
                         self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'][key]
 
         # Round the shift to 4 decimal places so that we will be able to match shift numbers
@@ -772,9 +772,9 @@ class SubmitToFW(luigi.Task):
                 # shifts. We didn't have to check this before because the results were only
                 # for a very specific relaxed surface
                 if not np.isnan(self.parameters['slab']['shift']):
-                    matching_docs = [doc for doc in fpd_structs if 
-                                      np.abs(doc['shift']-self.parameters['slab']['shift'])<1e-4 and
-                                      doc['top']==self.parameters['slab']['top']]
+                    matching_docs = [doc for doc in fpd_structs if
+                                     np.abs(doc['shift']-self.parameters['slab']['shift']) < 1e-4 and
+                                     doc['top'] == self.parameters['slab']['top']]
                 else:
                     matching_docs = fpd_structs
 
@@ -1138,7 +1138,7 @@ class GenerateAdSlabs(luigi.Task):
             # Load the atoms object for the slab and adsorbate
             slab = adsorbate_config['atoms']
             ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
- 
+
             # Rotate the adsorbate into place
             #this check is needed if adsorbate = '', in which case there is no adsorbate_rotation
             if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:

@@ -1,5 +1,8 @@
 ''' These tools form gaspy's API to its databases '''
 
+__author__ = 'Kevin Tran'
+__email__ = 'ktran@andrew.cmu.edu'
+
 import warnings
 import copy
 from collections import defaultdict
@@ -7,7 +10,6 @@ import numpy as np
 import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
-import glob
 import pickle
 from . import defaults, utils
 
@@ -171,16 +173,18 @@ def get_catalog_docs():
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.catalog_fingerprints`
     '''
-
+    # If we have a cache of the catalog, open it
     catalog_cache_file = utils.read_rc('gasdb_path') + '/catalog_cache.pkl'
+    try:
+        with open(catalog_cache_file, 'rb') as file_handle:
+            cleaned_docs = pickle.load(file_handle)
 
-    if len(glob.glob(catalog_cache_file))==0:
-
+    # If there is no cache, then read from Mongo and store the cache
+    except FileNotFoundError:
         # Establish the information that'll be contained in the documents we'll be getting
         fingerprints = defaults.catalog_fingerprints()
-
         group = {'$group': {'_id': fingerprints}}
-    
+
         # Get the documents and clean them up
         pipeline = [group]
         with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
@@ -189,11 +193,8 @@ def get_catalog_docs():
             docs = [doc for doc in tqdm.tqdm(cursor)]
         cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
-        pickle.dump(cleaned_docs, open(catalog_cache_file,'wb'))
-
-    else:
-        #grab the pickle file
-        cleaned_docs = pickle.load(open(catalog_cache_file, 'rb'))
+        with open(catalog_cache_file, 'wb') as file_handle:
+            pickle.dump(cleaned_docs, file_handle)
 
     return cleaned_docs
 
@@ -246,7 +247,7 @@ def get_surface_docs(extra_fingerprints=None, filters=None):
     return cleaned_docs
 
 
-def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list = None):
+def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list=None):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out
     all items that also show up in `get_adsorption_docs`, i.e., gets the
@@ -267,8 +268,8 @@ def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list = None):
     docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates)
     docs_catalog_no_rotation = get_catalog_docs()
 
-    #default the rotation_list to the zero rotation if none is passed in
-    if adsorbate_rotation_list == None:
+    # default the rotation_list to the zero rotation if none is passed in
+    if adsorbate_rotation_list is None:
         adsorbate_rotation_list = [copy.deepcopy(defaults.ROTATION)]
 
     # enumerate the catalog with the rotation information
@@ -276,9 +277,8 @@ def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list = None):
     for adsorbate_rotation in adsorbate_rotation_list:
         catalog_copy = copy.deepcopy(docs_catalog_no_rotation)
         for doc in catalog_copy:
-            doc['adsorbate_rotation']=adsorbate_rotation
+            doc['adsorbate_rotation'] = adsorbate_rotation
         docs_catalog += catalog_copy
-
 
     # Identify unsimulated documents by comparing hashes
     # of catalog docs vs. simulated adsorption docs
