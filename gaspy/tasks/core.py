@@ -805,30 +805,7 @@ class SubmitToFW(luigi.Task):
                     if name['adsorbate'] == '':
                         del name['adsorption_site']
 
-                    '''
-                    This next paragraph (i.e., code until the next blank line) is a prototyping
-                    skeleton for GASpy Issue #14
-                    '''
-                    # First, let's see if we can find a reasonable guess for the doc:
-                    #guess_docs = [doc2 for doc2 in self.matching_docs_all_calcs
-                    #              if matchFP(fingerprint(doc2['atoms'], ), doc)]
-                    guess_docs = []
-                    # We've found another calculation with exactly the same fingerprint
-                    if len(guess_docs) > 0:
-                        guess = guess_docs[0]
-                        # Get the initial adsorption site of the identified doc
-                        ads_site = np.array(list(map(eval, guess['fwname']['adsorption_site'].strip().split()[1:4])))
-                        atoms = doc['atoms']
-                        atomsguess = guess['atoms']
-                        # For each adsorbate atom, move it the same relative amount as in the guessed configuration
-                        lenAdsorbates = len(Atoms(self.parameters['adsorption']['adsorbates'][0]['name']))
-                        for ind in range(-lenAdsorbates, len(atoms)):
-                            atoms[ind].position += atomsguess[ind].position-ads_site
-                    else:
-                        atoms = doc['atoms']
-                    if len(guess_docs) > 0:
-                        name['guessed_from'] = {'xc': guess['fwname']['vasp_settings']['xc'],
-                                                'encut': guess['fwname']['vasp_settings']['encut']}
+                    atoms = doc['atoms']
 
                     # Add the firework if it's not already running
                     if len(fwhs.running_fireworks(name, launchpad)) == 0:
