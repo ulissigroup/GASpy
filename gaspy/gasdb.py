@@ -13,6 +13,8 @@ from pymongo.collection import Collection
 import pickle
 from . import defaults, utils
 
+CATALOG_CACHE_FILE = utils.read_rc('gasdb_path') + '/catalog_cache.pkl'
+
 
 def get_mongo_collection(collection_tag):
     '''
@@ -164,39 +166,61 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
-def get_catalog_docs():
+def get_catalog_docs(rebuild_cache=False):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `relaxed_bulk_catalog`.
 
+    In practice, it takes awhile to read the catalog. So we cache the data
+    in a pickle file. This function simply reads the cache or forces a
+    rebuild if the user requests it.
+
+    Arg:
+        rebuild_cache   Boolean indicating whether or not you want to rebuild
+                        the cache of the catalog. If `True`, it rebuilds
+                        the cache using current data from Mongo.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.catalog_fingerprints`
     '''
-    # If we have a cache of the catalog, open it
-    catalog_cache_file = utils.read_rc('gasdb_path') + '/catalog_cache.pkl'
+    if rebuild_cache:
+        __cache_catalog_docs()
+
+    # EAFP to read the cache if it's there.
     try:
-        with open(catalog_cache_file, 'rb') as file_handle:
-            cleaned_docs = pickle.load(file_handle)
+        with open(CATALOG_CACHE_FILE, 'rb') as file_handle:
+            docs = pickle.load(file_handle)
 
-    # If there is no cache, then read from Mongo and store the cache
+    # If it's not there, then make it and read it.
     except FileNotFoundError:
-        # Establish the information that'll be contained in the documents we'll be getting
-        fingerprints = defaults.catalog_fingerprints()
-        group = {'$group': {'_id': fingerprints}}
+        __cache_catalog_docs()
+        with open(CATALOG_CACHE_FILE, 'rb') as file_handle:
+            docs = pickle.load(file_handle)
 
-        # Get the documents and clean them up
-        pipeline = [group]
-        with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
-            print('Now pulling catalog documents...')
-            cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-            docs = [doc for doc in tqdm.tqdm(cursor)]
-        cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+    return docs
 
-        with open(catalog_cache_file, 'wb') as file_handle:
-            pickle.dump(cleaned_docs, file_handle)
 
-    return cleaned_docs
+def __cache_catalog_docs():
+    '''
+    Uses `collection.aggregate`, but is tailored specifically for the
+    collection that's tagged `relaxed_bulk_catalog`. Then stores the results
+    in a pickle cache.
+    '''
+    # Establish the information that'll be contained in the documents we'll be getting
+    fingerprints = defaults.catalog_fingerprints()
+    group = {'$group': {'_id': fingerprints}}
+
+    # Get the documents and clean them up
+    pipeline = [group]
+    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
+        print('Now pulling catalog documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+        docs = [doc for doc in tqdm.tqdm(cursor)]
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+
+    # Store the documents in the cache
+    with open(CATALOG_CACHE_FILE, 'wb') as file_handle:
+        pickle.dump(cleaned_docs, file_handle)
 
 
 def get_surface_docs(extra_fingerprints=None, filters=None):

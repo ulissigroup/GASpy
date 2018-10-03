@@ -20,6 +20,8 @@ from ..gasdb import (get_mongo_collection,
                      get_adsorption_docs,
                      _clean_up_aggregated_docs,
                      get_catalog_docs,
+                     __cache_catalog_docs,
+                     CATALOG_CACHE_FILE,
                      get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
@@ -228,9 +230,29 @@ def get_expected_aggregated_catalog_documents():
     return docs
 
 
-def test_get_catalog_docs():
+@pytest.mark.parametrize('rebuild_cache, predelete_cache',
+                         [(False, True),
+                          (False, False),
+                          (True, True),
+                          (True, False)])
+def test_get_catalog_docs(rebuild_cache, predelete_cache):
+    if predelete_cache:
+        try:
+            os.remove(CATALOG_CACHE_FILE)
+        except FileNotFoundError:
+            pass
+
     expected_docs = get_expected_aggregated_catalog_documents()
-    docs = get_catalog_docs()
+    docs = get_catalog_docs(rebuild_cache)
+    assert docs == expected_docs
+
+
+def test___cache_catalog_docs():
+    __cache_catalog_docs()
+    with open(CATALOG_CACHE_FILE, 'rb') as file_handle:
+        docs = pickle.load(file_handle)
+
+    expected_docs = get_expected_aggregated_catalog_documents()
     assert docs == expected_docs
 
 
