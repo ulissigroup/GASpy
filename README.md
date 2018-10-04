@@ -8,8 +8,8 @@ different bulk materials, facets, adsorption sites, adsorbates, etc.
 # Overview
 
 GASpy is written in [Python 3](https://www.python.org/), and we use various tools
-(below) that enable to perform DFT relaxations on sample pools of
-near-arbitrary size. You can find a full list of our dependencies in our
+(below) that enable us to perform high-throughput DFT relaxations. You can find a
+full list of our dependencies in our
 [Dockerfile](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile).
 
 [ASE](https://wiki.fysik.dtu.dk/ase/about.html),
@@ -23,22 +23,22 @@ We created various Python classes (referred to as
 [tasks](https://github.com/ulissigroup/GASpy/tree/master/gaspy/tasks) by
 [Luigi](https://github.com/spotify/luigi)) to automate adsorption energy
 calculations. For example:  We have a task to fetch bulk structures from the
-Materials Projec and then turn them into ASE atoms objects; we have a task that
+Materials Project and then turn them into ASE atoms objects; we have a task that
 uses PyMatGen to cut slabs out of these bulk structures; we have a task that
 use PyMatGen to enumerate adsorption sites on these slabs; we have a task to
 add adsorbates onto these sites; and we have a task to calculate adsorption
 energies from slab, adsorbate, and slab+adsorbate relaxations.
 
 We use Luigi to manage the dependencies between these tasks (e.g., our slab
-cutting class requires that we have already fetched the bulk structure), and we
-use FireWorks to manage/submit our DFT simulations across multiple clusters.
-Thus, we can simply tell GASpy to "calculate the adsorption energy of CO on
-Pt", and it automatically performs all of the necessary steps (e.g., fetch Pt
-from Materials Project; cut slabs; relax the slabs; add CO onto the slab and
-then relax; then calculate the adsorption energy).
+cutting class requires that we fetch the bulk structure), and we use FireWorks
+to manage/submit our DFT simulations across multiple clusters. Thus, we can
+simply tell GASpy to "calculate the adsorption energy of CO on Pt", and it
+automatically performs all of the necessary steps (e.g., fetch Pt from
+Materials Project; cut slabs; relax the slabs; add CO onto the slab and then
+relax; then calculate the adsorption energy).
 
 To submit calculations, we create wrapper tasks that call on the appropriate
-sub-tasks, and then use either Luigi our our Python wrapping functions to
+sub-tasks, and then use either Luigi or our Python wrapping functions to
 execute the classes that you made. For
 [example](https://github.com/ulissigroup/GASpy/blob/master/examples/calculate_all_adsorptions_on_surfaces.py):
 
@@ -61,7 +61,7 @@ the (1, 1, 1) and (1, 0, 0) facets of
 
 # Installation
 
-You will need five main things to run GASpy:
+You will need five things to run GASpy:
 
 1. a locally cloned version of this repository,
 
@@ -85,7 +85,7 @@ image](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile)
 does not actually contain the GASpy source code. If it did, we would need to
 constantly rebuild the image, because we are constantly changing and
 redeveloping GASpy. We instead mount our local repository to the container that
-we use to run our code: `docker run -v "/local/path/to/GASpy:/home/GASpy"
+we use to run our code:  `docker run -v "/local/path/to/GASpy:/home/GASpy"
 ulissigroup/gaspy:latest foo` You can also see how we open an interactive
 Docker container
 [here](https://github.com/ulissigroup/GASpy/blob/master/open_container_via_docker.sh).
