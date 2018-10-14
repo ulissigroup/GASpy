@@ -20,14 +20,17 @@ from ..gasdb import (get_mongo_collection,
                      get_adsorption_docs,
                      _clean_up_aggregated_docs,
                      get_catalog_docs,
-                     __cache_catalog_docs,
-                     CATALOG_CACHE_FILE,
+                     get_catalog_docs_with_predictions,
                      get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
+                     _duplicate_docs_per_rotations,
                      _hash_docs,
                      _hash_doc,
-                     get_low_coverage_docs_by_surface,
+                     get_low_coverage_docs,
+                     get_low_coverage_dft_docs,
+                     _get_surface_from_doc,
+                     get_low_coverage_ml_docs,
                      remove_duplicates_in_adsorption_collection)
 
 # Things we need to do the tests
@@ -37,8 +40,6 @@ import pickle
 import random
 import binascii
 import hashlib
-from collections import defaultdict
-import numpy as np
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
@@ -136,6 +137,9 @@ def __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fin
     return file_name
 
 
+@pytest.mark.filterwarnings('ignore:  You are using adsorption document filters '
+                            'for a set of adsorbates that we have not yet '
+                            'established valid energy bounds for, yet.')
 @pytest.mark.parametrize('adsorbates, extra_fingerprints',
                          [(None, None),
                           (['CO'], None),
@@ -211,8 +215,7 @@ def __make_documents_dirty(docs):
     doc_empty2['neighborcoord'] = ['Cu:', 'Al:']
 
     # Make the dirty documents
-    dirty_docs = copy.deepcopy(docs) + [doc_partial, doc_empty0, doc_empty1, doc_empty2]
-    dirty_docs = [{'_id': doc} for doc in dirty_docs]   # because mongo is stupid
+    dirty_docs = docs.copy() + [doc_partial, doc_empty0, doc_empty1, doc_empty2]
     return dirty_docs
 
 
@@ -230,29 +233,46 @@ def get_expected_aggregated_catalog_documents():
     return docs
 
 
-@pytest.mark.parametrize('rebuild_cache, predelete_cache',
-                         [(False, True),
-                          (False, False),
-                          (True, True),
-                          (True, False)])
-def test_get_catalog_docs(rebuild_cache, predelete_cache):
-    if predelete_cache:
-        try:
-            os.remove(CATALOG_CACHE_FILE)
-        except FileNotFoundError:
-            pass
-
+def test_get_catalog_docs():
     expected_docs = get_expected_aggregated_catalog_documents()
-    docs = get_catalog_docs(rebuild_cache)
+    docs = get_catalog_docs()
     assert docs == expected_docs
 
 
-def test___cache_catalog_docs():
-    __cache_catalog_docs()
-    with open(CATALOG_CACHE_FILE, 'rb') as file_handle:
-        docs = pickle.load(file_handle)
+@pytest.mark.baseline
+@pytest.mark.parametrize('adsorbates, models, latest_predictions',
+                         [(['CO'], ['model0'], True),
+                          (['CO', 'H'], ['model0'], True),
+                          (['CO', 'H'], ['model0'], False)])
+def test_to_create_catalog_docs_with_predictions(adsorbates, models, latest_predictions):
+    docs = get_catalog_docs_with_predictions(adsorbates, models, latest_predictions)
 
-    expected_docs = get_expected_aggregated_catalog_documents()
+    arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_predictions_%s' % arg_hash + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(docs, file_handle)
+    assert True
+
+
+@pytest.mark.parametrize('adsorbates, models, latest_predictions',
+                         [(['CO'], ['model0'], True),
+                          (['CO', 'H'], ['model0'], True),
+                          (['CO', 'H'], ['model0'], False)])
+def test_get_catalog_docs_with_predictions(adsorbates, models, latest_predictions):
+    '''
+    This could be a "real" test, but I am really busy and don't have time to design one.
+    So I'm turning this into a regression test to let someone else (probably me)
+    deal with this later.
+
+    If you do fix this, you should probably add more than one day's worth of predictions
+    to the unit testing catalog.
+    '''
+    docs = get_catalog_docs_with_predictions(adsorbates, models, latest_predictions)
+
+    arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_predictions_%s' % arg_hash + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_docs = pickle.load(file_handle)
     assert docs == expected_docs
 
 
@@ -279,8 +299,8 @@ def test_get_surface_docs(extra_fingerprints):
     '''
     # EAFP to set the file name; depends on whether or not there are extra fingerprints
     try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
-            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
+        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
+                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
     except AttributeError:
         file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
 
@@ -356,6 +376,23 @@ def test__get_attempted_adsorption_docs(adsorbates):
     assert _compare_unordered_sequences(docs, expected_docs)
 
 
+def test__duplicate_docs_per_rotation():
+    docs = [dict.fromkeys(range(i)) for i in range(10)]
+    rotation_list = [{'phi': 0., 'theta': 0., 'psi': 0.},
+                     {'phi': 180., 'theta': 180., 'psi': 180.}]
+    duplicated_docs = _duplicate_docs_per_rotations(docs, rotation_list)
+
+    # Check that we have enough documents
+    assert len(rotation_list)*len(docs) == len(duplicated_docs)
+
+    # Check that the rotations have been added correctly
+    for i, expected_rotation in enumerate(rotation_list):
+        start_slice = len(docs) * i
+        end_slice = len(docs) * (i+1)
+        for doc in duplicated_docs[start_slice:end_slice]:
+            assert doc['adsorbate_rotation'] == expected_rotation
+
+
 @pytest.mark.baseline
 @pytest.mark.parametrize('ignore_keys', [None, ['mpid'], ['mpid', 'top']])
 def test_to_create_hashed_docs(ignore_keys):
@@ -376,7 +413,7 @@ def test__hash_docs(ignore_keys):
     '''
     Note that since Python 3's `hash` returns a different hash for
     each instance of Python, we actually perform regression testing
-    ond the pre-hashed strings, not the hash itself.
+    on the serialized documents, not the hash itself.
     '''
     # EAFP to find the pickle name of the cache, since it'll be odd if adsorbates == None
     try:
@@ -384,11 +421,11 @@ def test__hash_docs(ignore_keys):
     except TypeError:
         file_name = REGRESSION_BASELINES_LOCATION + 'hashed_docs_ignoring_nothing.pkl'
     with open(file_name, 'rb') as file_handle:
-        expected_strings = pickle.load(file_handle)
+        expected_serialized_doc = pickle.load(file_handle)
 
     docs = get_expected_aggregated_adsorption_documents()
-    strings = _hash_docs(docs=docs, ignore_keys=ignore_keys, _return_hashes=False)
-    assert strings == expected_strings
+    serialized_doc = _hash_docs(docs=docs, ignore_keys=ignore_keys, _return_hashes=False)
+    assert serialized_doc == expected_serialized_doc
 
 
 @pytest.mark.baseline
@@ -429,17 +466,17 @@ def test__hash_doc(ignore_keys):
 @pytest.mark.parametrize('adsorbates, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
-def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
+def test_surfaces_from_get_low_coverage_docs(adsorbates, model_tag):
     '''
     We test `get_low_coverage_docs_by_surface' in multiple unit tests.
     This test checks that the surfaces we find are correct.
     '''
-    low_coverage_docs = get_low_coverage_docs_by_surface(adsorbates, model_tag)
+    low_coverage_docs = get_low_coverage_docs(adsorbates, model_tag)
     surfaces = set(low_coverage_docs.keys())
 
     adsorption_docs = get_adsorption_docs(adsorbates)
     catalog_docs = get_unsimulated_catalog_docs(adsorbates)
-    expected_surfaces = set((doc['mpid'], str(doc['miller']), doc['shift'], doc['top'])
+    expected_surfaces = set((doc['mpid'], str(doc['miller']), round(doc['shift'], 2), doc['top'])
                             for doc in adsorption_docs + catalog_docs)
     assert surfaces == expected_surfaces
 
@@ -447,47 +484,80 @@ def test_surfaces_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
 @pytest.mark.parametrize('adsorbates, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
-def test_docs_from_get_low_coverage_docs_by_surface(adsorbates, model_tag):
+def test_energies_from_get_low_coverage_docs(adsorbates, model_tag):
     '''
     We test `get_low_coverage_docs_by_surface' in multiple unit tests.
     This test verifies that the documents provided by this function are
     actually have the minimum energy within each surface.
     '''
-    low_coverage_docs = get_low_coverage_docs_by_surface(adsorbates, model_tag)
+    low_coverage_docs = get_low_coverage_docs(adsorbates, model_tag)
+    docs_dft = get_low_coverage_dft_docs(adsorbates)
+    docs_ml = get_low_coverage_ml_docs(adsorbates, model_tag)
 
-    # Get the documents, and then copy the predicted energies into the appropriate key
-    adsorption_docs = get_adsorption_docs(adsorbates)
-    catalog_docs = get_unsimulated_catalog_docs(adsorbates)
-    for doc in catalog_docs:
-        energy_data_by_date = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag]
-        dates = energy_data_by_date.keys()
-        energy_data = energy_data_by_date.values()
-        dates_and_energy_data = list(zip(dates, energy_data))
-        latest_energy_data = sorted(dates_and_energy_data)[-1][1]
-        doc['energy'] = latest_energy_data['energy']
+    for surface, doc in low_coverage_docs.items():
 
-    # Organize/bucket the documents by surface
-    docs_by_surface = defaultdict(list)
-    for doc in adsorption_docs + catalog_docs:
-        surface = (doc['mpid'], str(doc['miller']), doc['shift'], doc['top'])
-        docs_by_surface[surface].append(doc)
+        if doc['DFT_calculated']:
+            try:
+                doc_ml = docs_ml[surface]
+                assert doc['energy'] <= doc_ml['energy']
+            except KeyError:
+                continue
 
-    # Find the lower covearge documents ourselves and then compare them to
-    # whatever the function returned
-    for surface, docs in docs_by_surface.items():
-        energies = [doc['energy'] for doc in docs]
-        expected_low_coverage_doc = docs[np.argmin(np.array(energies))]
-        if 'predictions' not in expected_low_coverage_doc:
-            expected_low_coverage_doc['DFT_calculated'] = True
         else:
-            expected_low_coverage_doc['DFT_calculated'] = False
-        assert low_coverage_docs[surface] == expected_low_coverage_doc
+            try:
+                doc_dft = docs_dft[surface]
+                assert doc['energy'] <= doc_dft['energy']
+            except KeyError:
+                continue
 
-        # Test if we tagged each document correctly
-        if 'predictions' not in expected_low_coverage_doc:
-            assert expected_low_coverage_doc['DFT_calculated']
-        else:
-            assert not expected_low_coverage_doc['DFT_calculated']
+
+@pytest.mark.parametrize('adsorbates', [['H'], ['CO']])
+def test_get_low_coverage_dft_docs(adsorbates):
+    '''
+    For each surface, verify that every single document in
+    our adsorption collection has a higher (or equal) adsorption
+    energy than the one reported by `get_low_coverage_dft_docs`
+    '''
+    low_coverage_docs = get_low_coverage_dft_docs(adsorbates)
+    all_docs = get_adsorption_docs(adsorbates)
+
+    for doc in all_docs:
+        energy = doc['energy']
+
+        surface = _get_surface_from_doc(doc)
+        low_cov_energy = low_coverage_docs[surface]['energy']
+        assert low_cov_energy <= energy
+
+
+def test__get_surface_from_doc():
+    doc = {'mpid': 'mp-23',
+           'miller': [1, 0, 0],
+           'shift': 0.001,
+           'top': True}
+    surface = _get_surface_from_doc(doc)
+
+    expected_surface = ('mp-23', '[1, 0, 0]', 0., True)
+    assert surface == expected_surface
+
+
+@pytest.mark.parametrize('adsorbates, model_tag',
+                         [(['H'], 'model0'),
+                          (['CO'], 'model0')])
+def test_get_low_coverage_ml_docs(adsorbates, model_tag):
+    '''
+    For each surface, verify that every single document in
+    our adsorption collection has a higher (or equal) adsorption
+    energy than the one reported by `get_low_coverage_ml_docs`
+    '''
+    models = ['model0']
+    low_coverage_docs = get_low_coverage_ml_docs(adsorbates)
+    all_docs = get_catalog_docs_with_predictions(adsorbates, models)
+
+    for doc in all_docs:
+        energy = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag][1]
+        surface = _get_surface_from_doc(doc)
+        low_cov_energy = low_coverage_docs[surface]['energy']
+        assert low_cov_energy <= energy
 
 
 def test_remove_duplicates_in_adsorption_collection():

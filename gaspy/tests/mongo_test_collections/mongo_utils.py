@@ -170,7 +170,7 @@ def populate_unit_testing_collection(collection_tag):
         docs = pickle.load(file_handle)
 
     # Put the documents in
-    with get_testing_mongo_collection('collection_tag') as collection:
+    with get_testing_mongo_collection(collection_tag) as collection:
         collection.insert_many(docs)
 
 

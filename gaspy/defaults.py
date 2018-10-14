@@ -18,6 +18,7 @@ SLAB_ENCUT = 350.
 ADSLAB_ENCUT = 350.
 PP_VERSION = '5.4'  # Vasp pseudopotential version
 ROTATION = {'phi': 0., 'theta': 0., 'psi': 0.}
+MODEL = 'model0'
 
 
 def adsorption_fingerprints():
@@ -30,7 +31,8 @@ def adsorption_fingerprints():
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
     are where you can find the information from the old mongo docs (in our databases).
     '''
-    fingerprints = {'mongo_id': '$_id',
+    fingerprints = {'_id': 0,
+                    'mongo_id': '$_id',
                     'mpid': '$processed_data.calculation_info.mpid',
                     'formula': '$processed_data.calculation_info.formula',
                     'miller': '$processed_data.calculation_info.miller',
@@ -85,7 +87,9 @@ def adsorption_filters(adsorbates):
     else:
         energy_min = -50.
         energy_max = 50.
-        warnings.warn('You are using adsorption document filters for a set of adsorbates that we have not yet established valid energy bounds for, yet. We are accepting anything in the range between %i and %i eV.' % (energy_min, energy_max))
+        warnings.warn('You are using adsorption document filters for a set of adsorbates that '
+                      'we have not yet established valid energy bounds for, yet. We are accepting '
+                      'anything in the range between %i and %i eV.' % (energy_min, energy_max))
 
     # Distribute filters into mongo-readable form
     filters['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
@@ -109,7 +113,8 @@ def catalog_fingerprints():
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
     are where you can find the information from the old mongo docs (in our databases).
     '''
-    fingerprints = {'mongo_id': '$_id',
+    fingerprints = {'_id': 0,
+                    'mongo_id': '$_id',
                     'mpid': '$processed_data.calculation_info.mpid',
                     'formula': '$processed_data.calculation_info.formula',
                     'miller': '$processed_data.calculation_info.miller',
@@ -118,8 +123,7 @@ def catalog_fingerprints():
                     'coordination': '$processed_data.fp_init.coordination',
                     'neighborcoord': '$processed_data.fp_init.neighborcoord',
                     'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
-                    'adsorption_site': '$processed_data.calculation_info.adsorption_site',
-                    'predictions': '$predictions'}
+                    'adsorption_site': '$processed_data.calculation_info.adsorption_site'}
     return fingerprints
 
 
@@ -132,15 +136,15 @@ def surface_fingerprints():
     new mongo docs. The keys here are the keys for the new mongo doc, and the values
     are where you can find the information from the old mongo docs (in our databases).
     '''
-    fingerprints = {'mongo_id': '$_id',
+    fingerprints = {'_id': 0,
+                    'mongo_id': '$_id',
                     'mpid': '$processed_data.calculation_info.mpid',
                     'formula': '$processed_data.calculation_info.formula',
                     'miller': '$processed_data.calculation_info.miller',
                     'intercept': '$processed_data.surface_energy_info.intercept',
                     'intercept_uncertainty': '$processed_data.surface_energy_info.intercept_uncertainty',
                     'initial_configuration': '$initial_configuration',
-                    'FW_info': '$processed_data.FW_info'
-                    }
+                    'FW_info': '$processed_data.FW_info'}
     return fingerprints
 
 
