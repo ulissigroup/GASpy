@@ -598,7 +598,8 @@ class SubmitToFW(luigi.Task):
         # generate the necessary unrelaxed structure
         if len(self.matching_doc) == 0:
             if self.calctype == 'slab':
-                return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
+                return [
+                    Slabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
                         # We are also vaing the unrelaxed slabs just in case. We can delete if
                         # we can find shifts successfully.
@@ -961,6 +962,8 @@ class GenerateSlabs(luigi.Task):
                 atoms_slab.rotate('x', math.pi, rotate_cell=True, center='COM')
                 if atoms_slab.cell[2][2] < 0.:
                     atoms_slab.cell[2] = -atoms_slab.cell[2]
+                if np.cross(atoms_slab.cell[0],atoms_slab.cell[1])[2]<0.0:
+                    atoms_slab.cell[1] = -atoms_slab.cell[1]
                 atoms_slab.wrap()
 
                 # and if it is not in the database, then save it.
