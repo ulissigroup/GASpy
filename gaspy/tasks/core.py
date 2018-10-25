@@ -1481,7 +1481,7 @@ class EnumerateAlloys(luigi.WrapperTask):
                                          adsorption=defaults.adsorption_parameters(adsorbate='U',
                                                                                    adsorption_site='[3.36 1.16 24.52]',
                                                                                    slabrepeat='(1, 1)',
-                                                                                   nub_slab_atoms=24))
+                                                                                   num_slab_atoms=24))
                 if not(self.dft):
                     parameters['unrelaxed'] = True
                 else:
