@@ -162,6 +162,13 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
                         relaxation of system you want to make a
                         rocket/calculation for.
     '''
+    # Sometimes we don't care about rotation. If that happens, then just use
+    # the default rotation.
+    try:
+        adsorbate_rotation = doc['adsorbate_rotation']
+    except KeyError:
+        adsorbate_rotation = defaults.ROTATION
+
     parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
                                                   settings=xc,
@@ -176,7 +183,7 @@ def _make_adslab_parameters_from_doc(doc, adsorbates,
                                                   pp_version=pp_version)
     parameters['adsorption'] = defaults.adsorption_parameters(adsorbate=adsorbates[0],
                                                               adsorption_site=doc['adsorption_site'],
-                                                              adsorbate_rotation=doc['adsorbate_rotation'],
+                                                              adsorbate_rotation=adsorbate_rotation,
                                                               settings=xc,
                                                               encut=encut,
                                                               pp_version=pp_version)
