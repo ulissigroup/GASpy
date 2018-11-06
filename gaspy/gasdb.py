@@ -243,8 +243,6 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
 
     # Get the documents
     project = {'$project': fingerprints}
-
-    print(project)
     pipeline = [project]
     with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
         print('Now pulling catalog documents...')
