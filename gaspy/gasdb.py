@@ -243,6 +243,8 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
 
     # Get the documents
     project = {'$project': fingerprints}
+
+    print(project)
     pipeline = [project]
     with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
         print('Now pulling catalog documents...')
@@ -254,6 +256,11 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
     for adsorbate in adsorbates:
         for model in models:
             expected_keys.remove('predictions.adsorption_energy.%s.%s' % (adsorbate, model))
+
+    for chemistry in chemistries:
+        for model in models:
+            expected_keys.remove('predictions.%s.%s' % (chemistry, model))
+
     expected_keys.add('predictions')
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
 
