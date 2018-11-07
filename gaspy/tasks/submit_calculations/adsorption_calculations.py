@@ -12,6 +12,7 @@ import random
 import luigi
 import numpy as np
 from ... import defaults
+from ...utils import unfreeze_dict
 from ...gasdb import get_unsimulated_catalog_docs
 from ..core import FingerprintRelaxedAdslab, SubmitToFW
 
@@ -70,11 +71,15 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
         mpids_set = set(self.mpid_list)
         millers_set = set(_standardize_miller(miller) for miller in self.miller_list)
 
+        # Unfreeze the adsorbate rotations dictionaries so that we can use them as-expected
+        adsorbate_rotation_list = [unfreeze_dict(rotations)
+                                   for rotations in self.adsorbate_rotation_list]
+
         # Iterate through a different set of documents for each adsorbate,
         # because the unsimulated catalog of sites is different for each adsorbate
         parameters_list = []
         for adsorbates in self.adsorbates_list:
-            for doc in get_unsimulated_catalog_docs(adsorbates, self.adsorbate_rotation_list):
+            for doc in get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list):
 
                 # Create the simulation parameters from the site if the site falls
                 # within the set of mpid and millers we are looking for.

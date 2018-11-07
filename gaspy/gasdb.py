@@ -438,7 +438,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
     for i, adsorbate_rotation in enumerate(adsorbate_rotation_list):
         print('Making catalog copy number %i of %i...' % (i+1, len(adsorbate_rotation_list)))
         docs_copy = copy.deepcopy(docs)     # To make sure we don't modify the parent docs
-        for doc in docs_copy:
+        for doc in tqdm.tqdm(docs_copy):
             doc['adsorbate_rotation'] = adsorbate_rotation
         docs_with_rotation += docs_copy
     return docs_with_rotation
