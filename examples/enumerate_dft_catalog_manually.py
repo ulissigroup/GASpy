@@ -29,7 +29,7 @@ import tqdm
 whitelist = ['Pd', 'Cu', 'Au', 'Ag', 'Pt', 'Rh', 'Re', 'Ni', 'Co', 'Ir',
              'W', 'Al', 'Ga', 'In', 'H', 'N', 'Os', 'Fe', 'V', 'Si', 'Sn',
              'Sb', 'Mo', 'Mn', 'Cr', 'Ti', 'Zn', 'Ge', 'As', 'Ru', 'Pb',
-             'Nb', 'Ca', 'Na', 'S', 'C', 'Cd', 'K']
+             'Nb', 'Ca', 'Na', 'S', 'C', 'Cd', 'K','Hg']
 alloy_enumerator = EnumerateAlloys(whitelist=whitelist, max_to_submit=100000, max_index=2, dft=True)
 tasks = list(alloy_enumerator.requires())
 
@@ -61,3 +61,4 @@ def evaluate_luigi_task_and_bypass_errors(task):
 with mp.Pool(32) as pool:
     multithreaded_iterator = pool.imap(evaluate_luigi_task_and_bypass_errors, tasks, chunksize=10)
     _ = list(tqdm.tqdm(multithreaded_iterator, total=len(tasks)))
+
