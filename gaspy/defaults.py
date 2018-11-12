@@ -120,6 +120,7 @@ def catalog_fingerprints():
                     'miller': '$processed_data.calculation_info.miller',
                     'shift': '$processed_data.calculation_info.shift',
                     'top': '$processed_data.calculation_info.top',
+                    'natoms': '$atoms.natoms',
                     'coordination': '$processed_data.fp_init.coordination',
                     'neighborcoord': '$processed_data.fp_init.neighborcoord',
                     'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
