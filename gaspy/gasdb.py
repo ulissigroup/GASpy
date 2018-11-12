@@ -233,13 +233,14 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
             else:
                 fingerprints[data_location] = '$'+data_location
 
-    for chemistry in chemistries:
-        for model in models:
-            data_location = 'predictions.%s.%s' % (chemistry, model)
-            if latest_predictions:
-                fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
-            else:
-                fingerprints[data_location] = '$'+data_location
+    if chemistries is not None:
+        for chemistry in chemistries:
+            for model in models:
+                data_location = 'predictions.%s.%s' % (chemistry, model)
+                if latest_predictions:
+                    fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
+                else:
+                    fingerprints[data_location] = '$'+data_location
 
     # Get the documents
     project = {'$project': fingerprints}
@@ -255,9 +256,10 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
         for model in models:
             expected_keys.remove('predictions.adsorption_energy.%s.%s' % (adsorbate, model))
 
-    for chemistry in chemistries:
-        for model in models:
-            expected_keys.remove('predictions.%s.%s' % (chemistry, model))
+    if chemistries is not None:
+        for chemistry in chemistries:
+            for model in models:
+                expected_keys.remove('predictions.%s.%s' % (chemistry, model))
 
     expected_keys.add('predictions')
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
