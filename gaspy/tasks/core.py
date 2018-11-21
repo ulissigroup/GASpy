@@ -1245,7 +1245,7 @@ class FingerprintRelaxedAdslab(luigi.Task):
         slab_natoms = slab[0]['atoms']['natoms']
 
         # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
-        if slab_natoms == len(calc_e_dict['atoms']) or np.max(np.abs(calc_e_dict['atoms'].positions-adslab0.positions)) > 10.0:
+        if slab_natoms == len(calc_e_dict['atoms']):
             fp_final = {}
             fp_init = {}
         else:
