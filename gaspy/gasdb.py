@@ -196,7 +196,7 @@ def get_catalog_docs():
     return cleaned_docs
 
 
-def get_catalog_docs_with_predictions(adsorbates=None, models=['model0'], latest_predictions=True):
+def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=['model0'], latest_predictions=True):
     '''
     Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
     modeling predictions for adsorption energy.
@@ -205,6 +205,8 @@ def get_catalog_docs_with_predictions(adsorbates=None, models=['model0'], latest
         adsorbates          A list of strings indicating which sets of adsorbates
                             you want to get adsorption energy predictions for,
                             e.g., ['CO', 'H'] or ['O', 'OH', 'OOH'].
+        chemistries         A list of strings for top-level predictions to also pull
+                            e.g. ['orr_onset_potential_4e']
         models              A list of strings indicating which models whose
                             predictions you want to get.
         lastest_predictions Boolean indicating whether or not you want either
@@ -231,6 +233,15 @@ def get_catalog_docs_with_predictions(adsorbates=None, models=['model0'], latest
             else:
                 fingerprints[data_location] = '$'+data_location
 
+    if chemistries is not None:
+        for chemistry in chemistries:
+            for model in models:
+                data_location = 'predictions.%s.%s' % (chemistry, model)
+                if latest_predictions:
+                    fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
+                else:
+                    fingerprints[data_location] = '$'+data_location
+
     # Get the documents
     project = {'$project': fingerprints}
     pipeline = [project]
@@ -244,6 +255,12 @@ def get_catalog_docs_with_predictions(adsorbates=None, models=['model0'], latest
     for adsorbate in adsorbates:
         for model in models:
             expected_keys.remove('predictions.adsorption_energy.%s.%s' % (adsorbate, model))
+
+    if chemistries is not None:
+        for chemistry in chemistries:
+            for model in models:
+                expected_keys.remove('predictions.%s.%s' % (chemistry, model))
+
     expected_keys.add('predictions')
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
 

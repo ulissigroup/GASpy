@@ -575,7 +575,7 @@ def encode_atoms_to_trajhex(atoms):
         hex_    A hex-encoded string object of the trajectory of the atoms object
     '''
     # Make the trajectory
-    fname = str(uuid.uuid4()) + '.traj'
+    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
     atoms.write(fname)
 
     # Encode the trajectory
@@ -603,7 +603,7 @@ def decode_trajhex_to_atoms(hex_, index=-1):
         atoms   The decoded ase.Atoms object
     '''
     # Make the trajectory from the hex
-    fname = str(uuid.uuid4()) + '.traj'
+    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
     with open(fname, 'wb') as fhandle:
         fhandle.write(bytes.fromhex(hex_))
 

@@ -93,7 +93,7 @@ def adsorption_filters(adsorbates):
 
     # Distribute filters into mongo-readable form
     filters['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
-    filters['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    filters['results.fmax'] = {'$lt': f_max}
     filters['processed_data.movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
     filters['processed_data.movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': slab_move_max}
@@ -120,6 +120,7 @@ def catalog_fingerprints():
                     'miller': '$processed_data.calculation_info.miller',
                     'shift': '$processed_data.calculation_info.shift',
                     'top': '$processed_data.calculation_info.top',
+                    'natoms': '$atoms.natoms',
                     'coordination': '$processed_data.fp_init.coordination',
                     'neighborcoord': '$processed_data.fp_init.neighborcoord',
                     'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
@@ -162,7 +163,7 @@ def surface_filters():
     max_surface_movement = 0.5  # Maximum distance that any atom can move [Ang]
 
     # Distribute filters into mongo-readable form
-    filters['results.forces'] = {'$not': {'$elemMatch': {'$elemMatch': {'$gt': f_max}}}}
+    filters['results.fmax'] = {'$lt': f_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
     _calc_settings = calc_settings(SLAB_ENCUT)
     filters['processed_data.vasp_settings.gga'] = _calc_settings['gga']

@@ -146,12 +146,14 @@ def _make_results_dict(atoms):
     if calculator:
 
         if not calculator.calculation_required(atoms, ['energy']):
-            results_dict['energy'] = atoms.get_potential_energy()
+            results_dict['energy'] = atoms.get_potential_energy(apply_constraint=False)
 
         if not calculator.calculation_required(atoms, ['forces']):
-            forces = atoms.get_forces()
+            forces = atoms.get_forces(apply_constraint=False)
             results_dict['forces'] = forces.tolist()
-            results_dict['fmax'] = max(np.abs(forces.flatten()))
+
+            # fmax will be the max force component w/ constraints applied
+            results_dict['fmax'] = max(np.abs(atoms.get_forces().flatten()))
 
     return results_dict
 
