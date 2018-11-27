@@ -187,26 +187,40 @@ def get_catalog_docs():
 
     # Pull and clean the documents
     pipeline = [project]
-    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
-        print('Now pulling catalog documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
+    docs = _pull_catalog_from_mongo(pipeline)
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
 
     return cleaned_docs
 
 
-def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=['model0'], latest_predictions=True):
+def _pull_catalog_from_mongo(pipeline):
+    '''
+    Given a Mongo pipeline, get the catalog documents.
+
+    Arg:
+        pipeline    A list object containing the pipeline of Mongo operations that
+                    you want to use during Mongo aggregation. Refer to pymongo
+                    documentation on aggregation.
+    Returns:
+        docs    A list of dictionaries containing the catalog documents as per
+                your pipeline.
+    '''
+    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
+        print('Now pulling catalog documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+        docs = [doc for doc in tqdm.tqdm(cursor)]
+    return docs
+
+
+def get_catalog_docs_with_adsorption_energies(adsorbates=None, models=['model0'], latest_predictions=True):
     '''
     Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
-    modeling predictions for adsorption energy.
+    modeling predictions for adsorption energies.
 
     Args:
         adsorbates          A list of strings indicating which sets of adsorbates
                             you want to get adsorption energy predictions for,
                             e.g., ['CO', 'H'] or ['O', 'OH', 'OOH'].
-        chemistries         A list of strings for top-level predictions to also pull
-                            e.g. ['orr_onset_potential_4e']
         models              A list of strings indicating which models whose
                             predictions you want to get.
         lastest_predictions Boolean indicating whether or not you want either
@@ -221,10 +235,8 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
         raise SyntaxError('The models argument must be a sequence of strings where each '
                           'element is a model name. Do not pass a single string.')
 
-    # Reorganize the documents to the way we want
-    fingerprints = defaults.catalog_fingerprints()
-
     # Get the prediction data
+    fingerprints = defaults.catalog_fingerprints()
     for adsorbate in adsorbates:
         for model in models:
             data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model)
@@ -233,34 +245,60 @@ def get_catalog_docs_with_predictions(adsorbates=None, chemistries=None, models=
             else:
                 fingerprints[data_location] = '$'+data_location
 
-    if chemistries is not None:
-        for chemistry in chemistries:
-            for model in models:
-                data_location = 'predictions.%s.%s' % (chemistry, model)
-                if latest_predictions:
-                    fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
-                else:
-                    fingerprints[data_location] = '$'+data_location
-
     # Get the documents
     project = {'$project': fingerprints}
     pipeline = [project]
-    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
-        print('Now pulling catalog documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
+    docs = _pull_catalog_from_mongo(pipeline)
 
     # Clean the documents up
     expected_keys = set(fingerprints.keys())
     for adsorbate in adsorbates:
         for model in models:
             expected_keys.remove('predictions.adsorption_energy.%s.%s' % (adsorbate, model))
+    expected_keys.add('predictions')
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
 
-    if chemistries is not None:
-        for chemistry in chemistries:
-            for model in models:
-                expected_keys.remove('predictions.%s.%s' % (chemistry, model))
+    return cleaned_docs
 
+
+def get_catalog_docs_with_orr_potentials(models=['model0'], latest_predictions=True):
+    '''
+    Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
+    modeling predictions for adsorption energy.
+
+    Args:
+        models              A list of strings indicating which models whose
+                            predictions you want to get.
+        lastest_predictions Boolean indicating whether or not you want either
+                            the latest predictions or all of them.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.catalog_fingerprints`, along
+                with a 'predictions' key that has the surrogate modeling
+                predictions of adsorption energy.
+    '''
+    if isinstance(models, str):
+        raise SyntaxError('The models argument must be a sequence of strings where each '
+                          'element is a model name. Do not pass a single string.')
+
+    # Get the prediction data
+    fingerprints = defaults.catalog_fingerprints()
+    for model in models:
+        data_location = 'predictions.orr_onset_potential_4e.%s' % model
+        if latest_predictions:
+            fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
+        else:
+            fingerprints[data_location] = '$'+data_location
+
+    # Get the documents
+    project = {'$project': fingerprints}
+    pipeline = [project]
+    docs = _pull_catalog_from_mongo(pipeline)
+
+    # Clean the documents up
+    expected_keys = set(fingerprints.keys())
+    for model in models:
+        expected_keys.remove('predictions.orr_onset_potential_4e.%s' % model)
     expected_keys.add('predictions')
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
 

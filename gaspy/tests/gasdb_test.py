@@ -20,7 +20,8 @@ from ..gasdb import (get_mongo_collection,
                      get_adsorption_docs,
                      _clean_up_aggregated_docs,
                      get_catalog_docs,
-                     get_catalog_docs_with_predictions,
+                     get_catalog_docs_with_adsorption_energies,
+                     get_catalog_docs_with_orr_potentials,
                      get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
@@ -244,11 +245,11 @@ def test_get_catalog_docs():
                          [(['CO'], ['model0'], True),
                           (['CO', 'H'], ['model0'], True),
                           (['CO', 'H'], ['model0'], False)])
-def test_to_create_catalog_docs_with_predictions(adsorbates, models, latest_predictions):
-    docs = get_catalog_docs_with_predictions(adsorbates, models, latest_predictions)
+def test_to_create_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions):
+    docs = get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions)
 
     arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_predictions_%s' % arg_hash + '.pkl'
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_adsorption_energies_%s' % arg_hash + '.pkl'
     with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
@@ -258,7 +259,7 @@ def test_to_create_catalog_docs_with_predictions(adsorbates, models, latest_pred
                          [(['CO'], ['model0'], True),
                           (['CO', 'H'], ['model0'], True),
                           (['CO', 'H'], ['model0'], False)])
-def test_get_catalog_docs_with_predictions(adsorbates, models, latest_predictions):
+def test_get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions):
     '''
     This could be a "real" test, but I am really busy and don't have time to design one.
     So I'm turning this into a regression test to let someone else (probably me)
@@ -267,10 +268,45 @@ def test_get_catalog_docs_with_predictions(adsorbates, models, latest_prediction
     If you do fix this, you should probably add more than one day's worth of predictions
     to the unit testing catalog.
     '''
-    docs = get_catalog_docs_with_predictions(adsorbates, models, latest_predictions)
+    docs = get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions)
 
     arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_predictions_%s' % arg_hash + '.pkl'
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_adsorption_energies_%s' % arg_hash + '.pkl'
+    with open(file_name, 'rb') as file_handle:
+        expected_docs = pickle.load(file_handle)
+    assert docs == expected_docs
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('models, latest_predictions',
+                         [(['model0'], True),
+                          (['model0'], False)])
+def test_to_create_catalog_docs_with_orr_potentials(models, latest_predictions):
+    docs = get_catalog_docs_with_orr_potentials(models, latest_predictions)
+
+    arg_hash = hashlib.sha224((str(models) + str(latest_predictions)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_orr_potentials_%s' % arg_hash + '.pkl'
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(docs, file_handle)
+    assert True
+
+
+@pytest.mark.parametrize('models, latest_predictions',
+                         [(['model0'], True),
+                          (['model0'], False)])
+def test_get_catalog_docs_with_orr_potentials(models, latest_predictions):
+    '''
+    This could be a "real" test, but I am really busy and don't have time to design one.
+    So I'm turning this into a regression test to let someone else (probably me)
+    deal with this later.
+
+    If you do fix this, you should probably add more than one day's worth of predictions
+    to the unit testing catalog.
+    '''
+    docs = get_catalog_docs_with_orr_potentials(models, latest_predictions)
+
+    arg_hash = hashlib.sha224((str(models) + str(latest_predictions)).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_orr_potentials_%s' % arg_hash + '.pkl'
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
     assert docs == expected_docs
@@ -551,7 +587,7 @@ def test_get_low_coverage_ml_docs(adsorbates, model_tag):
     '''
     models = ['model0']
     low_coverage_docs = get_low_coverage_ml_docs(adsorbates)
-    all_docs = get_catalog_docs_with_predictions(adsorbates, models)
+    all_docs = get_catalog_docs_with_adsorption_energies(adsorbates, models)
 
     for doc in all_docs:
         energy = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag][1]

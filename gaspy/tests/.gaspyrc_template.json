@@ -1,4 +1,5 @@
 {
+    "temp_directory": "/tmp/",
     "luigi_port": "999.99.999.99",
     "gasdb_path": "/home/GASpy/gaspy/tests/regression_baselines/testing_caches",
     "matproj_api_key": "ABC123",
