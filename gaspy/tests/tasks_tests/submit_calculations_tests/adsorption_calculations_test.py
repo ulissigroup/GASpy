@@ -54,6 +54,9 @@ def test__standardize_miller(miller):
                           ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False,
                             'adsorption_site': [1., 1., 1.],
                             'adsorbate_rotation': {'phi': 0., 'theta': 0., 'psi': 0.}},
+                           ['H'], 350., 500., 350., 'rpbe', '5.4', 80),
+                          ({'mpid': 'mp-30.', 'miller': [1, 1, 1], 'shift': 0., 'top': False,
+                            'adsorption_site': [1., 1., 1.]},
                            ['H'], 350., 500., 350., 'rpbe', '5.4', 80)])
 def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, slab_encut,
                                           xc, pp_version, max_bulk_atoms):
@@ -64,6 +67,12 @@ def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, sl
                                                   xc=xc,
                                                   pp_version=pp_version,
                                                   max_bulk_atoms=max_bulk_atoms)
+
+    # Deal with cases where we the document doesn't have a specified rotation
+    try:
+        adsorbate_rotation = doc['adsorbate_rotation']
+    except KeyError:
+        adsorbate_rotation = defaults.ROTATION
 
     expected_parameters = OrderedDict.fromkeys(['bulk', 'slab', 'adsorption', 'gas'])
     expected_parameters['bulk'] = defaults.bulk_parameters(mpid=doc['mpid'],
@@ -79,7 +88,7 @@ def test__make_adslab_parameters_from_doc(doc, adsorbates, encut, bulk_encut, sl
                                                            pp_version=pp_version)
     expected_parameters['adsorption'] = defaults.adsorption_parameters(adsorbate=adsorbates[0],
                                                                        adsorption_site=doc['adsorption_site'],
-                                                                       adsorbate_rotation=doc['adsorbate_rotation'],
+                                                                       adsorbate_rotation=adsorbate_rotation,
                                                                        settings=xc,
                                                                        encut=encut,
                                                                        pp_version=pp_version)
