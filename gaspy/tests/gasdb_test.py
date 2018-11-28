@@ -20,8 +20,10 @@ from ..gasdb import (get_mongo_collection,
                      get_adsorption_docs,
                      _clean_up_aggregated_docs,
                      get_catalog_docs,
-                     get_catalog_docs_with_adsorption_energies,
-                     get_catalog_docs_with_orr_potentials,
+                     _pull_catalog_from_mongo,
+                     get_catalog_docs_with_predictions,
+                     _add_adsorption_energy_predictions_to_fingerprints,
+                     _add_orr_predictions_to_fingerprints,
                      get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
@@ -45,6 +47,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
 from ..utils import read_rc
+from ..defaults import catalog_fingerprints
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
@@ -241,60 +244,41 @@ def test_get_catalog_docs():
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates, models, latest_predictions',
-                         [(['CO'], ['model0'], True),
-                          (['CO', 'H'], ['model0'], True),
-                          (['CO', 'H'], ['model0'], False)])
-def test_to_create_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions):
-    docs = get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions)
+def test_to_create_unprocessed_catalog_docs():
+    fingerprints = catalog_fingerprints()
+    project = {'$project': fingerprints}
+    pipeline = [project]
+    docs = _pull_catalog_from_mongo(pipeline)
 
-    arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_adsorption_energies_%s' % arg_hash + '.pkl'
-    with open(file_name, 'wb') as file_handle:
+    with open(REGRESSION_BASELINES_LOCATION + 'unprocessed_catalog_documents' + '.pkl', 'wb') as file_handle:
         pickle.dump(docs, file_handle)
-    assert True
 
 
-@pytest.mark.parametrize('adsorbates, models, latest_predictions',
-                         [(['CO'], ['model0'], True),
-                          (['CO', 'H'], ['model0'], True),
-                          (['CO', 'H'], ['model0'], False)])
-def test_get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions):
-    '''
-    This could be a "real" test, but I am really busy and don't have time to design one.
-    So I'm turning this into a regression test to let someone else (probably me)
-    deal with this later.
+def test__pull_catalog_from_mongo():
+    fingerprints = catalog_fingerprints()
+    project = {'$project': fingerprints}
+    pipeline = [project]
+    docs = _pull_catalog_from_mongo(pipeline)
 
-    If you do fix this, you should probably add more than one day's worth of predictions
-    to the unit testing catalog.
-    '''
-    docs = get_catalog_docs_with_adsorption_energies(adsorbates, models, latest_predictions)
-
-    arg_hash = hashlib.sha224((str(adsorbates) + str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_adsorption_energies_%s' % arg_hash + '.pkl'
-    with open(file_name, 'rb') as file_handle:
+    with open(REGRESSION_BASELINES_LOCATION + 'unprocessed_catalog_documents' + '.pkl', 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
     assert docs == expected_docs
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('models, latest_predictions',
-                         [(['model0'], True),
-                          (['model0'], False)])
-def test_to_create_catalog_docs_with_orr_potentials(models, latest_predictions):
-    docs = get_catalog_docs_with_orr_potentials(models, latest_predictions)
+@pytest.mark.parametrize('latest_predictions', [True, False])
+def test_to_create_catalog_docs_with_predictions(latest_predictions):
+    docs = get_catalog_docs_with_predictions(latest_predictions)
 
-    arg_hash = hashlib.sha224((str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_orr_potentials_%s' % arg_hash + '.pkl'
+    arg_hash = hashlib.sha224(str(latest_predictions).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_predictions_%s' % arg_hash + '.pkl'
     with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-@pytest.mark.parametrize('models, latest_predictions',
-                         [(['model0'], True),
-                          (['model0'], False)])
-def test_get_catalog_docs_with_orr_potentials(models, latest_predictions):
+@pytest.mark.parametrize('latest_predictions', [True, False])
+def test_get_catalog_docs_with_predictions(latest_predictions):
     '''
     This could be a "real" test, but I am really busy and don't have time to design one.
     So I'm turning this into a regression test to let someone else (probably me)
@@ -303,13 +287,65 @@ def test_get_catalog_docs_with_orr_potentials(models, latest_predictions):
     If you do fix this, you should probably add more than one day's worth of predictions
     to the unit testing catalog.
     '''
-    docs = get_catalog_docs_with_orr_potentials(models, latest_predictions)
+    docs = get_catalog_docs_with_predictions(latest_predictions)
 
-    arg_hash = hashlib.sha224((str(models) + str(latest_predictions)).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_orr_potentials_%s' % arg_hash + '.pkl'
+    arg_hash = hashlib.sha224(str(latest_predictions).encode()).hexdigest()
+    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_predictions_%s' % arg_hash + '.pkl'
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
     assert docs == expected_docs
+
+
+@pytest.mark.parametrize('latest_predictions', [True, False])
+def test__add_adsorption_energy_predictions_to_fingerprints(latest_predictions):
+    default_fingerprints = catalog_fingerprints()
+    fingerprints = _add_adsorption_energy_predictions_to_fingerprints(default_fingerprints, latest_predictions)
+
+    # Get ALL of the adsorbates and models in the unit testing collection
+    with get_mongo_collection('catalog') as collection:
+        cursor = collection.aggregate([{"$sample": {"size": 1}}])
+        docs = list(cursor)
+    adsorbates = set()
+    models = set()
+    for doc in docs:
+        predictions = doc['predictions']['adsorption_energy']
+        new_adsorbates = set(predictions.keys())
+        new_models = set(model for adsorbate in adsorbates for model in predictions[adsorbate])
+        adsorbates.update(new_adsorbates)
+        models.update(new_models)
+
+    # Make sure that every single query is there
+    for adsorbate in adsorbates:
+        for model in models:
+            data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model)
+            if latest_predictions:
+                assert fingerprints[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
+            else:
+                assert fingerprints[data_location] == '$'+data_location
+
+
+@pytest.mark.parametrize('latest_predictions', [True, False])
+def test__add_orr_predictions_to_fingerprints(latest_predictions):
+    default_fingerprints = catalog_fingerprints()
+    fingerprints = _add_orr_predictions_to_fingerprints(default_fingerprints, latest_predictions)
+
+    # Get ALL of the models in the unit testing collection
+    with get_mongo_collection('catalog') as collection:
+        cursor = collection.aggregate([{"$sample": {"size": 1}}])
+        docs = list(cursor)
+    models = set()
+    for doc in docs:
+        predictions = doc['predictions']['orr_onset_potential_4e']
+        new_models = set(predictions.keys())
+        models.update(new_models)
+
+    # Make sure that every single query is there
+    for model in models:
+        data_location = 'predictions.orr_onset_potential_4e.%s' % model
+        if latest_predictions:
+            assert fingerprints[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
+        else:
+            assert fingerprints[data_location] == '$'+data_location
 
 
 @pytest.mark.baseline
@@ -585,9 +621,8 @@ def test_get_low_coverage_ml_docs(adsorbates, model_tag):
     our adsorption collection has a higher (or equal) adsorption
     energy than the one reported by `get_low_coverage_ml_docs`
     '''
-    models = ['model0']
     low_coverage_docs = get_low_coverage_ml_docs(adsorbates)
-    all_docs = get_catalog_docs_with_adsorption_energies(adsorbates, models)
+    all_docs = get_catalog_docs_with_predictions()
 
     for doc in all_docs:
         energy = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag][1]
