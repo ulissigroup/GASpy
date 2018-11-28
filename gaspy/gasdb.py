@@ -212,17 +212,12 @@ def _pull_catalog_from_mongo(pipeline):
     return docs
 
 
-def get_catalog_docs_with_adsorption_energies(adsorbates=None, models=['model0'], latest_predictions=True):
+def get_catalog_docs_with_predictions(latest_predictions=True):
     '''
     Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
     modeling predictions for adsorption energies.
 
     Args:
-        adsorbates          A list of strings indicating which sets of adsorbates
-                            you want to get adsorption energy predictions for,
-                            e.g., ['CO', 'H'] or ['O', 'OH', 'OOH'].
-        models              A list of strings indicating which models whose
-                            predictions you want to get.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
     Returns:
@@ -231,12 +226,49 @@ def get_catalog_docs_with_adsorption_energies(adsorbates=None, models=['model0']
                 with a 'predictions' key that has the surrogate modeling
                 predictions of adsorption energy.
     '''
-    if isinstance(models, str):
-        raise SyntaxError('The models argument must be a sequence of strings where each '
-                          'element is a model name. Do not pass a single string.')
-
-    # Get the prediction data
+    # Get the default catalog fingerprints, then append the fingerprints we
+    # need to get the predictions.
     fingerprints = defaults.catalog_fingerprints()
+    fingerprints = _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_predictions)
+    fingerprints = _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions)
+
+    # Get the documents
+    project = {'$project': fingerprints}
+    pipeline = [project]
+    docs = _pull_catalog_from_mongo(pipeline)
+
+    # Clean the documents up
+    expected_keys = set(defaults.catalog_fingerprints())
+    expected_keys.add('predictions')
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
+
+    return cleaned_docs
+
+
+def _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_predictions):
+    '''
+    This function will add particular keys to a `fingerprints` dictionary that
+    can be used in a Mongo projection to get the adsorption energy predictions
+    from our catalog.
+
+    Args:
+        fingerprints        A dictionary that you plan to pass as a projection
+                            command to a pymongo collection aggregation.
+        lastest_predictions Boolean indicating whether or not you want either
+                            the latest predictions or all of them.
+    '''
+    # Figure out what type of json structure our adsorption energy predictions
+    # have. We do that by looking at the structure of one random document. Note
+    # that this assumes that all documents are structure identically.
+    with get_mongo_collection('catalog') as collection:
+        cursor = collection.aggregate([{"$sample": {"size": 1}}])
+        example_doc = list(cursor)[0]
+    predictions = example_doc['predictions']['adsorption_energy']
+    adsorbates = set(predictions.keys())
+    models = set(model for adsorbate in adsorbates for model in predictions[adsorbate])
+
+    # Make a projection query that targets predictions for each combination of
+    # adsorbate and model.
     for adsorbate in adsorbates:
         for model in models:
             data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model)
@@ -245,44 +277,31 @@ def get_catalog_docs_with_adsorption_energies(adsorbates=None, models=['model0']
             else:
                 fingerprints[data_location] = '$'+data_location
 
-    # Get the documents
-    project = {'$project': fingerprints}
-    pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
-
-    # Clean the documents up
-    expected_keys = set(fingerprints.keys())
-    for adsorbate in adsorbates:
-        for model in models:
-            expected_keys.remove('predictions.adsorption_energy.%s.%s' % (adsorbate, model))
-    expected_keys.add('predictions')
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
-
-    return cleaned_docs
+    return fingerprints
 
 
-def get_catalog_docs_with_orr_potentials(models=['model0'], latest_predictions=True):
+def _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions):
     '''
-    Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
-    modeling predictions for adsorption energy.
+    This function will add particular keys to a `fingerprints` dictionary that
+    can be used in a Mongo projection to get the ORR chemistry predictions from
+    our catalog.
 
     Args:
-        models              A list of strings indicating which models whose
-                            predictions you want to get.
+        fingerprints        A dictionary that you plan to pass as a projection
+                            command to a pymongo collection aggregation.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
-    Returns:
-        docs    A list of dictionaries whose key/value pairings are the
-                ones given by `gaspy.defaults.catalog_fingerprints`, along
-                with a 'predictions' key that has the surrogate modeling
-                predictions of adsorption energy.
     '''
-    if isinstance(models, str):
-        raise SyntaxError('The models argument must be a sequence of strings where each '
-                          'element is a model name. Do not pass a single string.')
+    # Figure out what type of json structure our adsorption energy predictions
+    # have. We do that by looking at the structure of one random document. Note
+    # that this assumes that all documents are structure identically.
+    with get_mongo_collection('catalog') as collection:
+        cursor = collection.aggregate([{"$sample": {"size": 1}}])
+        example_doc = list(cursor)[0]
+    predictions = example_doc['predictions']['orr_onset_potential_4e']
+    models = set(predictions.keys())
 
-    # Get the prediction data
-    fingerprints = defaults.catalog_fingerprints()
+    # Make a projection query that targets predictions for each model.
     for model in models:
         data_location = 'predictions.orr_onset_potential_4e.%s' % model
         if latest_predictions:
@@ -290,19 +309,7 @@ def get_catalog_docs_with_orr_potentials(models=['model0'], latest_predictions=T
         else:
             fingerprints[data_location] = '$'+data_location
 
-    # Get the documents
-    project = {'$project': fingerprints}
-    pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
-
-    # Clean the documents up
-    expected_keys = set(fingerprints.keys())
-    for model in models:
-        expected_keys.remove('predictions.orr_onset_potential_4e.%s' % model)
-    expected_keys.add('predictions')
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
-
-    return cleaned_docs
+    return fingerprints
 
 
 def get_surface_docs(extra_fingerprints=None, filters=None):
