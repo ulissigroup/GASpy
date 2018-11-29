@@ -260,7 +260,7 @@ def _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_pred
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('relaxed_bulk_catalog') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['adsorption_energy']
@@ -295,7 +295,7 @@ def _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions):
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('relaxed_bulk_catalog') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['orr_onset_potential_4e']
