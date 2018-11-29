@@ -91,7 +91,7 @@ def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
                 `gaspy.defaults.adsorption_filters`
     '''
     # Set the filtering criteria of the documents we'll be getting
-    if not filters:
+    if filters is None:
         filters = defaults.adsorption_filters(adsorbates)
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
@@ -337,7 +337,7 @@ def get_surface_docs(extra_fingerprints=None, filters=None):
                 `gaspy.defaults.surface_filters`
     '''
     # Set the filtering criteria of the documents we'll be getting
-    if not filters:
+    if filters is None:
         filters = defaults.surface_filters()
     match = {'$match': filters}
 
@@ -673,7 +673,7 @@ def get_low_coverage_dft_docs(adsorbates, filters=None):
                         Mongo document for the low coverage site on that surface.
     '''
     # Set the filtering criteria of the documents we'll be getting
-    if not filters:
+    if filters is None:
         filters = defaults.adsorption_filters(adsorbates)
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
