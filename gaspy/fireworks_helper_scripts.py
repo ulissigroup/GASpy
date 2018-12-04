@@ -220,7 +220,6 @@ def defuse_lost_runs():
             to_print.append(fwid)
             fw = lp.get_fw_by_id(fwid)
             name = fw.name
-            #if name['user'] == user_ID:
             for key in name_fields:
                 if key in name:
                     to_print.append(name[key])
