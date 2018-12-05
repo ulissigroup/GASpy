@@ -4,7 +4,7 @@ import numpy as np
 from ase.io import read
 from ase.io.trajectory import TrajectoryWriter
 from ase.optimize import BFGS
-from ase.calculators.vasp import Vasp
+from ase.calculators.vasp import Vasp2
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
 # noqa: E731
 
@@ -112,7 +112,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
     if vasp_incompatible_constraints:
         vaspflags['ibrion'] = 2
         vaspflags['nsw'] = 0
-        calc = Vasp(**vaspflags)
+        calc = Vasp2(**vaspflags)
         atoms.set_calculator(calc)
         qn = BFGS(atoms, logfile='relax.log', trajectory='all.traj')
         qn.run(fmax=vaspflags['ediffg'] if 'ediffg' in vaspflags else 0.05)
@@ -120,7 +120,7 @@ def runVasp(fname_in, fname_out, vaspflags, npar=4):
 
     else:
         # set up the calculation and run
-        calc = Vasp(**vaspflags)
+        calc = Vasp2(**vaspflags)
         atoms.set_calculator(calc)
 
         # Trigger the calculation
