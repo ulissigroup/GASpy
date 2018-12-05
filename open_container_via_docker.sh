@@ -15,5 +15,6 @@ gaspy_mounting_config="$gaspy_path:/home/GASpy"
 #   -v      mount various things to the container
 docker run -it --rm -w "/home" \
     -v $gaspy_mounting_config \
+    -v $HOME/.ssh:/home/.ssh \
     ulissigroup/gaspy:latest \
     /bin/bash
