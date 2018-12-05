@@ -43,7 +43,7 @@ RUN conda install \
     pytest=3.8.0 \
     mongodb=4.0.2   pymongo=3.7.1 \
     multiprocess=0.70.5 \
-    ase=3.16.2 \
+    ase=3.17.0 \
     pymatgen=2018.9.1 \
     fireworks=1.7.2 \
     luigi=2.7.8 \
