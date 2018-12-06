@@ -51,10 +51,13 @@ RUN conda install \
     ipykernel=4.9.0 \
     tqdm=4.24.0
 
+# The $HOME/.ssh mount is so that you can mount your ~/.ssh into it, so that
+# you can freely log into other things from inside the container.
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
 # We do this near the end because we can't modify mounted folders after
 # declaring them as volumes.
-VOLUME $GASPY_HOME
+RUN mkdir -p $HOME/.ssh
+VOLUME $HOME/.ssh $GASPY_HOME
 
 # Make the default user `user` instead of `root`. Necessary when working with Shifter.
 RUN chown -R user:group $HOME

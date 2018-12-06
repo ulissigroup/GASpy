@@ -48,7 +48,7 @@ class AllSitesOnSurfaces(luigi.WrapperTask):
                                     of submissions, then submission priority is assigned randomly.
     '''
     adsorbates_list = luigi.ListParameter()
-    adsorbate_rotation_list = luigi.ListParameter()
+    adsorbate_rotation_list = luigi.ListParameter([defaults.ROTATION])
     mpid_list = luigi.ListParameter()
     miller_list = luigi.ListParameter()
     xc = luigi.Parameter(defaults.XC)
@@ -265,7 +265,7 @@ class AllSitesOnSurfacesBlaster(luigi.WrapperTask):
                         of submissions, then submission priority is assigned randomly.
     '''
     adsorbates_list = luigi.ListParameter()
-    adsorbate_rotation_list = luigi.ListParameter()
+    adsorbate_rotation_list = luigi.ListParameter([defaults.ROTATION])
     mpid_list = luigi.ListParameter()
     miller_list = luigi.ListParameter()
     xc = luigi.Parameter(defaults.XC)
