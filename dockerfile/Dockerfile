@@ -26,8 +26,9 @@ RUN apt-get update
 RUN apt-get dist-upgrade -y
 RUN apt-get install -y wget
 
-# Install less
+# Install some utility packages
 RUN apt-get install less
+RUN echo -e "Y\n" | apt install rsync
 
 # Install Conda
 RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
