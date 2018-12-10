@@ -326,27 +326,23 @@ class DumpToAuxDB(luigi.Task):
                     atoms.set_tags(tags)
                     starting_atoms.set_tags(tags)
 
-                # The VASP calculator, when used with ASE optimization was incorrectly
-                # recording the internal forces in atoms objects, with the stored forces
-                # including constraints. If such incompatible constraints exist and the calculations occured 
-                # before the switch to the Vasp2 calculator, we should get the correct (VASP) forces
-                # from a backup of the directory which includes the INCAR, ase-sort.dat, etc files
+                # The VASP calculator, when used with ASE optimization, was
+                # incorrectly recording the internal forces in atoms objects
+                # with the stored forces including constraints. If such
+                # incompatible constraints exist and the calculations occured
+                # before the switch to the Vasp2 calculator, we should get the
+                # correct (VASP) forces from a backup of the directory which
+                # includes the INCAR, ase-sort.dat, etc files
                 allowable_constraints = ['FixAtoms']
-                constraint_not_allowable = [constraint.todict()['name']
-                                            not in allowable_constraints
+                constraint_not_allowable = [constraint.todict()['name'] not in allowable_constraints
                                             for constraint in atoms.constraints]
-                                            
                 vasp_incompatible_constraints = np.any(constraint_not_allowable)
-                
-                if (fw.created_on < datetime(2018, 12, 1) and
-                        vasp_incompatible_constraints):
+                if (fw.created_on < datetime(2018, 12, 1) and vasp_incompatible_constraints):
                     atoms = utils.get_final_atoms_object_with_vasp_forces(fw.launches[-1].launch_id)
-                    
+
                 # Initialize the mongo document, doc, and the populate it with the fw info
                 doc = make_doc_from_atoms(atoms)
                 doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
-
-
                 doc['fwname'] = fw.name
                 doc['fwid'] = fwid
                 doc['directory'] = fw.launches[-1].launch_dir
@@ -360,8 +356,6 @@ class DumpToAuxDB(luigi.Task):
                     doc['type'] = 'slab_surface_energy'
                 elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                     doc['type'] = 'slab+adsorbate'
-
-
 
                 # Convert the miller indices from strings to integers
                 if 'miller' in fw.name:
