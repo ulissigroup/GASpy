@@ -693,26 +693,28 @@ def get_lpad():
 def get_final_atoms_object_with_vasp_forces(launch_id):
     # launch_id is the fireworks launch ID
     # returns an atoms object with the correct internal forces
-    
-    #Set the backup directory
-    temp_loc= '/tmp/%s/'%uuid.uuid4()
-    
-    #Make the directory
-    subprocess.call('mkdir %s'%temp_loc, shell=True)
-    
-    #Unzip the launch backup to the temp directory
-    subprocess.call('tar -C %s -xf %s'%(temp_loc,read_rc()['launches_backup_directory']+'/'+'%d.tar.gz'%launch_id), shell=True)
-    
-    #unzip all of the files if necessary (zipped archive from a backup)
-    subprocess.call('gunzip -q %s/* > /dev/null'%temp_loc, shell=True)
-    
-    #Read the atoms object and use the Vasp2 calculator 
-    # to load the correct (DFT) forces from the OUTCAR/etc info
-    atoms = ase.io.read('%s/slab_relaxed.traj'%temp_loc)
+
+    # Set the backup directory
+    temp_loc = '/tmp/%s/' % uuid.uuid4()
+
+    # Make the directory
+    subprocess.call('mkdir %s' % temp_loc, shell=True)
+
+    # Unzip the launch backup to the temp directory
+    subprocess.call('tar -C %s -xf %s' % (temp_loc,
+                                          read_rc()['launches_backup_directory'] + '/' + '%d.tar.gz' % launch_id),
+                    shell=True)
+
+    # unzip all of the files if necessary (zipped archive from a backup)
+    subprocess.call('gunzip -q %s/* > /dev/null' % temp_loc, shell=True)
+
+    # Read the atoms object and use the Vasp2 calculator
+    #  to load the correct (DFT) forces from the OUTCAR/etc info
+    atoms = ase.io.read('%s/slab_relaxed.traj' % temp_loc)
     vasp2 = Vasp2(atoms, restart=True, directory=temp_loc)
     vasp2.read_results()
-    
-    #Clean up behind us
-    subprocess.call('rm -r %s'%temp_loc, shell=True)
-    
+
+    # Clean up behind us
+    subprocess.call('rm -r %s' % temp_loc, shell=True)
+
     return atoms
