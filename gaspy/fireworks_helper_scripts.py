@@ -9,6 +9,7 @@ __email__ = 'zulissi@andrew.cmu.edu'
 from collections import OrderedDict
 import getpass
 import numpy as np
+import pandas as pd
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
 from . import vasp_functions, defaults
@@ -178,3 +179,58 @@ def defuse_lost_runs():
     # Defuse them
     for _id in lost_fw_ids:
         lp.defuse_fw(_id)
+       
+    
+ def check_jobs_status(user_ID, num_jobs):
+    """
+    This function requires importing pandas and gaspy.fireworks_helper_scripts.get_launchpad()
+    This function returns the status of the submitted FW_jobs in a pandas dataframe. 
+    The job status are displayed in reversed order (last job- first job).
+    For example, if Zach submitted 2 jobs (with fwid 10000, 10001), and wants to check their status, he will get
+    fwi    mpid    miller_index    shift    top    calculation_type             user       job status    directory
+0   10001  mp-XXX  [1, 1, 0]       0.0      True   slab+adsorbate optimization  'zulissi'  RUNNING       /home/zulissi/fireworks/block_2018-11-25-21-28...
+1   10000  mp-YYY  [1, 1, 0]       0.0      True   slab+adsorbate optimization  'zulissi'  RUNNING       /home-research/zulissi/fireworks/blocks/block_...
+    
+    
+    Args:
+    
+        user:      your cori user ID, which is usually your CMU andrew ID, input as a string.
+                   for example: 'zulissi' or 'ktran'.
+        
+        num_jobs:  number of submitted job you want to check
+        
+    Returns:
+    
+        job status: A Pandas Dataframe that contains FW job status. 
+                    Information includes:
+                        user, mpid, miller index, shift, calculation_type (e.g slab_adsorbate optimization, slab optimization), 
+                        top, adsorbate (if any), job status (e.g. COMPLETED, FIZZLED, READY, DEFUSED), and directories.
+    """
+    
+    lp=get_launchpad()
+    user_fwids = lp.get_fw_ids({'name.user':user_ID})
+    name_fields = ['mpid','miller','shift','top','calculation_type','adsorbate', 'user']
+    col_names = ['fwid','mpid','miller_index','shift','top','calculation_type','adsorbate','user','job status', 'directory'] 
+
+    data = []
+    num = 0
+    for fwid in reversed(user_fwids):
+        if num < num_jobs:
+            to_print = []
+            to_print.append(fwid)
+            fw = lp.get_fw_by_id(fwid)
+            name = fw.name
+            for key in name_fields:
+                if key in name:
+                    to_print.append(name[key])
+                else:
+                    to_print.append('') 
+            to_print.append(fw.state)
+            if len(fw.launches)>0:
+                to_print.append(fw.launches[0].launch_dir)
+            else:
+                to_print.append('')
+            data.append(to_print)
+            num += 1
+    data = pd.DataFrame(data, columns = col_names)
+    return data
