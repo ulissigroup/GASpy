@@ -20,15 +20,19 @@ from ..utils import (read_rc,
                      decode_trajhex_to_atoms,
                      save_luigi_task_run_results,
                      evaluate_luigi_task,
-                     get_lpad)
+                     get_lpad,
+                     get_final_atoms_object_with_vasp_forces,
+                     _dump_file_to_tmp)
 
 # Things we need to do the tests
 import pytest
+import subprocess
 import pickle
 import collections
 import json
 import numpy as np
 import numpy.testing as npt
+import ase
 import luigi
 from luigi.parameter import _FrozenOrderedDict
 from fireworks.core.launchpad import LaunchPad
@@ -420,3 +424,29 @@ def test_get_lpad():
     lpad_info['port'] = int(lpad_info['port'])
     for key, expected_value in lpad_info.items():
         assert getattr(lpad, key) == expected_value
+
+
+def test_get_final_atoms_object_with_vasp_forces():
+    atoms = get_final_atoms_object_with_vasp_forces(101392)
+    assert type(atoms) == ase.atoms.Atoms
+    assert type(atoms.get_calculator()) == ase.calculators.vasp.Vasp2
+
+
+def test__dump_directory_to_tmp():
+    temp_loc = _dump_file_to_tmp('/home/GASpy/gaspy/tests/launches_backup_directory/101392.tar.gz')
+
+    # Make sure that all the files exist
+    try:
+        files = ['CONTCAR', 'DOSCAR', 'EIGENVAL', 'FW.json', 'FW_submit.script',
+                 'IBZKPT', 'INCAR', 'KPOINTS', 'OSZICAR', 'OUTCAR', 'PCDAT',
+                 'POSCAR', 'POTCAR', 'REPORT', 'XDATCAR', 'all.traj',
+                 'ase-sort.dat', 'energy.out', 'fw_vasp_fill-115384.error',
+                 'fw_vasp_fill-115384.out', 'slab_in.traj', 'slab_relaxed.traj',
+                 'vasp.out', 'vasp_functions.py', 'vasp_functions.pyc',
+                 'vasprun.xml']
+        for file_ in files:
+            assert os.path.isfile(temp_loc + file_)
+
+    # Clean up
+    finally:
+        subprocess.call('rm -r %s' % temp_loc, shell=True)

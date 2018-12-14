@@ -14,6 +14,7 @@
         "password": "pw",
         "port": "99999"
         },
+    "launches_backup_directory": "/home/GASpy/gaspy/tests/launches_backup_directory",
     "mongo_info":{
         "atoms":{
             "host": "host.name",

@@ -1,7 +1,7 @@
 ''' Various functions that may be used across GASpy and its submodules '''
 
-__author__ = 'Kevin Tran'
-__email__ = 'ktran@andrew.cmu.edu'
+__authors__ = ['Kevin Tran', 'Zack Ulissi']
+__emails__ = ['ktran@andrew.cmu.edu', 'zulissi@andrew.cmu.edu']
 
 import os
 import pickle
@@ -691,30 +691,53 @@ def get_lpad():
 
 
 def get_final_atoms_object_with_vasp_forces(launch_id):
-    # launch_id is the fireworks launch ID
-    # returns an atoms object with the correct internal forces
+    '''
+    This function will return an ase.Atoms object from a particular FireWorks
+    launch ID. It will also make sure that the ase.Atoms object will have
+    VASP-calculated forces attache to it.
 
-    # Set the backup directory
-    temp_loc = '/tmp/%s/' % uuid.uuid4()
+    Arg:
+        launch_id   An integer representing the FireWorks launch ID of the
+                    atoms object you want to get
+    Returns:
+        atoms   ase.Atoms object with the VASP-calculated forces
+    '''
+    # We will be opening a temporary directory where we will unzip the
+    # FireWorks launch directory
+    fw_launch_file = read_rc('launches_backup_directory') + '/%d.tar.gz' % launch_id
+    temp_loc = _dump_file_to_tmp(fw_launch_file)
 
-    # Make the directory
-    subprocess.call('mkdir %s' % temp_loc, shell=True)
-
-    # Unzip the launch backup to the temp directory
-    subprocess.call('tar -C %s -xf %s' % (temp_loc,
-                                          read_rc()['launches_backup_directory'] + '/' + '%d.tar.gz' % launch_id),
-                    shell=True)
-
-    # unzip all of the files if necessary (zipped archive from a backup)
-    subprocess.call('gunzip -q %s/* > /dev/null' % temp_loc, shell=True)
-
-    # Read the atoms object and use the Vasp2 calculator
-    #  to load the correct (DFT) forces from the OUTCAR/etc info
-    atoms = ase.io.read('%s/slab_relaxed.traj' % temp_loc)
-    vasp2 = Vasp2(atoms, restart=True, directory=temp_loc)
-    vasp2.read_results()
+    # Load the atoms object and then load the correct (DFT) forces from the
+    # OUTCAR/etc info
+    try:
+        atoms = ase.io.read('%s/slab_relaxed.traj' % temp_loc)
+        vasp2 = Vasp2(atoms, restart=True, directory=temp_loc)
+        vasp2.read_results()
 
     # Clean up behind us
-    subprocess.call('rm -r %s' % temp_loc, shell=True)
+    finally:
+        subprocess.call('rm -r %s' % temp_loc, shell=True)
 
     return atoms
+
+
+def _dump_file_to_tmp(file_name):
+    '''
+    Take the contents of a directory and then dump it into a temporary
+    directory while simultaneously unzipping it. This makes reading from
+    FireWorks directories faster.
+
+    Arg:
+        file_name   String indicating what directory you want to dump
+    Returns:
+        temp_loc    A string indicating where we just dumped the directory
+    '''
+    # Make the temporary directory
+    temp_loc = '/tmp/%s/' % uuid.uuid4()
+    subprocess.call('mkdir %s' % temp_loc, shell=True)
+
+    # Move to the temporary folder and unzip everything
+    subprocess.call('tar -C %s -xf %s' % (temp_loc, file_name), shell=True)
+    subprocess.call('gunzip -q %s/* > /dev/null' % temp_loc, shell=True)
+
+    return temp_loc
