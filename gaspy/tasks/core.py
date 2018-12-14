@@ -896,6 +896,21 @@ class SubmitToFW(luigi.Task):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
 
 
+class GenerateGas(luigi.Task):
+    parameters = luigi.DictParameter()
+
+    def run(self):
+        atoms = g2[self.parameters['gas']['gasname']]
+        atoms.positions += 10.
+        atoms.cell = [20, 20, 20]
+        atoms.pbc = [True, True, True]
+        with self.output().temporary_path() as self.temp_output_path:
+            pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
+
+    def output(self):
+        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+
+
 class GenerateBulk(luigi.Task):
     '''
     This class pulls a bulk structure from Materials Project and then converts it to an ASE
@@ -912,21 +927,6 @@ class GenerateBulk(luigi.Task):
             # Dump the atoms object into our pickles
             with self.output().temporary_path() as self.temp_output_path:
                 pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
-
-    def output(self):
-        return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
-
-
-class GenerateGas(luigi.Task):
-    parameters = luigi.DictParameter()
-
-    def run(self):
-        atoms = g2[self.parameters['gas']['gasname']]
-        atoms.positions += 10.
-        atoms.cell = [20, 20, 20]
-        atoms.pbc = [True, True, True]
-        with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
 
     def output(self):
         return luigi.LocalTarget(GASdb_path+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
