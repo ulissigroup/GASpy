@@ -7,7 +7,8 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 # flake8: noqa
 
-from .core import (run_tasks,
+from .core import (evaluate_luigi_task,
+                   save_luigi_task_run_results,
                    UpdateAllDB,
                    UpdateEnumerations,
                    DumpToAuxDB,
