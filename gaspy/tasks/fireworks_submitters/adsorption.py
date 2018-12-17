@@ -11,10 +11,11 @@ from collections import OrderedDict
 import random
 import luigi
 import numpy as np
+from .core import SubmitToFW
+from ..metadata_calculators import FingerprintRelaxedAdslab
 from ... import defaults
 from ...utils import unfreeze_dict
 from ...gasdb import get_unsimulated_catalog_docs
-from ..core import FingerprintRelaxedAdslab, SubmitToFW
 
 DEFAULT_MAX_ROCKETS = 20
 
