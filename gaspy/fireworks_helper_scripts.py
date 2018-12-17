@@ -9,6 +9,7 @@ __email__ = 'zulissi@andrew.cmu.edu'
 from collections import OrderedDict
 import getpass
 import numpy as np
+import pandas as pd
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
 from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
 from . import vasp_functions, defaults
@@ -166,8 +167,8 @@ def defuse_lost_runs():
     become "lost". This function finds and clears them
     '''
     # Find the lost runs
-    lp = get_launchpad()
-    lost_launch_ids, lost_fw_ids, inconsistent_fw_ids = lp.detect_lostruns()
+    lpad = get_launchpad()
+    lost_launch_ids, lost_fw_ids, inconsistent_fw_ids = lpad.detect_lostruns()
 
     # We reverse the list, because early-on in the list there's some really bad
     # launches that cause this script to hang up. If we run in reverse, then
@@ -177,4 +178,67 @@ def defuse_lost_runs():
 
     # Defuse them
     for _id in lost_fw_ids:
-        lp.defuse_fw(_id)
+        lpad.defuse_fw(_id)
+
+
+def check_jobs_status(user_ID, num_jobs):
+    '''
+    This function returns the status of the submitted FW_jobs as a pandas
+    dataframe. The job status are displayed in reversed order (last job to
+    first job).
+
+    For example, if Zack submitted 2 jobs (with fwid 10000, 10001),
+    and wants to check their status, he will get
+    fwi    mpid    miller_index    shift    top    calculation_type             user       job status    directory
+    10001  mp-XXX  [1, 1, 0]       0.0      True   slab+adsorbate optimization  'zulissi'  RUNNING       /home/zulissi/fireworks/block_2018-11-25-21-28...
+    10000  mp-YYY  [1, 1, 0]       0.0      True   slab+adsorbate optimization  'zulissi'  RUNNING       /home-research/zulissi/fireworks/blocks/block_...
+
+    Args:
+        user:       Your cori user ID, which is usually your CMU andrew ID, input as a string.
+                    For example: 'zulissi' or 'ktran'.
+        num_jobs    Number of submitted job you want to check
+    Returns:
+        dataframe   A Pandas DataFrame that contains FW job status. Information includes:
+                    user, mpid, miller index, shift, calculation_type (e.g slab_adsorbate
+                    optimization, slab optimization), top, adsorbate (if any), job status
+                    (e.g. COMPLETED, FIZZLED, READY, DEFUSED), and directories.
+    '''
+    lpad = get_launchpad()
+    user_fwids = lpad.get_fw_ids({'name.user': user_ID})
+    user_fwids.sort(reverse=True)
+
+    fireworks_info = []
+    for fwid in user_fwids[:num_jobs]:
+        fw = lpad.get_fw_by_id(fwid)
+
+        # EAFP to get the launch directory, which does not exists for unlaunched fireworks
+        try:
+            launch_dir = fw.launches[0].launch_dir
+        except IndexError:
+            launch_dir = ''
+
+        fw_info = (fwid,
+                   fw.name.get('mpid', ''),
+                   fw.name.get('miller', ''),
+                   fw.name.get('shift', ''),
+                   fw.name.get('top', ''),
+                   fw.name.get('calculation_type', ''),
+                   fw.name.get('adsorbate', ''),
+                   fw.name.get('user', ''),
+                   fw.state,
+                   launch_dir)
+        fireworks_info.append(fw_info)
+
+    data_labels = ('fwid',
+                   'mpid',
+                   'miller',
+                   'shift',
+                   'top',
+                   'calculation_type',
+                   'adsorbate',
+                   'user',
+                   'state',
+                   'launch_dir')
+    dataframe = pd.DataFrame(fireworks_info, columns=data_labels)
+
+    return dataframe
