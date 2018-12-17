@@ -326,11 +326,23 @@ class DumpToAuxDB(luigi.Task):
                     atoms.set_tags(tags)
                     starting_atoms.set_tags(tags)
 
+                # The VASP calculator, when used with ASE optimization, was
+                # incorrectly recording the internal forces in atoms objects
+                # with the stored forces including constraints. If such
+                # incompatible constraints exist and the calculations occured
+                # before the switch to the Vasp2 calculator, we should get the
+                # correct (VASP) forces from a backup of the directory which
+                # includes the INCAR, ase-sort.dat, etc files
+                allowable_constraints = ['FixAtoms']
+                constraint_not_allowable = [constraint.todict()['name'] not in allowable_constraints
+                                            for constraint in atoms.constraints]
+                vasp_incompatible_constraints = np.any(constraint_not_allowable)
+                if (fw.created_on < datetime(2018, 12, 1) and vasp_incompatible_constraints):
+                    atoms = utils.get_final_atoms_object_with_vasp_forces(fw.launches[-1].launch_id)
+
                 # Initialize the mongo document, doc, and the populate it with the fw info
                 doc = make_doc_from_atoms(atoms)
                 doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
-
-
                 doc['fwname'] = fw.name
                 doc['fwid'] = fwid
                 doc['directory'] = fw.launches[-1].launch_dir
@@ -344,8 +356,6 @@ class DumpToAuxDB(luigi.Task):
                     doc['type'] = 'slab_surface_energy'
                 elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
                     doc['type'] = 'slab+adsorbate'
-
-
 
                 # Convert the miller indices from strings to integers
                 if 'miller' in fw.name:
@@ -598,8 +608,7 @@ class SubmitToFW(luigi.Task):
         # generate the necessary unrelaxed structure
         if len(self.matching_doc) == 0:
             if self.calctype == 'slab':
-                return [
-                    Slabs(OrderedDict(bulk=self.parameters['bulk'],
+                return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
                         # We are also vaing the unrelaxed slabs just in case. We can delete if
                         # we can find shifts successfully.
@@ -962,7 +971,7 @@ class GenerateSlabs(luigi.Task):
                 atoms_slab.rotate('x', math.pi, rotate_cell=True, center='COM')
                 if atoms_slab.cell[2][2] < 0.:
                     atoms_slab.cell[2] = -atoms_slab.cell[2]
-                if np.cross(atoms_slab.cell[0],atoms_slab.cell[1])[2]<0.0:
+                if np.cross(atoms_slab.cell[0], atoms_slab.cell[1])[2] < 0.0:
                     atoms_slab.cell[1] = -atoms_slab.cell[1]
                 atoms_slab.wrap()
 
@@ -1329,13 +1338,12 @@ class CalculateEnergy(luigi.Task):
         toreturn.append(SubmitToFW(parameters=param, calctype='slab+adsorbate'))
 
         # Lastly, we need to relax the base gases.
-        for gasname in ['CO', 'H2', 'H2O']:
+        for gasname in ['CO', 'H2', 'H2O', 'N2']:
             param = utils.unfreeze_dict(copy.deepcopy({'gas': self.parameters['gas']}))
             param['gas']['gasname'] = gasname
             toreturn.append(SubmitToFW(parameters=param, calctype='gas'))
 
         # Now we put it all together.
-        #print('Checking for/submitting relaxations for %s %s' % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller']))
         return toreturn
 
     def run(self):
@@ -1346,6 +1354,7 @@ class CalculateEnergy(luigi.Task):
         gasEnergies['CO'] = make_atoms_from_doc(pickle.load(open(inputs[2].fn, 'rb'))[0]).get_potential_energy()
         gasEnergies['H2'] = make_atoms_from_doc(pickle.load(open(inputs[3].fn, 'rb'))[0]).get_potential_energy()
         gasEnergies['H2O'] = make_atoms_from_doc(pickle.load(open(inputs[4].fn, 'rb'))[0]).get_potential_energy()
+        gasEnergies['N2'] = make_atoms_from_doc(pickle.load(open(inputs[5].fn, 'rb'))[0]).get_potential_energy()
         # Load the slab+adsorbate relaxed structures, and take the lowest energy one
         adslab_docs = pickle.load(open(inputs[0].fn, 'rb'))
         lowest_energy_adslab = np.argmin([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in adslab_docs])
@@ -1358,7 +1367,8 @@ class CalculateEnergy(luigi.Task):
         # Get the per-atom energies as a linear combination of the basis set
         mono_atom_energies = {'H': gasEnergies['H2']/2.,
                               'O': gasEnergies['H2O'] - gasEnergies['H2'],
-                              'C': gasEnergies['CO'] - (gasEnergies['H2O']-gasEnergies['H2'])}
+                              'C': gasEnergies['CO'] - (gasEnergies['H2O']-gasEnergies['H2']),
+                              'N': gasEnergies['N2']/2.}
 
         # Get the total energy of the stoichiometry amount of gas reference species
         gas_energy = 0
@@ -1382,7 +1392,8 @@ class CalculateEnergy(luigi.Task):
                    'slab': slab_docs[lowest_energy_slab],
                    'gas': {'CO': pickle.load(open(inputs[2].fn, 'rb'))[0],
                            'H2': pickle.load(open(inputs[3].fn, 'rb'))[0],
-                           'H2O': pickle.load(open(inputs[4].fn, 'rb'))[0]}}
+                           'H2O': pickle.load(open(inputs[4].fn, 'rb'))[0],
+                           'N2': pickle.load(open(inputs[5].fn, 'rb'))}}
 
         # Write the dictionary as a pickle
         with self.output().temporary_path() as self.temp_output_path:

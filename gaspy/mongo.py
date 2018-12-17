@@ -116,6 +116,12 @@ def _make_calculator_dict(atoms):
     if calculator:
         try:
             calc_dict['calculator'] = calculator.todict()
+            # Convert the kpts into a list of integers instead of an array of numpy64's
+            # so that Mongo can encode it. EAFP in case there is no calculator
+            try:
+                calc_dict['calculator']['kpts'] = [int(kpt) for kpt in calc_dict['calculator']['kpts']]
+            except KeyError:
+                pass
         except AttributeError:
             calc_dict['calculator'] = {}
 

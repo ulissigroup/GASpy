@@ -381,6 +381,7 @@ def adsorbates_dict():
     adsorbates['H'] = Atoms('H', positions=[[0., 0., -0.5]])
     adsorbates['O'] = Atoms('O')
     adsorbates['C'] = Atoms('C')
+    adsorbates['N'] = Atoms('N')
 
     ''' Diatomics '''
     # For diatomics (and above), it's a good practice to manually relax the gases

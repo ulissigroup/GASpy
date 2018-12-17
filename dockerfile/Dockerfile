@@ -26,8 +26,9 @@ RUN apt-get update
 RUN apt-get dist-upgrade -y
 RUN apt-get install -y wget
 
-# Install less
+# Install some utility packages
 RUN apt-get install less
+RUN echo -e "Y\n" | apt install rsync
 
 # Install Conda
 RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
@@ -43,7 +44,7 @@ RUN conda install \
     pytest=3.8.0 \
     mongodb=4.0.2   pymongo=3.7.1 \
     multiprocess=0.70.5 \
-    ase=3.16.2 \
+    ase=3.17.0 \
     pymatgen=2018.9.1 \
     fireworks=1.7.2 \
     luigi=2.7.8 \
@@ -51,10 +52,13 @@ RUN conda install \
     ipykernel=4.9.0 \
     tqdm=4.24.0
 
+# The $HOME/.ssh mount is so that you can mount your ~/.ssh into it, so that
+# you can freely log into other things from inside the container.
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
 # We do this near the end because we can't modify mounted folders after
 # declaring them as volumes.
-VOLUME $GASPY_HOME
+RUN mkdir -p $HOME/.ssh
+VOLUME $HOME/.ssh $GASPY_HOME
 
 # Make the default user `user` instead of `root`. Necessary when working with Shifter.
 RUN chown -R user:group $HOME
