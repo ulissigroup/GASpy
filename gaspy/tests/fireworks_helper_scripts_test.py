@@ -1,44 +1,43 @@
-"""Tests for the `fireworks_helper_scripts` submodule.
-Most of the script formatting followed the formats in gaspy/test folder in UlissiGroup Github
-That created by Kevin Tran"""
+'''
+Tests for the `fireworks_helper_scripts` submodule.
+'''
 
 __author__ = 'Aini Palizhati'
 __email__ = 'apalizha@andrew.cmu.edu'
 
 # Modify the python path so that we find/use the .gaspyrc.json in the testing
 # folder instead of the main folder
-
 import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
-#Things we are testing
+# Things we are testing
 from ..fireworks_helper_scripts import check_jobs_status
 
-#Things we need to do the tests
+# Things we need to do the tests
 import pandas as pd
-from ..fireworks_helper_scripts import get_launchpad
 
-#Here the @parameterize defines varies different tuples 
-#so that the check_jobs_status will run multiple times using them in turns
+# Here the @parameterize defines varies different tuples so that the
+# check_jobs_status will run multiple times using them in turns
 import pytest
 
-@pytest.mark.parametrize("test_input1, test_input2",[('zulissi',10)])
-def test_output_type(test_input1, test_input2):
-    """this function test if the output is Pandas Dataframe"""
-    expected_output = pd.DataFrame
-    output = check_jobs_status(test_input1, test_input2)
-    assert isinstance(output, expected_output)
 
-def check_user(test_input1, test_input2):
-    """This function test if the DataFrame contains only the user inquired"""
-    expected_output = test_input1
-    docs = check_jobs_status(test_input1, test_input2)
-    output = docs['user'].unique()
-    assert output == expected_output
+def test_check_jobs_output_type():
+    ''' This function tests if the output is Pandas Dataframe '''
+    dataframe = check_jobs_status('zulissi', 10)
+    assert isinstance(dataframe, pd.DataFrame)
 
-def check_num_jobs(test_input1, test_input2):
-    """This function test if the DataFrame contains requested number of rows"""
-    expected_output = test_input2
-    docs = check_jobs_status(test_input1, test_input2)
-    output = len(docs.index)
-    assert output == expected_output
+
+@pytest.mark.parametrize('user', ['zulissi', 'apalizha'])
+def test_check_jobs_user(user):
+    ''' This function test if the DataFrame contains only the user inquired '''
+    dataframe = check_jobs_status(user, 10)
+    user_from_results = dataframe['user'].unique()
+    assert user == user_from_results
+
+
+@pytest.mark.parametrize('n_jobs', [10, 20])
+def test_check_jobs_num_jobs(n_jobs):
+    ''' This function test if the DataFrame contains the requested number of rows '''
+    dataframe = check_jobs_status('zulissi', n_jobs)
+    n_jobs_from_results = len(dataframe.index)
+    assert n_jobs == n_jobs_from_results
