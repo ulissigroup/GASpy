@@ -1,6 +1,9 @@
 '''
-This submodule contains various tasks that generato ase.atoms.Atoms objects
-and/or pymatgen structures.
+This submodule contains various tasks that generato ase.atoms.Atoms objects.
+The output of all the tasks in this submodule are actually dictionaries (or
+"docs" as we define them, which is short for Mongo document). If you want the
+atoms object, then use the gaspy.mongo.make_atoms_from_doc function on the
+output.
 '''
 
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
@@ -21,47 +24,65 @@ from pymatgen.ext.matproj import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 import luigi
+from .core import make_task_output_object, save_task_output
 from .fireworks_submitters import SubmitToFW
 from ..mongo import make_doc_from_atoms, make_atoms_from_doc
-from .. import utils
+from .. import utils, defaults
 
 GASDB_PATH = utils.read_rc('gasdb_path')
+GAS_SETTINGS = defaults.GAS_SETTINGS
+BULK_SETTINGS = defaults.BULK_SETTINGS
+SLAB_SETTINGS = defaults.SLAB_SETTINGS
 
 
 class GenerateGas(luigi.Task):
-    parameters = luigi.DictParameter()
+    '''
+    Makes a gas-phase atoms object using ASE's g2 collection
+
+    Arg:
+        gas_name    A string that can be fed to ase.collection.g2 to create an
+                    atoms object (e.g., 'CO', 'OH')
+    saved output:
+        doc     The atoms object in the format of a dictionary/document
+    '''
+    gas_name = luigi.Parameter()
 
     def run(self):
-        atoms = g2[self.parameters['gas']['gasname']]
+        atoms = g2[self.gas_name]
         atoms.positions += 10.
         atoms.cell = [20, 20, 20]
         atoms.pbc = [True, True, True]
-        with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
+
+        doc = make_doc_from_atoms(atoms)
+        save_task_output(self, doc)
 
     def output(self):
-        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+        return make_task_output_object(self)
 
 
 class GenerateBulk(luigi.Task):
     '''
-    This class pulls a bulk structure from Materials Project and then converts it to an ASE
-    atoms object
+    This class pulls a bulk structure from Materials Project and then converts
+    it to an ASE atoms object
+
+    Arg:
+        mpid    A string indicating what the Materials Project ID (mpid) to
+                base this bulk on
+    saved output:
+        doc     The atoms object in the format of a dictionary/document
     '''
-    parameters = luigi.DictParameter()
+    mpid = luigi.Parameter()
 
     def run(self):
-        # Connect to the Materials Project database
-        with MPRester(utils.read_rc('matproj_api_key')) as m:
-            # Pull out the PyMatGen structure and convert it to an ASE atoms object
-            structure = m.get_structure_by_material_id(self.parameters['bulk']['mpid'])
-            atoms = AseAtomsAdaptor.get_atoms(structure)
-            # Dump the atoms object into our pickles
-            with self.output().temporary_path() as self.temp_output_path:
-                pickle.dump([make_doc_from_atoms(atoms)], open(self.temp_output_path, 'wb'))
+        with MPRester(utils.read_rc('matproj_api_key')) as rester:
+            structure = rester.get_structure_by_material_id(self.mpid)
+        atoms = AseAtomsAdaptor.get_atoms(structure)
+
+        doc = make_doc_from_atoms(atoms)
+        save_task_output(self, doc)
 
     def output(self):
-        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+        return make_task_output_object(self)
 
 
 class GenerateSlabs(luigi.Task):

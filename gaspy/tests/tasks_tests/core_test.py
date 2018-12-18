@@ -9,7 +9,10 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ...tasks.core import evaluate_luigi_task, save_luigi_task_run_results
+from ...tasks.core import (make_task_output_object,
+                           get_task_output_location,
+                           save_task_output,
+                           evaluate_luigi_task)
 
 # Things we need to do the tests
 import pickle
@@ -17,7 +20,57 @@ import luigi
 from ...utils import read_rc
 
 # Get the path for the GASdb folder location from the gaspy config file
-TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path')
+TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path') + '/pickles/'
+
+
+def test_make_task_output_object():
+    task = RootTestTask()
+    target = make_task_output_object(task)
+
+    # Verify that the target is the correct object type
+    assert isinstance(target, luigi.LocalTarget)
+
+    # Verify that the path of the target is correct
+    assert target.path == get_task_output_location(task)
+
+
+class RootTestTask(luigi.Task):
+    def requires(self):
+        return [BranchTestTask(task_result=1),
+                BranchTestTask(task_result=7, branch_again=True)]
+
+    def run(self):
+        save_task_output(self, 'We did it!')
+
+    def output(self):
+        return make_task_output_object(self)
+
+
+class BranchTestTask(luigi.Task):
+    task_result = luigi.IntParameter(42)
+    branch_again = luigi.BoolParameter(False)
+
+    def requires(self):
+        if self.branch_again:
+            return BranchTestTask()
+        else:
+            return
+
+    def run(self):
+        save_task_output(self, self.task_result)
+
+    def output(self):
+        return make_task_output_object(self)
+
+
+def test_get_task_output_location():
+    task = RootTestTask()
+    file_name = get_task_output_location(task)
+
+    task_name = type(task).__name__
+    task_id = task.task_id
+    expected_file_name = TASKS_OUTPUTS_LOCATION + '%s/%s.pkl' % (task_name, task_id)
+    assert file_name == expected_file_name
 
 
 def test_evaluate_luigi_task():
@@ -30,7 +83,7 @@ def test_evaluate_luigi_task():
                          'BranchTestTask/BranchTestTask_False_42_fedcdcbd62.pkl',
                          'BranchTestTask/BranchTestTask_True_7_498ea8eed2.pkl',
                          'RootTestTask/RootTestTask__99914b932b.pkl']
-    output_file_names = [TASKS_OUTPUTS_LOCATION + '/pickles/' + file_name
+    output_file_names = [TASKS_OUTPUTS_LOCATION + file_name
                          for file_name in output_file_names]
     expected_outputs = [1, 42, 7, 'We did it!']
 
@@ -50,6 +103,7 @@ def test_evaluate_luigi_task():
         for output_file, expected_ctime in zip(output_file_names, file_creation_times):
             ctime = os.path.getmtime(output_file)
             assert ctime == expected_ctime
+
         # Test that when the "force" argument is `True`, tasks ARE rerun
         evaluate_luigi_task(RootTestTask(), force=True)
         for output_file, old_ctime in zip(output_file_names, file_creation_times):
@@ -70,38 +124,7 @@ def __delete_files(file_names):
             pass
 
 
-class RootTestTask(luigi.Task):
-    def requires(self):
-        return [BranchTestTask(task_result=1),
-                BranchTestTask(task_result=7, branch_again=True)]
-
-    def run(self):
-        save_luigi_task_run_results(self, 'We did it!')
-
-    def output(self):
-        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
-                                 % (type(self).__name__, self.task_id))
-
-
-class BranchTestTask(luigi.Task):
-    task_result = luigi.IntParameter(42)
-    branch_again = luigi.BoolParameter(False)
-
-    def requires(self):
-        if self.branch_again:
-            return BranchTestTask()
-        else:
-            return
-
-    def run(self):
-        save_luigi_task_run_results(self, self.task_result)
-
-    def output(self):
-        return luigi.LocalTarget(TASKS_OUTPUTS_LOCATION + '/pickles/%s/%s.pkl'
-                                 % (type(self).__name__, self.task_id))
-
-
-def test_save_luigi_task_run_results():
+def test_save_task_output():
     '''
     Instead of actually testing this function, we perform a rough
     learning test on Luigi.

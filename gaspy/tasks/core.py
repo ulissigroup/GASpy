@@ -11,9 +11,69 @@ from collections import Iterable
 import pickle
 import luigi
 from .. import utils
-from .. import fireworks_helper_scripts as fwhs
+from ..fireworks_helper_scripts import get_launchpad
 
 GASDB_PATH = utils.read_rc('gasdb_path')
+TASKS_CACHE_LOCATION = utils.read_rc('gasdb_path') + '/pickles/'
+
+
+def make_task_output_object(task):
+    '''
+    This function will create an instance of a luigi.LocalTarget object, which
+    is what the `output` method of a Luigi task should return. The main thing
+    this function does for you is that it creates a target with a standardized
+    location.
+
+    Arg:
+        task    Instance of a luigi.Task object
+    Returns:
+        target  An instance of a luigi.LocalTarget object with the `path`
+                attribute set to GASpy's standard location (as defined by
+                the `get_task_output_location` function)
+    '''
+    output_location = get_task_output_location(task)
+    target = luigi.LocalTarget(output_location)
+    return target
+
+
+def get_task_output_location(task):
+    '''
+    We have a standard location where we store task outputs. This function
+    will find that location for you.
+
+    Arg:
+        task    Instance of a luigi.Task that you want to find the output location for
+    Output:
+        file_name   String indication the full path of where the output is
+    '''
+    task_name = type(task).__name__
+    task_id = task.task_id
+    file_name = TASKS_CACHE_LOCATION + '%s/%s.pkl' % (task_name, task_id)
+    return file_name
+
+
+def save_task_output(task, output):
+    '''
+    This function is a light wrapper to save a luigi task's output. Instead of
+    writing the output directly onto the output file, we write onto a temporary
+    file and then atomically move the temporary file onto the output file.
+
+    This defends against situations where we may have accidentally queued
+    multiple instances of a task; if this happens and both tasks try to write
+    to the same file, then the file gets corrupted. But if both of these tasks
+    simply write to separate files and then each perform an atomic move, then
+    the final output file remains uncorrupted.
+
+    Doing this for more or less every single task in GASpy gots annoying, so
+    we wrapped it.
+
+    Args:
+        task    Instance of a luigi task whose output you want to write to
+        output  Whatever object that you want to save
+    '''
+    with task.output().temporary_path() as task.temp_output_path:
+        with open(task.temp_output_path, 'wb') as file_handle:
+            pickle.dump(output, file_handle)
 
 
 def evaluate_luigi_task(task, force=False):
@@ -54,30 +114,6 @@ def evaluate_luigi_task(task, force=False):
         task.run()
 
 
-def save_luigi_task_run_results(task, output):
-    '''
-    This function is a light wrapper to save a luigi task's output. Instead of
-    writing the output directly onto the output file, we write onto a temporary
-    file and then atomically move the temporary file onto the output file.
-
-    This defends against situations where we may have accidentally queued
-    multiple instances of a task; if this happens and both tasks try to write
-    to the same file, then the file gets corrupted. But if both of these tasks
-    simply write to separate files and then each perform an atomic move, then
-    the final output file remains uncorrupted.
-
-    Doing this for more or less every single task in GASpy gots annoying, so
-    we wrapped it.
-
-    Args:
-        task    Instance of a luigi task whose output you want to write to
-        output  Whatever object that you want to save
-    '''
-    with task.output().temporary_path() as task.temp_output_path:
-        with open(task.temp_output_path, 'wb') as file_handle:
-            pickle.dump(output, file_handle)
-
-
 class DumpFWToTraj(luigi.Task):
     '''
     Given a FWID, this task will dump a traj file into GASdb/FW_structures for viewing/debugging
@@ -86,7 +122,7 @@ class DumpFWToTraj(luigi.Task):
     fwid = luigi.IntParameter()
 
     def run(self):
-        lpad = fwhs.get_launchpad()
+        lpad = get_launchpad()
         fw = lpad.get_fw_by_id(self.fwid)
         atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
 

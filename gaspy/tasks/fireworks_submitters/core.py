@@ -17,7 +17,6 @@ from ... import utils, gasdb, defaults
 from ... import fireworks_helper_scripts as fwhs
 
 GASDB_PATH = utils.read_rc('gasdb_path')
-MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
 
 
 class SubmitToFW(luigi.Task):
@@ -173,7 +172,7 @@ class SubmitToFW(luigi.Task):
                     atoms = make_atoms_from_doc(pickle.load(open(self.input().fn, 'rb'))[0])
                     tosubmit.append(fwhs.make_firework(atoms, name,
                                                        utils.unfreeze_dict(self.parameters['gas']['vasp_settings']),
-                                                       max_atoms=MAX_BULK_SIZE))
+                                                       max_atoms=defaults.BULK_SETTINGS['max_atoms']))
 
             # A way to append `tosubmit`, but specialized for bulk relaxations
             if self.calctype == 'bulk':
