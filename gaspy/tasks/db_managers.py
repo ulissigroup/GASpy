@@ -23,7 +23,6 @@ from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from .. import defaults, utils, gasdb
 from .. import fireworks_helper_scripts as fwhs
 
-
 GASDB_PATH = utils.read_rc('gasdb_path')
 
 

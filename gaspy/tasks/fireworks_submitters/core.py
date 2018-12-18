@@ -5,7 +5,6 @@ This module houses the core functions needed to submit rockets to FireWorks
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
-
 import copy
 from collections import OrderedDict
 import pickle
