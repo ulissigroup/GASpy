@@ -9,24 +9,7 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Imports necessary to make these utility functions
-import pickle
 from ...tasks import get_task_output_location
-
-
-def get_task_output(task):
-    '''
-    We have a standard location where we store task outputs.
-    This function will find that location and automatically open it for you.
-
-    Arg:
-        task    Instance of a luigi.Task that you want to find the output location for
-    Output:
-        output  Whatever was saved by the task
-    '''
-    file_name = get_task_output_location(task)
-    with open(file_name, 'rb') as file_handle:
-        output = pickle.load(file_handle)
-    return output
 
 
 def clean_up_task(task):

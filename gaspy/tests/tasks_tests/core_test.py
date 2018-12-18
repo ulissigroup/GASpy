@@ -12,11 +12,13 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ...tasks.core import (make_task_output_object,
                            get_task_output_location,
                            save_task_output,
+                           get_task_output,
                            evaluate_luigi_task)
 
 # Things we need to do the tests
 import pickle
 import luigi
+from .utils import clean_up_task
 from ...utils import read_rc
 
 # Get the path for the GASdb folder location from the gaspy config file
@@ -73,6 +75,27 @@ def test_get_task_output_location():
     assert file_name == expected_file_name
 
 
+def test_save_task_output():
+    '''
+    Instead of actually testing this function, we perform a rough
+    learning test on Luigi.
+    '''
+    assert 'temporary_path' in dir(luigi.LocalTarget)
+
+
+def test_get_task_output():
+    task = RootTestTask()
+    try:
+        evaluate_luigi_task(task)
+        output = get_task_output(task)
+
+        expected_output = 'We did it!'
+        assert output == expected_output
+
+    finally:
+        clean_up_task(task)
+
+
 def test_evaluate_luigi_task():
     '''
     We made some test tasks and try to execute them here. Then we verify
@@ -88,8 +111,9 @@ def test_evaluate_luigi_task():
     expected_outputs = [1, 42, 7, 'We did it!']
 
     # Run the tasks
+    task = RootTestTask()
     try:
-        evaluate_luigi_task(RootTestTask())
+        evaluate_luigi_task(task)
 
         # Test that each task executed correctly
         for output_file_name, expected_output in zip(output_file_names, expected_outputs):
@@ -112,21 +136,4 @@ def test_evaluate_luigi_task():
 
     # Clean up
     finally:
-        __delete_files(output_file_names)
-
-
-def __delete_files(file_names):
-    ''' Helper function to try and delete some files '''
-    for file_name in file_names:
-        try:
-            os.remove(file_name)
-        except OSError:
-            pass
-
-
-def test_save_task_output():
-    '''
-    Instead of actually testing this function, we perform a rough
-    learning test on Luigi.
-    '''
-    assert 'temporary_path' in dir(luigi.LocalTarget)
+        clean_up_task(task)
