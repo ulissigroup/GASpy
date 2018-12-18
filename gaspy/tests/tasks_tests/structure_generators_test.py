@@ -9,16 +9,15 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ...tasks.generators import (GenerateGas,
-                                 GenerateBulk)
+from ...tasks.structure_generators import (GenerateGas,
+                                           GenerateBulk)
 
 # Things we need to do the tests
 import pytest
 from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
-from .__init__ import (get_task_output,
-                       clean_up_task)
+from .__init__ import get_task_output, clean_up_task
 from ...tasks import evaluate_luigi_task
 from ... import defaults
 from ...utils import read_rc

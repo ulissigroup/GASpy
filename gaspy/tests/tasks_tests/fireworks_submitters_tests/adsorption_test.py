@@ -9,15 +9,15 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ....tasks.submit_calculations.adsorption_calculations import (_standardize_miller,
-                                                                   _make_adslab_parameters_from_doc,
-                                                                   _make_relaxation_tasks_from_parameters)
+from ....tasks.fireworks_submitters.adsorption import (_standardize_miller,
+                                                       _make_adslab_parameters_from_doc,
+                                                       _make_relaxation_tasks_from_parameters)
 
 # Things we need to do the tests
 import pytest
 from collections import OrderedDict
 from .... import defaults
-from ....tasks import FingerprintRelaxedAdslab
+from ....tasks.metadata_calculators import FingerprintRelaxedAdslab
 from ....gasdb import get_unsimulated_catalog_docs
 
 
