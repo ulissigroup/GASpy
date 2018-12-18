@@ -9,7 +9,7 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Imports necessary to make these utility functions
-from ...tasks import get_task_output_location
+from ...tasks import make_task_output_location
 
 
 def clean_up_task(task):
@@ -20,7 +20,7 @@ def clean_up_task(task):
     Arg:
         task    Instance of a luigi.Task whose output you want to delete/clean up
     '''
-    output_file = get_task_output_location(task)
+    output_file = make_task_output_location(task)
     try:
         os.remove(output_file)
     except OSError:

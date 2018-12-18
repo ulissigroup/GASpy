@@ -29,14 +29,14 @@ def make_task_output_object(task):
     Returns:
         target  An instance of a luigi.LocalTarget object with the `path`
                 attribute set to GASpy's standard location (as defined by
-                the `get_task_output_location` function)
+                the `make_task_output_location` function)
     '''
-    output_location = get_task_output_location(task)
+    output_location = make_task_output_location(task)
     target = luigi.LocalTarget(output_location)
     return target
 
 
-def get_task_output_location(task):
+def make_task_output_location(task):
     '''
     We have a standard location where we store task outputs. This function
     will find that location for you.
@@ -76,6 +76,23 @@ def save_task_output(task, output):
             pickle.dump(output, file_handle)
 
 
+def get_task_output(task):
+    '''
+    This function will open and return the output of a Luigi task. This
+    function assumes that the `output` method of the task returns a single
+    luigi.LocalTarget object.
+
+    Arg:
+        task    Instance of a luigi.Task that you want to find the output of
+    Output:
+        output  Whatever was saved by the task
+    '''
+    target = task.output()
+    with open(target.fn, 'rb') as file_handle:
+        output = pickle.load(file_handle)
+    return output
+
+
 def evaluate_luigi_task(task, force=False):
     '''
     This follows luigi logic to evaluate a task by recursively evaluating all
@@ -112,22 +129,6 @@ def evaluate_luigi_task(task, force=False):
 
         # After prerequisites are done, run the task
         task.run()
-
-
-def get_task_output(task):
-    '''
-    We have a standard location where we store task outputs. This function
-    will find that location and open the output for you.
-
-    Arg:
-        task    Instance of a luigi.Task that you want to find the output of
-    Output:
-        output  Whatever was saved by the task
-    '''
-    file_name = get_task_output_location(task)
-    with open(file_name, 'rb') as file_handle:
-        output = pickle.load(file_handle)
-    return output
 
 
 class DumpFWToTraj(luigi.Task):

@@ -10,7 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.core import (make_task_output_object,
-                           get_task_output_location,
+                           make_task_output_location,
                            save_task_output,
                            get_task_output,
                            evaluate_luigi_task)
@@ -33,7 +33,7 @@ def test_make_task_output_object():
     assert isinstance(target, luigi.LocalTarget)
 
     # Verify that the path of the target is correct
-    assert target.path == get_task_output_location(task)
+    assert target.path == make_task_output_location(task)
 
 
 class RootTestTask(luigi.Task):
@@ -65,9 +65,9 @@ class BranchTestTask(luigi.Task):
         return make_task_output_object(self)
 
 
-def test_get_task_output_location():
+def test_make_task_output_location():
     task = RootTestTask()
-    file_name = get_task_output_location(task)
+    file_name = make_task_output_location(task)
 
     task_name = type(task).__name__
     task_id = task.task_id
