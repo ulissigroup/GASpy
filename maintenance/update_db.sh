@@ -12,7 +12,7 @@ rm ${GASDB_PATH}/DumpToAuxDB.token
 
 # Tell Luigi to do the dumping
 PYTHONPATH=$PYTHONPATH luigi \
-    --module gaspy.tasks UpdateAllDB \
+    --module gaspy.tasks.db_managers UpdateAllDB \
     --max-processes 0 \
     --scheduler-host $LUIGI_HOST \
     --workers=4 \

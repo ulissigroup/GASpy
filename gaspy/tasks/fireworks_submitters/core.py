@@ -10,13 +10,11 @@ import copy
 from collections import OrderedDict
 import pickle
 import numpy as np
-from fireworks import Workflow
 import luigi
-from ..mongo import make_atoms_from_doc
-from .generators import GenerateGas, GenerateBulk, GenerateSlabs
-from .metadata_calculators import FingerprintUnrelaxedAdslabs
-from .. import utils, gasdb, defaults
-from .. import fireworks_helper_scripts as fwhs
+from fireworks import Workflow
+from ...mongo import make_atoms_from_doc
+from ... import utils, gasdb, defaults
+from ... import fireworks_helper_scripts as fwhs
 
 GASDB_PATH = utils.read_rc('gasdb_path')
 MAX_BULK_SIZE = defaults.MAX_NUM_BULK_ATOMS
@@ -108,6 +106,7 @@ class SubmitToFW(luigi.Task):
         # generate the necessary unrelaxed structure
         if len(self.matching_doc) == 0:
             if self.calctype == 'slab':
+                from ..structure_generators import GenerateSlabs
                 return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
                         # We are also vaing the unrelaxed slabs just in case. We can delete if
@@ -116,6 +115,7 @@ class SubmitToFW(luigi.Task):
                                                   bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab']))]
             if self.calctype == 'slab_surface_energy':
+                from ..structure_generators import GenerateSlabs
                 return [GenerateSlabs(OrderedDict(bulk=self.parameters['bulk'],
                                                   slab=self.parameters['slab'])),
                         # We are also vaing the unrelaxed slabs just in case. We can delete if
@@ -137,6 +137,7 @@ class SubmitToFW(luigi.Task):
                 # request. This will trigger a FingerprintUnrelaxedAdslabs for each FP, which
                 # is entirely unnecessary. The result is the same # regardless of what
                 # parameters['adsorption'][0]['fp'] happens to be
+                from ..metadata_calculators import FingerprintUnrelaxedAdslabs
                 parameters_copy = utils.unfreeze_dict(copy.deepcopy(self.parameters))
                 if 'fp' in parameters_copy['adsorption']['adsorbates'][0]:
                     del parameters_copy['adsorption']['adsorbates'][0]['fp']
@@ -144,8 +145,10 @@ class SubmitToFW(luigi.Task):
                 return FingerprintUnrelaxedAdslabs(parameters_copy)
 
             if self.calctype == 'bulk':
+                from ..structure_generators import GenerateBulk
                 return GenerateBulk({'bulk': self.parameters['bulk']})
             if self.calctype == 'gas':
+                from ..structure_generators import GenerateGas
                 return GenerateGas({'gas': self.parameters['gas']})
 
     def run(self):

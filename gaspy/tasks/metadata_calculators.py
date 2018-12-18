@@ -17,7 +17,7 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 import luigi
 import statsmodels.api as sm
-from .generators import GenerateSlabs, GenerateAdSlabs
+from .structure_generators import GenerateSlabs, GenerateAdSlabs
 from .fireworks_submitters import SubmitToFW
 from ..mongo import make_atoms_from_doc
 from .. import utils
