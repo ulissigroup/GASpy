@@ -13,12 +13,13 @@ from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk)
 
 # Things we need to do the tests
+import os
 import pytest
 from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
-from .utils import get_task_output, clean_up_task
-from ...tasks import evaluate_luigi_task
+from .utils import clean_up_task
+from ...tasks import get_task_output, evaluate_luigi_task
 from ...utils import read_rc
 from ...mongo import make_atoms_from_doc
 

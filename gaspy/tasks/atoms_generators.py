@@ -1,5 +1,5 @@
 '''
-This submodule contains various tasks that generato ase.atoms.Atoms objects.
+This submodule contains various tasks that generato `ase.Atoms` objects.
 The output of all the tasks in this submodule are actually dictionaries (or
 "docs" as we define them, which is short for Mongo document). If you want the
 atoms object, then use the gaspy.mongo.make_atoms_from_doc function on the
@@ -10,22 +10,20 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import copy
-import math
+#import math
 from math import ceil
 from collections import OrderedDict
 import pickle
 import numpy as np
 from numpy.linalg import norm
 from ase import Atoms
-from ase.build import rotate
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.core.surface import SlabGenerator
 import luigi
-from .core import make_task_output_object, save_task_output
+from .core import save_task_output, make_task_output_object
 from .fireworks_submitters import SubmitToFW
+from ..atoms_operators import make_slabs_from_bulk_atoms, make_slab_docs_from_structs
 from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from .. import utils, defaults
 
@@ -85,119 +83,30 @@ class GenerateBulk(luigi.Task):
         return make_task_output_object(self)
 
 
-class GenerateSlabs(luigi.Task):
+class GenerateSlabsFromUnrelaxedBulk(luigi.Task):
     '''
-    This class uses PyMatGen to create surfaces (i.e., slabs cut from a bulk) from ASE atoms
-    objects
     '''
-    parameters = luigi.DictParameter()
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
 
     def requires(self):
-        '''
-        If the bulk does not need to be relaxed, we simply pull it from Materials Project using
-        the `Bulk` class. If it needs to be relaxed, then we submit it to Fireworks.
-        '''
-        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
-            return GenerateBulk(parameters={'bulk': self.parameters['bulk']})
-        elif 'unrelaxed' in self.parameters and self.parameters['unrelaxed'] == 'relaxed_bulk':
-            return SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
-        else:
-            return SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
+        return GenerateBulk(mpid=self.mpid)
 
     def run(self):
-        # Preparation work with ASE and PyMatGen before we start creating the slabs
-        if 'unrelaxed' in self.parameters and self.parameters['unrelaxed']:
-            bulk_doc = pickle.load(open(self.input().fn, 'rb'))[0]
-        else:
-            bulk_docs = pickle.load(open(self.input().fn, 'rb'))
-            bulkmin = np.argmin([x['results']['energy'] for x in bulk_docs])
-            bulk_doc = bulk_docs[bulkmin]
-
-        # Pull out the fwid of the relaxed bulk (if there is one)
-        if not ('unrelaxed' in self.parameters and self.parameters['unrelaxed']):
-            bulk_fwid = bulk_doc['fwid']
-        else:
-            bulk_fwid = None
-        bulk = make_atoms_from_doc(bulk_doc)
-        structure = AseAtomsAdaptor.get_structure(bulk)
-        sga = SpacegroupAnalyzer(structure, symprec=0.1)
-        structure = sga.get_conventional_standard_structure()
-        gen = SlabGenerator(structure,
-                            self.parameters['slab']['miller'],
-                            **self.parameters['slab']['slab_generate_settings'])
-        slabs = gen.get_slabs(**self.parameters['slab']['get_slab_settings'])
-        slabsave = []
-        for slab in slabs:
-            shift = slab.shift
-
-            # Create an atoms class for this particular slab, "atoms_slab"
-            atoms_slab = AseAtomsAdaptor.get_atoms(slab)
-            # Then reorient the "atoms_slab" class so that the surface of the slab is pointing
-            # upwards in the z-direction
-            rotate(atoms_slab,
-                   atoms_slab.cell[2], (0, 0, 1),
-                   atoms_slab.cell[0], [1, 0, 0],
-                   rotate_cell=True)
-            # Save the slab, but only if it isn't already in the database
-            top = True
-            tags = {'type': 'slab',
-                    'top': top,
-                    'mpid': self.parameters['bulk']['mpid'],
-                    'miller': self.parameters['slab']['miller'],
-                    'shift': shift,
-                    'num_slab_atoms': len(atoms_slab),
-                    'relaxed': False,
-                    'bulk_fwid': bulk_fwid,
-                    'slab_generate_settings': self.parameters['slab']['slab_generate_settings'],
-                    'get_slab_settings': self.parameters['slab']['get_slab_settings']}
-            slabdoc = make_doc_from_atoms(utils.constrain_slab(atoms_slab))
-            slabdoc['tags'] = tags
-            slabsave.append(slabdoc)
-
-            # If the top of the cut is not identical to the bottom, then save the bottom slab
-            # to the database, as well. To do this, we first pull out the sga class of this
-            # particular slab, "sga_slab". Again, we use a symmetry finding tolerance of 0.1
-            # to be consistent with MP
-            sga_slab = SpacegroupAnalyzer(slab, symprec=0.1)
-            # Then use the "sga_slab" class to create a list, "symm_ops", that contains classes,
-            # which contain matrix and vector operators that may be used to rotate/translate the
-            # slab about axes of symmetry
-            symm_ops = sga_slab.get_symmetry_operations()
-            # Create a boolean, "z_invertible", which will be "True" if the top of the slab is
-            # the same as the bottom.
-            z_invertible = True in list(map(lambda x: x.as_dict()['matrix'][2][2] == -1, symm_ops))
-            # If the bottom is different, then...
-            if not z_invertible:
-                # flip the slab upside down...
-                atoms_slab.wrap()
-                atoms_slab.rotate('x', math.pi, rotate_cell=True, center='COM')
-                if atoms_slab.cell[2][2] < 0.:
-                    atoms_slab.cell[2] = -atoms_slab.cell[2]
-                if np.cross(atoms_slab.cell[0], atoms_slab.cell[1])[2] < 0.0:
-                    atoms_slab.cell[1] = -atoms_slab.cell[1]
-                atoms_slab.wrap()
-
-                # and if it is not in the database, then save it.
-                slabdoc = make_doc_from_atoms(utils.constrain_slab(atoms_slab))
-                tags = {'type': 'slab',
-                        'top': not(top),
-                        'mpid': self.parameters['bulk']['mpid'],
-                        'miller': self.parameters['slab']['miller'],
-                        'shift': shift,
-                        'num_slab_atoms': len(atoms_slab),
-                        'relaxed': False,
-                        'slab_generate_settings': self.parameters['slab']['slab_generate_settings'],
-                        'get_slab_settings': self.parameters['slab']['get_slab_settings']}
-                slabdoc['tags'] = tags
-                slabsave.append(slabdoc)
-
-        with self.output().temporary_path() as self.temp_output_path:
-            pickle.dump(slabsave, open(self.temp_output_path, 'wb'))
-
-        return
+        with open(self.input().fn, 'rb') as file_handle:
+            bulk_doc = pickle.load(file_handle)
+        bulk_atoms = make_atoms_from_doc(bulk_doc)
+        slab_structs = make_slabs_from_bulk_atoms(atoms=bulk_atoms,
+                                                  miller_indices=self.miller_indices,
+                                                  slab_generator_settings=self.slab_generator_settings,
+                                                  get_slab_settings=self.get_slab_settigs)
+        slab_docs = make_slab_docs_from_structs(slab_structs)
+        save_task_output(self, slab_docs)
 
     def output(self):
-        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+        return make_task_output_object(self)
 
 
 class GenerateSiteMarkers(luigi.Task):
