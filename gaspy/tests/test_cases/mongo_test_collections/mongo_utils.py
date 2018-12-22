@@ -13,7 +13,7 @@ from bson.objectid import ObjectId
 from pymongo import MongoClient
 from ...gasdb import get_mongo_collection, ConnectableCollection
 
-LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/mongo_test_collections/'
+LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/test_cases/mongo_test_collections/'
 ALL_COLLECTION_TAGS = ['atoms', 'catalog', 'adsorption', 'surface_energy']
 
 
