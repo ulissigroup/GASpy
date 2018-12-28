@@ -9,7 +9,10 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import os
 from collections import Iterable
 import pickle
-import luigi
+import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', category=DeprecationWarning)
+    import luigi
 from .. import utils
 from ..fireworks_helper_scripts import get_launchpad
 

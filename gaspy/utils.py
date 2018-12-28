@@ -18,7 +18,6 @@ from ase import Atoms
 from ase.calculators.vasp import Vasp2
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
-from fireworks.core.launchpad import LaunchPad
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
@@ -84,27 +83,27 @@ def _find_rc_file():
                 raise EnvironmentError('You have not yet made an appropriate .gaspyrc.json configuration file yet.')
 
 
-def print_dict(d, indent=0):
+def print_dict(dict_, indent=0):
     '''
-    This function prings a nested dictionary, but in a prettier format. This is strictly for
-    debugging purposes.
+    This function prings a nested dictionary, but in a prettier format. This is
+    strictly for reporting and/or debugging purposes.
 
     Inputs:
-        d       The nested dictionary to print
+        dict_   The nested dictionary to print
         indent  How many tabs to start the printing at
     '''
-    if isinstance(d, dict):
-        for key, value in d.items():
-            # If the dictionary key is `spec`, then it's going to print out a bunch of
-            # messy looking things we don't care about. So skip it.
+    if isinstance(dict_, dict):
+        for key, value in dict_.items():
+            # If the dictionary key is `spec`, then it's going to print out a
+            # bunch of messy looking things we don't care about. So skip it.
             if key != 'spec':
                 print('\t' * indent + str(key))
                 if isinstance(value, dict) or isinstance(value, list):
                     print_dict(value, indent+1)
                 else:
                     print('\t' * (indent+1) + str(value))
-    elif isinstance(d, list):
-        for item in d:
+    elif isinstance(dict_, list):
+        for item in dict_:
             if isinstance(item, dict) or isinstance(item, list):
                 print_dict(item, indent+1)
             else:
@@ -560,72 +559,6 @@ def decode_hex_to_atoms(atoms_hex):
     atoms_bytes = bytes.fromhex(atoms_hex)
     atoms = pickle.loads(atoms_bytes, encoding='latin-1')
     return atoms
-
-
-def encode_atoms_to_trajhex(atoms):
-    '''
-    Encode a trajectory-formatted atoms object into a hex string.
-    Differs from `encode_atoms_to_hex` since this method is hex-encoding
-    the trajectory, not an atoms object.
-
-    As of the writing of this docstring, we intend to use this mainly
-    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
-
-    Arg:
-        atoms   ase.Atoms object to encode
-    Output:
-        hex_    A hex-encoded string object of the trajectory of the atoms object
-    '''
-    # Make the trajectory
-    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
-    atoms.write(fname)
-
-    # Encode the trajectory
-    with open(fname, 'rb') as fhandle:
-        hex_ = fhandle.read().hex()
-
-    # Clean up
-    os.remove(fname)
-    return hex_
-
-
-def decode_trajhex_to_atoms(hex_, index=-1):
-    '''
-    Decode a trajectory-formatted atoms object into a hex string.
-
-    As of the writing of this docstring, we intend to use this mainly
-    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
-
-    Arg:
-        hex_    A hex-encoded string of a trajectory of atoms objects.
-        index   Trajectories can contain multiple atoms objects.
-                The `index` is used to specify which atoms object to return.
-                -1 corresponds to the last image.
-    Output:
-        atoms   The decoded ase.Atoms object
-    '''
-    # Make the trajectory from the hex
-    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
-    with open(fname, 'wb') as fhandle:
-        fhandle.write(bytes.fromhex(hex_))
-
-    # Open up the atoms from the trajectory
-    atoms = ase.io.read(fname, index=index)
-
-    # Clean up
-    os.remove(fname)
-    return atoms
-
-
-def get_lpad():
-    '''
-    Gets the FireWorks launchpad object according to the login
-    information contained in the .gaspyrc.json file.
-    '''
-    lpad_info = read_rc('lpad')
-    lpad_info['port'] = int(lpad_info['port'])
-    lpad = LaunchPad(**lpad_info)
-    return lpad
 
 
 def get_final_atoms_object_with_vasp_forces(launch_id):

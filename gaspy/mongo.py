@@ -9,8 +9,7 @@ This module will be like the ase-db but different in the following ways:
 3. Tags are stored in an array.
 '''
 
-__author__ = 'John Kitchin'
-__maintainer__ = 'Kevin Tran'
+__authors__ = ['John Kitchin', 'Kevin Tran']
 __email__ = 'ktran@andrew.cmu.edu'
 
 import os
@@ -91,13 +90,32 @@ def _make_atoms_dict(atoms):
     cell = atoms.get_cell()
     atoms_dict['mass'] = sum(atoms.get_masses())
     syms = atoms.get_chemical_symbols()
+    atoms_dict['spacegroup'] = spglib.get_spacegroup(make_spglib_cell_from_atoms(atoms))
     atoms_dict['chemical_symbols'] = list(set(syms))
     atoms_dict['symbol_counts'] = {sym: syms.count(sym) for sym in syms}
-    atoms_dict['spacegroup'] = spglib.get_spacegroup(atoms)
     if cell is not None and np.linalg.det(cell) > 0:
         atoms_dict['volume'] = atoms.get_volume()
 
     return json.loads(encode(atoms_dict))
+
+
+def make_spglib_cell_from_atoms(atoms):
+    '''
+    `spglib` uses `cell` tuples to do things, but we normally work with
+    `ase.Atoms` objects. This function contains a snippet from spglib itself
+    that converts an `ase.Atoms` object into a `cell` tuple.
+
+    Arg:
+        atoms   Instance of an `ase.Atoms` object
+    Returns:
+        cell    A 3-tuple that `spglib` can use to perform various operations
+    '''
+    lattice = np.array(atoms.get_cell().T, dtype='double', order='C')
+    positions = np.array(atoms.get_scaled_positions(),
+                         dtype='double', order='C')
+    numbers = np.array(atoms.get_atomic_numbers(), dtype='intc')
+    cell = (lattice, positions, numbers)
+    return cell
 
 
 def _make_calculator_dict(atoms):

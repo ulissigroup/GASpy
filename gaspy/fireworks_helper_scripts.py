@@ -3,112 +3,211 @@ This submodule contains various functions that help us manage
 and interact with FireWorks.
 '''
 
-__author__ = 'Zachary W. Ulissi'
-__email__ = 'zulissi@andrew.cmu.edu'
+__authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
+__emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
-from collections import OrderedDict
+import os
+import warnings
+import uuid
 import getpass
-import numpy as np
 import pandas as pd
+import ase.io
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
-from .utils import vasp_settings_to_str, print_dict, read_rc, encode_atoms_to_trajhex, decode_trajhex_to_atoms
+from .utils import vasp_settings_to_str, print_dict, read_rc
 from . import vasp_functions, defaults
 
 
-def running_fireworks(name_dict, launchpad):
+def get_launchpad():
     '''
-    Return the running, ready, or completed fireworks on the launchpad with a given name
-    name_dict   name dictionary to search for
-    launchpad   launchpad to use
-    '''
-    # Make a mongo query
-    name = {}
-    # Turn a nested dictionary into a series of mongo queries
-    for key in name_dict:
-        if isinstance(name_dict[key], dict) or isinstance(name_dict[key], OrderedDict):
-            for key2 in name_dict[key]:
-                name['name.%s.%s' % (key, key2)] = name_dict[key][key2]
-        else:
-            if key == 'shift':
-                # Search for a range of shift parameters up to 4 decimal place
-                shift = float(np.round(name_dict[key], 4))
-                name['name.%s' % key] = {'$gte': shift-1e-4, '$lte': shift+1e-4}
-            else:
-                name['name.%s' % key] = name_dict[key]
+    This function returns an instance of a `fireworks.LaunchPad` object that is
+    connected to our FireWorks launchpad.
 
-    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
-    # or defused.)
-    fw_ids = launchpad.get_fw_ids(name)
-    fw_list = []
-    for fwid in fw_ids:
-        fw = launchpad.get_fw_by_id(fwid)
-        if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
-            fw_list.append(fwid)
-    # Return the matching fireworks
-    return fw_list
+    Returns:
+        lpad    An instance of a `fireworks.LaunchPad` object
+    '''
+    configs = read_rc('fireworks_info.lpad')
+    configs['port'] = int(configs['port'])  # Make sure that the port is an integer
+    lpad = LaunchPad(**configs)
+    return lpad
 
 
-def make_firework(atoms, fw_name, vasp_setngs, max_atoms=80, max_miller=2):
+def is_rocket_running(query, vasp_settings, _testing=False):
     '''
-    This function makes a simple vasp relaxation firework
-    atoms       atoms object to relax
-    fw_name     dictionary of tags/etc to use as the fireworks name
-    vasp_setngs dictionary of vasp settings to pass to Vasp()
-    max_atoms   max number of atoms to submit, mainly as a way to prevent overly-large
-                simulations from getting run
-    max_miller  maximum miller index to submit, so that be default miller indices
-                above 3 won't get submitted by accident
-    '''
-    # Notify the user if they try to create a firework with too many atoms
-    if len(atoms) > max_atoms:
-        print('Not making firework because the number of atoms, %i, exceeds the maximum, %i'
-              % (len(atoms), max_atoms))
-        print_dict(fw_name, indent=1)
-        return
-    # Notify the user if they try to create a firework with a high miller index
-    if 'miller' in fw_name and (np.max(eval(str(fw_name['miller']))) > max_miller):
-        print('Not making firework because the miller index exceeds the maximum of %s'
-              % max_miller)
-        print_dict(fw_name, indent=1)
-        return
+    This function will check if we have something currently running in our
+    FireWorks launcher. It will also warn you if we have a lot of fizzles.
 
-    # Generate a string representation that we can pass to the job as input
-    atom_trajhex = encode_atoms_to_trajhex(atoms)
-    # Two steps - write the input file and python script to local directory,
-    # then relax that traj file
+    Args:
+        query           A dictionary that can be passed as a `query` argument
+                        to the `fireworks` collection of our FireWorks database.
+        vasp_settings   A dictionary of vasp settings. These will be
+                        automatically parsed into the `query` argument.
+        _testing        Boolean indicating whether or not you are currently
+                        doing a unit test. You should probably not be
+                        changing the default from False.
+    Returns:
+        A boolean indicating whether or not we are currently running any
+        FireWorks rockets that match the query and VASP settings
+    '''
+    # Parse the VASP settings into the FireWorks query, then grab the docs
+    # and warn the user if there are a bunch of fizzles
+    for key, value in vasp_settings.items():
+        query['name.vasp_settings.%s' % key] = value
+    docs = _get_firework_docs(query=query, _testing=_testing)
+    __warn_about_fizzles(docs)
+
+    # Check if we are running currently. 'COMPLETED' is considered running
+    # because it's offically done when it's in our atoms collection, not
+    # when it's done in FireWorks
+    running_states = set(['COMPLETED', 'READY', 'RESERVED', 'RUNNING', 'PAUSED'])
+    docs_running = [doc for doc in docs if doc['state'] in running_states]
+    if len(docs_running) > 0:
+        print('You just asked if the following FireWork rocket is running. '
+              'We have %i of those running. The FWID[s] is/are (%s) in (%s) '
+              'states.' % (len(docs_running),
+                           ', '.join(str(doc['fw_id']) for doc in docs_running),
+                           ', '.join(doc['state'] for doc in docs_running)))
+        print_dict(query, indent=1)
+        return True
+    else:
+        return False
+
+
+def _get_firework_docs(query, _testing):
+    '''
+    This function will get some documents from our FireWorks database.
+
+    Args:
+        query       A dictionary that can be passed as a `query` argument
+                    to the `fireworks` collection of our FireWorks database.
+        _testing    Boolean indicating whether or not you are currently
+                    doing a unit test. You should probably not be
+                    changing the default from False.
+    Returns:
+        docs    A list of dictionaries (i.e, Mongo documents) obtained
+                from the `fireworks` collection of our FireWorks Mongo.
+    '''
+    lpad = get_launchpad()
+
+    # Grab the correct collection, depending on whether or not we are
+    # unit testing
+    if _testing is False:
+        collection = lpad.fireworks
+    else:
+        collection = lpad.fireworks.database.get_collection('unit_testing_fireworks')
+
+    try:
+        docs = list(collection.find(query))
+    finally:    # Make sure we close the connection
+        collection.database.client.close()
+    return docs
+
+
+def __warn_about_fizzles(docs):
+    '''
+    If we've tried a bunch of times before and kept failing, then let the user
+    know.
+    '''
+    docs_fizzled = [doc for doc in docs if doc['state'] == 'FIZZLED']
+    fwids_fizzled = [str(doc['fw_id']) for doc in docs_fizzled]
+    if len(docs_fizzled) > 0:
+        message = ('We have fizzled a calculation %i time[s] so far. '
+                   'The FireWork IDs are:  %s'
+                   % (len(docs_fizzled), ', '.join(fwids_fizzled)))
+        warnings.warn(message, RuntimeWarning)
+
+
+def make_firework(atoms, fw_name, vasp_settings):
+    '''
+    This function makes a FireWorks rocket to perform a VASP relaxation
+
+    Args:
+        atoms           `ase.Atoms` object to relax
+        fw_name         Dictionary of tags/etc to use as the FireWorks name
+        vasp_settings   Dictionary of VASP settings to pass to Vasp()
+    Returns:
+        firework    An instance of a `fireworks.Firework` object that is set up
+                    to perform a VASP relaxation
+    '''
+    # Take the `vasp_functions` submodule in GASpy and then pass it out to each
+    # FireWork rocket to use.
     vasp_filename = vasp_functions.__file__
-    if vasp_filename.split('.')[-1] == 'pyc':
+    if vasp_filename.split('.')[-1] == 'pyc':   # Make sure we use the source file
         vasp_filename = vasp_filename[:-3] + 'py'
+    with open(vasp_filename) as file_handle:
+        vasp_functions_contents = file_handle.read()
+    pass_vasp_functions = FileWriteTask(files_to_write=[{'filename': 'vasp_functions.py',
+                                                         'contents': vasp_functions_contents}])
 
-    with open(vasp_filename) as fhandle:
-        vasp_functions_contents = fhandle.read()
+    # Convert the atoms object to a string so that we can pass it through
+    # FireWorks, and then tell the FireWork rocket to use our `vasp_functions`
+    # submodule to unpack the string
+    atom_trajhex = encode_atoms_to_trajhex(atoms)
+    read_atoms_file = PyTask(func='vasp_functions.hex_to_file',
+                             args=['slab_in.traj', atom_trajhex])
 
-    write_python_file = FileWriteTask(files_to_write=[{'filename': 'vasp_functions.py',
-                                                       'contents': vasp_functions_contents}])
+    # Tell the FireWork rocket to perform the relaxation
+    relax = PyTask(func='vasp_functions.runVasp',
+                   args=['slab_in.traj', 'slab_relaxed.traj', vasp_settings],
+                   stored_data_varname='opt_results')
 
-    write_atoms_file = PyTask(func='vasp_functions.hex_to_file',
-                              args=['slab_in.traj', atom_trajhex])
-
-    opt_bulk = PyTask(func='vasp_functions.runVasp',
-                      args=['slab_in.traj', 'slab_relaxed.traj', vasp_setngs],
-                      stored_data_varname='opt_results')
-
-    # Package the tasks into a firework, the fireworks into a workflow,
-    # and submit the workflow to the launchpad
     fw_name['user'] = getpass.getuser()
-    firework = Firework([write_python_file, write_atoms_file, opt_bulk], name=fw_name)
+    firework = Firework([pass_vasp_functions, read_atoms_file, relax], name=fw_name)
     return firework
 
 
-def get_launchpad():
-    ''' This function pulls the information about our FireWorks LaunchPad from the config file '''
-    # Pull the information from the .gaspyrc
-    configs = read_rc()
-    lpad = configs['lpad']
-    # Make sure that the port is an integer
-    lpad['port'] = int(lpad['port'])
+def encode_atoms_to_trajhex(atoms):
+    '''
+    Encode a trajectory-formatted atoms object into a hex string.
+    Differs from `encode_atoms_to_hex` since this method is hex-encoding
+    the trajectory, not an atoms object.
 
-    return LaunchPad(**lpad)
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
+
+    Arg:
+        atoms   ase.Atoms object to encode
+    Output:
+        hex_    A hex-encoded string object of the trajectory of the atoms object
+    '''
+    # Make the trajectory
+    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
+    atoms.write(fname)
+
+    # Encode the trajectory
+    with open(fname, 'rb') as fhandle:
+        hex_ = fhandle.read().hex()
+
+    # Clean up
+    os.remove(fname)
+    return hex_
+
+
+def decode_trajhex_to_atoms(hex_, index=-1):
+    '''
+    Decode a trajectory-formatted atoms object into a hex string.
+
+    As of the writing of this docstring, we intend to use this mainly
+    to store atoms objects in the FireWorks DB, *not* the GASdb (AKA AuxDB).
+
+    Arg:
+        hex_    A hex-encoded string of a trajectory of atoms objects.
+        index   Trajectories can contain multiple atoms objects.
+                The `index` is used to specify which atoms object to return.
+                -1 corresponds to the last image.
+    Output:
+        atoms   The decoded ase.Atoms object
+    '''
+    # Make the trajectory from the hex
+    fname = read_rc('temp_directory') + str(uuid.uuid4()) + '.traj'
+    with open(fname, 'wb') as fhandle:
+        fhandle.write(bytes.fromhex(hex_))
+
+    # Open up the atoms from the trajectory
+    atoms = ase.io.read(fname, index=index)
+
+    # Clean up
+    os.remove(fname)
+    return atoms
 
 
 def get_firework_info(fw):
@@ -118,7 +217,7 @@ def get_firework_info(fw):
     '''
     # Pull the atoms objects from the firework. They are encoded, though
     atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
-    #find the vasp_functions.hex_to_file task atoms object
+    # find the vasp_functions.hex_to_file task atoms object
     vasp_settings = fw.name['vasp_settings']
 
     atoms = decode_trajhex_to_atoms(atoms_trajhex)
@@ -242,3 +341,36 @@ def check_jobs_status(user_ID, num_jobs):
     dataframe = pd.DataFrame(fireworks_info, columns=data_labels)
 
     return dataframe
+
+
+#def running_fireworks(name_dict, launchpad):
+#    '''
+#    Return the running, ready, or completed fireworks on the launchpad with a given name
+#    name_dict   name dictionary to search for
+#    launchpad   launchpad to use
+#    '''
+#    # Make a mongo query
+#    name = {}
+#    # Turn a nested dictionary into a series of mongo queries
+#    for key in name_dict:
+#        if isinstance(name_dict[key], dict) or isinstance(name_dict[key], OrderedDict):
+#            for key2 in name_dict[key]:
+#                name['name.%s.%s' % (key, key2)] = name_dict[key][key2]
+#        else:
+#            if key == 'shift':
+#                # Search for a range of shift parameters up to 4 decimal place
+#                shift = float(np.round(name_dict[key], 4))
+#                name['name.%s' % key] = {'$gte': shift-1e-4, '$lte': shift+1e-4}
+#            else:
+#                name['name.%s' % key] = name_dict[key]
+#
+#    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
+#    # or defused.)
+#    fw_ids = launchpad.get_fw_ids(name)
+#    fw_list = []
+#    for fwid in fw_ids:
+#        fw = launchpad.get_fw_by_id(fwid)
+#        if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
+#            fw_list.append(fwid)
+#    # Return the matching fireworks
+#    return fw_list

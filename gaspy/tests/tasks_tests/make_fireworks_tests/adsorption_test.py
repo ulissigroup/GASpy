@@ -1,4 +1,4 @@
-''' Tests for the `gaspy.tasks.submitters.adsorptions` submodule '''
+''' Tests for the `gaspy.tasks.make_fireworks.adsorptions` submodule '''
 
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
@@ -9,9 +9,9 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ....tasks.fireworks_submitters.adsorption import (_standardize_miller,
-                                                       _make_adslab_parameters_from_doc,
-                                                       _make_relaxation_tasks_from_parameters)
+from ....tasks.make_fireworks.adsorption import (_standardize_miller,
+                                                 _make_adslab_parameters_from_doc,
+                                                 _make_relaxation_tasks_from_parameters)
 
 # Things we need to do the tests
 import pytest

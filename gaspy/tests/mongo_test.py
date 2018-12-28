@@ -4,11 +4,12 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # Things we're testing
-from ..mongo import make_doc_from_atoms, \
-    _make_atoms_dict, \
-    _make_calculator_dict, \
-    _make_results_dict, \
-    make_atoms_from_doc
+from ..mongo import (make_doc_from_atoms,
+                     _make_atoms_dict,
+                     make_spglib_cell_from_atoms,
+                     _make_calculator_dict,
+                     _make_results_dict,
+                     make_atoms_from_doc)
 
 # Things we need to do the tests
 import pytest
@@ -16,6 +17,8 @@ import os
 from collections import OrderedDict
 import datetime
 import pickle
+import numpy as np
+import numpy.testing as npt
 from . import test_cases
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/mongo/'
@@ -95,6 +98,20 @@ def test__make_atoms_dict(bulk_atoms_name):
     with open(file_name, 'rb') as file_handle:
         expected_atoms_dict = pickle.load(file_handle)
     assert atoms_dict == expected_atoms_dict
+
+
+def test_make_spglib_cell_from_atoms():
+    atoms = test_cases.get_bulk_atoms('Cu_FCC.traj')
+    lattice, positions, numbers = make_spglib_cell_from_atoms(atoms)
+
+    expected_lattice = np.array(atoms.get_cell().T, dtype='double', order='C')
+    expected_positions = np.array(atoms.get_scaled_positions(),
+                                  dtype='double', order='C')
+    expected_numbers = np.array(atoms.get_atomic_numbers(), dtype='intc')
+
+    npt.assert_allclose(lattice, expected_lattice)
+    npt.assert_allclose(positions, expected_positions)
+    npt.assert_allclose(numbers, expected_numbers)
 
 
 @pytest.mark.baseline

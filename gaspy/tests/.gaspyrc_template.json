@@ -1,26 +1,28 @@
 {
     "temp_directory": "/tmp/",
     "luigi_port": "999.99.999.99",
-    "gasdb_path": "/home/GASpy/gaspy/tests/regression_baselines/testing_caches",
+    "gasdb_path": "/home/GASpy/gaspy/tests/test_caches",
     "matproj_api_key": "ABC123",
     "gasdb_server":{
         "username": "user",
         "password": "pw"},
-    "lpad_path": "/path/to/fireworks/launchpad.yaml",
-    "lpad":{
-        "host": "host.name",
-        "nome": "name",
-        "username": "username",
-        "password": "pw",
-        "port": "99999"
-        },
-    "launches_backup_directory": "/home/GASpy/gaspy/tests/test_cases/launches_backup_directory",
+    "fireworks_info":{
+        "lpad_path": "/path/to/fireworks/launchpad.yaml",
+        "lpad":{
+            "host": "host.name",
+            "nome": "name",
+            "username": "username",
+            "password": "pw",
+            "port": "99999"
+            },
+        "backup_directory": "/home/GASpy/gaspy/tests/test_cases/launches_backup_directory"
+    },
     "mongo_info":{
         "atoms":{
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_atoms",
             "user": "user",
             "password": "pw"
             },
@@ -28,7 +30,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_adsorption",
             "user": "user",
             "password": "pw"
             },
@@ -36,7 +38,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_surface_energy",
             "user": "user",
             "password": "pw"
             },
@@ -44,7 +46,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_catalog",
             "user": "user",
             "password": "pw"
             },
@@ -52,7 +54,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_catalog",
             "user": "user",
             "password": "pw"
             },
@@ -60,7 +62,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_catalog",
             "user": "user",
             "password": "pw"
             },
@@ -68,7 +70,7 @@
             "host": "host.name",
             "port": "99999",
             "database": "database",
-            "collection_name": "collection_name",
+            "collection_name": "unit_testing_catalog",
             "user": "user",
             "password": "pw"
             }

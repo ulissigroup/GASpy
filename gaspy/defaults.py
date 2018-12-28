@@ -1,6 +1,6 @@
 '''
 This modules contains default settings for various function and queries used in GASpy and its
-submodules.
+submodules. 
 '''
 
 import warnings
@@ -19,46 +19,45 @@ PP_VERSION = '5.4'
 # generalized gradient approximations (ggas), and other pertinent information.
 # Credit goes to John Kitchin who wrote vasp.Vasp.xc_defaults, which we copied
 # and put here.
-XC_SETTINGS = {'lda': {'pp': 'LDA'},
-               'gga': {'pp': 'GGA'},    # GGAs
-               'pbe': {'pp': 'PBE'},
-               'revpbe': {'pp': 'LDA', 'gga': 'RE'},
-               'rpbe': OrderedDict(gga='RP', pp='PBE'),
-               'am05': {'pp': 'LDA', 'gga': 'AM'},
-               'pbesol': OrderedDict(gga='PS', pp='PBE'),
-               # Meta-GGAs
-               'tpss': {'pp': 'PBE', 'metagga': 'TPSS'},
-               'revtpss': {'pp': 'PBE', 'metagga': 'RTPSS'},
-               'm06l': {'pp': 'PBE', 'metagga': 'M06L'},
-               # vdW-DFs
-               'optpbe-vdw': {'pp': 'LDA', 'gga': 'OR', 'luse_vdw': True,
-                              'aggac': 0.0},
-               'optb88-vdw': {'pp': 'LDA', 'gga': 'BO', 'luse_vdw': True,
-                              'aggac': 0.0, 'param1': 1.1 / 6.0,
-                              'param2': 0.22},
-               'optb86b-vdw': {'pp': 'LDA', 'gga': 'MK', 'luse_vdw': True,
-                               'aggac': 0.0, 'param1': 0.1234,
-                               'param2': 1.0},
-               'vdw-df2': {'pp': 'LDA', 'gga': 'ML', 'luse_vdw': True,
-                           'aggac': 0.0, 'zab_vdw': -1.8867},
-               'beef-vdw': {'pp': 'PBE', 'gga': 'BF', 'luse_vdw': True,
-                            'zab_vdw': -1.8867, 'lbeefens': True},
-               # hybrids
-               'pbe0': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True},
-               'hse03': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
-                         'hfscreen': 0.3},
-               'hse06': {'pp': 'LDA', 'gga': 'PE', 'lhfcalc': True,
-                         'hfscreen': 0.2},
-               'b3lyp': {'pp': 'LDA', 'gga': 'B3', 'lhfcalc': True,
-                         'aexx': 0.2, 'aggax': 0.72,
-                         'aggac': 0.81, 'aldac': 0.19},
-               'hf': {'pp': 'PBE', 'lhfcalc': True, 'aexx': 1.0,
-                      'aldac': 0.0, 'aggac': 0.0}}
+XC_SETTINGS = OrderedDict(lda=OrderedDict(pp='LDA'),
+                          gga=OrderedDict(pp='GGA'),    # GGAs
+                          pbe=OrderedDict(pp='PBE'),
+                          revpbe=OrderedDict(pp='LDA', gga='RE'),
+                          rpbe=OrderedDict(gga='RP', pp='PBE'),
+                          am05=OrderedDict(pp='LDA', gga='AM'),
+                          pbesol=OrderedDict(gga='PS', pp='PBE'),
+                          # Meta-GGAs
+                          tpss=OrderedDict(pp='PBE', metagga='TPSS'),
+                          revtpss=OrderedDict(pp='PBE', metagga='RTPSS'),
+                          m06l=OrderedDict(pp='PBE', metagga='M06L'),
+                          # vdW-DFs
+                          optpbe_vdw=OrderedDict(pp='LDA', gga='OR',
+                                                 luse_vdw=True, aggac=0.0),
+                          optb88_vdw=OrderedDict(pp='LDA', gga='BO',
+                                                 luse_vdw=True, aggac=0.0,
+                                                 param1=1.1 / 6.0, param2=0.22),
+                          optb86b_vdw=OrderedDict(pp='LDA', gga='MK',
+                                                  luse_vdw=True, aggac=0.0,
+                                                  param1=0.1234, param2=1.0),
+                          vdw_df2=OrderedDict(pp='LDA', gga='ML', luse_vdw=True,
+                                              aggac=0.0, zab_vdw=-1.8867),
+                          beef_vdw=OrderedDict(pp='PBE', gga='BF', luse_vdw=True,
+                                               zab_vdw=-1.8867, lbeefens=True),
+                          # hybrids
+                          pbe0=OrderedDict(pp='LDA', gga='PE', lhfcalc=True),
+                          hse03=OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                            hfscreen=0.3),
+                          hse06=OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                            hfscreen=0.2),
+                          b3lyp=OrderedDict(pp='LDA', gga='B3', lhfcalc=True,
+                                            aexx=0.2, aggax=0.72, aggac=0.81, aldac=0.19),
+                          hf=OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
+                                         aldac=0.0, aggac=0.0))
 
 # Our default exchange correlational
 XC = 'rpbe'
 
-# Settings for each type of DFT calculation
+# The default settings we use to do DFT calculations of gases
 GAS_SETTINGS = OrderedDict(vasp=OrderedDict(ibrion=2,
                                             nsw=100,
                                             isif=0,
@@ -67,6 +66,8 @@ GAS_SETTINGS = OrderedDict(vasp=OrderedDict(ibrion=2,
                                             encut=350.,
                                             pp_version=PP_VERSION,
                                             **XC_SETTINGS[XC]))
+
+# The default settings we use to do DFT calculations of bulks
 BULK_SETTINGS = OrderedDict(max_atoms=80,
                             vasp=OrderedDict(ibrion=1,
                                              nsw=100,
@@ -78,6 +79,11 @@ BULK_SETTINGS = OrderedDict(max_atoms=80,
                                              encut=500.,
                                              pp_version=PP_VERSION,
                                              **XC_SETTINGS[XC]))
+
+# The default settings we use to enumerate slabs, along with the subsequent DFT
+# settings. The 'slab_generator_settings' are passed to the `SlabGenerator`
+# class in pymatgen, and the `get_slab_settings` are passed to the `get_slab`
+# method of that class.
 SLAB_SETTINGS = OrderedDict(max_miller=2,
                             vasp=OrderedDict(ibrion=2,
                                              nsw=100,

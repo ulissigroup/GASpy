@@ -31,7 +31,7 @@ The types of atoms you can get are listed within the subfolders of
 `gaspy.tests.test_cases.*`. You can add more yourself if you want to create
 more test cases, too.
 
-## gaspy.tests.mongo\_test\_collections
+## gaspy.tests.test\_cases.mongo\_test\_collections
 
 Your Mongo database is probably going to explode if you populate it with enough
 data. It'll be so big that doing unit tests on the database will get very
@@ -59,6 +59,12 @@ of a function changes. This is called a regression test.
 This folder is a cache for all of GASpy's regression test results. The
 structure of this folder should mimic the structure of the `gaspy.tests` folder
 itself so that you know where to find the appropriate caches for a test.
+
+## gaspy.tests.test\_caches
+
+Sometimes GASpy uses caches of information/data to do things. This folder is where
+we put our unit testing caches.
+
 
 # Installation warning!
 

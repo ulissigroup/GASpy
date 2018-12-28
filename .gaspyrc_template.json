@@ -6,15 +6,17 @@
     "gasdb_server":{
         "username": "user",
         "password": "pw"},
-    "lpad_path": "/path/to/fireworks/launchpad.yaml",
-    "lpad":{
-        "host": "host.name",
-        "nome": "name",
-        "username": "username",
-        "password": "pw",
-        "port": "99999"
-        },
-    "launches_backup_directory": "/path/to/directory/holding/fireworks/dir/backups",
+    "fireworks_info":{
+        "lpad_path": "/path/to/fireworks/launchpad.yaml",
+        "lpad":{
+            "host": "host.name",
+            "nome": "name",
+            "username": "username",
+            "password": "pw",
+            "port": "99999"
+            },
+        "backup_directory": "/path/to/directory/holding/fireworks/dir/backups"
+    },
     "mongo_info":{
         "atoms":{
             "host": "host.name",

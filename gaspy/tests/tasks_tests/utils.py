@@ -17,7 +17,7 @@ def clean_up_task(task):
     Arg:
         task    Instance of a luigi.Task whose output you want to delete/clean up
     '''
-    output_file = task.output().fn
+    output_file = task.output().path
     try:
         os.remove(output_file)
     except OSError:
