@@ -9,27 +9,59 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import warnings
 import luigi
 from .. import defaults
+from .core import save_task_output, make_task_output_object
+from .make_fireworks.core import MakeGasFW
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import is_rocket_running
-from .core import save_task_output, make_task_output_object
 
 GAS_SETTINGS = defaults.GAS_SETTINGS
 BULK_SETTINGS = defaults.BULK_SETTINGS
 SLAB_SETTINGS = defaults.SLAB_SETTINGS
 
 
-class FindGas(luigi.Task):
-    gas_name = luigi.Parameter()
-    vasp_settings = luigi.DictParameter()
+class FindCalculation(luigi.Task):
+    '''
+    This is meant to be used as a parent class to the rest of the classes in
+    this submodule. It contains the skeleton needed to find a calculation in
+    our auxiliary Mongo database or our FireWorks database. If the calculation
+    appears completed in our auxiliary Mongo database, then this task will
+    return the results. If the calculation is pending, it will wait. If the
+    calculation has not yet been submitted, then it will start the calculation.
 
-    def run(self):
-        # Parse the task's input search parameters into a Mongo-readable query,
-        # which we can then use to find the Mongo document[s] of the
-        # relaxation[s] we're looking for
-        query = {'type': 'gas', 'fwname.gasname': self.gas_name}
-        docs = _find_docs_in_atoms_collection(query, self.vasp_settings)
+    This class requires some attributes, Luigi arguments, and method
+    definitions before it can be used.
 
-        # If we have any matches, then remove the old ones and save the newest
+    Required Luigi argument:
+        vasp_settings   A dictionary containing the VASP settings of the
+                        calculation you want to find. You can probably find
+                        examples in `gaspy.defaults.*_SETTNGS`.
+    Required attributes:
+        gasdb_query     A dictionary that can be passed as a `query` argument
+                        to our auxiliary Mongo database's `atoms` colection to
+                        find a calculation
+        fw_query        A dictionary that can be passed as a `query` argument
+                        to our FireWorks database's `fireworks` collection to
+                        find a calculation
+        dependency      An instance of a `luigi.Task` child class that should
+                        be returned as a dependency if the calculation is not
+                        found
+    Required method:
+        _load_attributes    Some of the required attributes may require Luigi
+                            parameters, which are only available after class
+                            instantiation. This method should save these
+                            attributes to the class. This method will be
+                            called automatically at the start of `run`.
+    '''
+    def run(self, _testing=False):
+        '''
+        Arg:
+            _testing    Boolean indicating whether or not you are doing a unit
+                        test. You probably shouldn't touch this.
+        '''
+        self._load_attributes()
+
+        # Find and save the calculations (if they're in our `atoms` collection)
+        docs = _find_docs_in_atoms_collection(self.gasdb_query, self.vasp_settings)
         try:
             doc = _remove_old_docs(docs)
             save_task_output(self, doc)
@@ -37,11 +69,13 @@ class FindGas(luigi.Task):
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
         except SyntaxError:
-            fw_query = {'name': 'gas phase optimization',
-                        'name.gasname': self.gas_name}
+
             # If we're not running, then submit the job
-            if is_rocket_running(fw_query, self.vasp_settings) is False:
-                return 'placeholder for "we finished but it is not in our db yet'
+            if is_rocket_running(self.fw_query,
+                                 self.vasp_settings,
+                                 _testing=_testing) is False:
+                return self.dependency
+
             # If we are running, then just wait
             else:
                 pass
@@ -100,6 +134,70 @@ def _remove_old_docs(docs):
     elif len(docs) == 0:
         raise SyntaxError('You tried to parse out old documents, but did not '
                           'pass any documents at all.')
+
+
+class FindGas(FindCalculation):
+    '''
+    This task will try to find a gas phase calculation in either our auxiliary
+    Mongo database or our FireWorks database. If the calculation is complete,
+    then it will return the results. If the calculation is pending, it will
+    wait. If the calculation has not yet been submitted, then it will start the
+    calculation.
+
+    Args:
+        gas_name        A string indicating the name of the gas you are looking
+                        for (e.g., 'CO')
+        vasp_settings   A dictionary containing your VASP settings
+    saved output:
+        doc     When the calculation is found in our auxiliary Mongo database
+                successfully, then this task's output will be the matching
+                Mongo document (i.e., dictionary) with various information
+                about the system. Some import keys include 'fwid', 'fwname',
+                or 'results'. This document should  also be able to be turned
+                an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
+    '''
+    gas_name = luigi.Parameter()
+    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+
+    def _load_attributes(self):
+        '''
+        Parses and saves Luigi parameters into various class attributes
+        required to run this task, as per the parent class `FindCalculation`
+        '''
+        self.gasdb_query = {'type': 'gas', 'fwname.gasname': self.gas_name}
+        self.fw_query = {'name.calculation_type': 'gas phase optimization',
+                         'name.gasname': self.gas_name}
+        self.dependency = MakeGasFW(self.gas_name, self.vasp_settings)
+
+
+#class FindBulk(FindCalculation):
+#    '''
+#    This task will try to find a unit cell calculation in either our auxiliary
+#    Mongo database or our FireWorks database. If the calculation is complete,
+#    then it will return the results. If the calculation is pending, it will
+#    wait. If the calculation has not yet been submitted, then it will start the
+#    calculation.
+#
+#    Args:
+#        mpid            A string indicating the Materials Project ID of the
+#                        bulk unit cell you are looking for
+#        vasp_settings   A dictionary containing your VASP settings
+#    Output:
+#        doc     When the calculation is found in our auxiliary Mongo database
+#                successfully, then this task's output will be a dictionary
+#                containing information about the relaxed system. You should
+#                also be able to turn the dictionary into an `ase.Atoms` object
+#                using `gaspy.mongo.make_atoms_from_doc`.
+#    '''
+#    # Actual arguments for this task
+#    mpid = luigi.Parameter()
+#    vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+#
+#    # Attributes required to make the parent task work
+#    gasdb_query = {'type': 'bulk', 'fwname.mpid': mpid}
+#    fw_query = {'name.calculation_type': 'unit cell optimization',
+#                'name.mpid': mpid}
+#    MakeBulkFW(mpid=mpid, vasp_settings=vasp_settings)
 
 
 #class FindBulk(luigi.Task):

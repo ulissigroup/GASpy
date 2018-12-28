@@ -7,5 +7,4 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # flake8: noqa
-
-from .core import SubmitToFW
+from .core import MakeGasFW
