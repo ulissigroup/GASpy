@@ -91,7 +91,7 @@ def get_task_output(task):
         output  Whatever was saved by the task
     '''
     target = task.output()
-    with open(target.fn, 'rb') as file_handle:
+    with open(target.path, 'rb') as file_handle:
         output = pickle.load(file_handle)
     return output
 
@@ -128,7 +128,7 @@ def evaluate_luigi_task(task, force=False):
         # Luigi will yell at us if we try to overwrite output files.
         # So if we're foricbly redoing tasks, we need to delete the old outputs.
         if force:
-            os.remove(task.output().fn)
+            os.remove(task.output().path)
 
         # After prerequisites are done, run the task
         task.run()
