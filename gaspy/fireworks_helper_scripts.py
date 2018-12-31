@@ -12,7 +12,7 @@ import uuid
 import getpass
 import pandas as pd
 import ase.io
-from fireworks import Firework, PyTask, LaunchPad, FileWriteTask
+from fireworks import Firework, PyTask, LaunchPad, FileWriteTask, Workflow
 from .utils import vasp_settings_to_str, print_dict, read_rc
 from . import vasp_functions, defaults
 
@@ -208,6 +208,30 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     # Clean up
     os.remove(fname)
     return atoms
+
+
+def submit_fwork(fwork, _testing=False):
+    '''
+    This function will package a FireWork into a workflow for you and then add
+    it to our FireWorks launchpad.
+
+    Args:
+        fwork       Instance of a `fireworks.Firework` object
+        _testing    Boolean indicating whether or not you're doing a unit test.
+                    You probably shouldn't touch this.
+    Returns:
+        wflow   An instance of the `firework.Workflow` that was added to the
+                FireWorks launch pad.
+    '''
+    wflow = Workflow([fwork], name='vasp optimization')
+
+    if not _testing:
+        lpad = get_launchpad()
+        lpad.add_wf(wflow)
+        print('Just submitted the following FireWork rocket:')
+        print_dict(fwork.name, indent=1)
+
+    return wflow
 
 
 def get_firework_info(fw):

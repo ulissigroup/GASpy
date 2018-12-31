@@ -7,12 +7,11 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import pickle
 import luigi
-from fireworks import Workflow
 from ..atoms_generators import GenerateGas
 from ... import defaults
 from ...mongo import make_atoms_from_doc
-from ...utils import unfreeze_dict, print_dict
-from ...fireworks_helper_scripts import get_launchpad, make_firework
+from ...utils import unfreeze_dict
+from ...fireworks_helper_scripts import make_firework, submit_fwork
 
 GAS_SETTINGS = defaults.GAS_SETTINGS
 
@@ -31,34 +30,27 @@ class MakeGasFW(luigi.Task):
     def requires(self):
         return GenerateGas(gas_name=self.gas_name)
 
-    def run(self, _test=False):
+    def run(self, _testing=False):
         ''' Do not use `_test=True` unless you are unit testing '''
         # Parse the input atoms object
         with open(self.input().path, 'rb') as file_handle:
             doc = pickle.load(file_handle)
         atoms = make_atoms_from_doc(doc)
 
-        # Create and package the FireWork
+        # Create, package, and submit the FireWork
         fw_name = {'gasname': self.gas_name,
                    'vasp_settings': unfreeze_dict(self.vasp_settings),
                    'calculation_type': 'gas phase optimization'}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
                               vasp_settings=unfreeze_dict(self.vasp_settings))
-        wflow = Workflow([fwork], name='vasp optimization')
+        _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
 
-        # Submit the FireWork to our launch pad
-        if _test is False:
-            lpad = get_launchpad()
-            lpad.add_wf(wflow)
-            print('Just submitted the following FireWork rocket:')
-            print_dict(fwork.name, indent=1)
+        # Pass out the firework for testing, if necessary
+        if _testing is True:
+            return fwork
 
-        # If we are unit testing, then DO NOT submit the FireWork
-        else:
-            return wflow
-#
-#
+
 #class MakeBulkFW(luigi.Task):
 #    '''
 #    This class accepts a luigi.Task (e.g., relax a structure), then checks to

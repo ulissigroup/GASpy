@@ -12,10 +12,9 @@ import warnings
 warnings.filterwarnings('ignore', category=ImportWarning)
 
 # Things we're testing
-from ....tasks.make_fireworks.gases import MakeGasFW
+from ....tasks.make_fireworks.core import (MakeGasFW)
 
 # Things we need to do the tests
-from fireworks import Workflow
 from ..utils import clean_up_task
 from .... import defaults
 from ....tasks.atoms_generators import GenerateGas
@@ -34,13 +33,10 @@ def test_MakeGasFW():
         req.run()
 
         # Manually call the `run` method with the unit testing flag to get the
-        # output instead of actually submitting a FireWork rocket
-        wflow = task.run(_test=True)
-        assert isinstance(wflow, Workflow)
-        assert wflow.name == 'vasp optimization'
-        assert len(wflow.fws) == 1
-        assert wflow.fws[0].name['gasname'] == 'CO'
-        assert wflow.fws[0].name['vasp_settings'] == defaults.GAS_SETTINGS['vasp']
+        # firework instead of actually submitting it
+        fwork = task.run(_testing=True)
+        assert fwork.name['gasname'] == 'CO'
+        assert fwork.name['vasp_settings'] == defaults.GAS_SETTINGS['vasp']
 
     finally:
         clean_up_task(req)

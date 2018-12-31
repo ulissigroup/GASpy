@@ -18,6 +18,7 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         make_firework,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
+                                        submit_fwork,
                                         check_jobs_status)
 
 # Things we need to do the tests
@@ -27,7 +28,7 @@ import pickle
 import getpass
 import pandas as pd
 import ase
-from fireworks import Firework, LaunchPad, FileWriteTask, PyTask
+from fireworks import Firework, LaunchPad, FileWriteTask, PyTask, Workflow
 from . import test_cases
 from ..utils import read_rc
 from .. import defaults
@@ -220,6 +221,17 @@ def test_decode_trajhex_to_atoms(adslab_atoms_name):
 
     expected_atoms = test_cases.get_adslab_atoms(adslab_atoms_name)
     assert atoms == expected_atoms
+
+
+def test_submit_fwork():
+    atoms = ase.Atoms('CO')
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    fwork = make_firework(atoms, fw_name, vasp_settings)
+    wflow = submit_fwork(fwork, _testing=True)
+    assert len(wflow.fws) == 1
+    assert isinstance(wflow, Workflow)
+    assert wflow.name == 'vasp optimization'
 
 
 def test_check_jobs_output_type():
