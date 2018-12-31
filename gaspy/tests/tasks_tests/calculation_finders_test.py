@@ -12,7 +12,8 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ...tasks.calculation_finders import (FindCalculation,
                                           _find_docs_in_atoms_collection,
                                           _remove_old_docs,
-                                          FindGas)
+                                          FindGas,
+                                          FindBulk)
 
 # Things we need to do the tests
 import pytest
@@ -23,7 +24,8 @@ from .utils import clean_up_task
 from ... import defaults
 from ...mongo import make_atoms_from_doc
 from ...tasks.core import get_task_output
-from ...tasks.make_fireworks.core import MakeGasFW
+from ...tasks.make_fireworks.core import (MakeGasFW,
+                                          MakeBulkFW)
 
 
 def test_FindCalculation():
@@ -116,14 +118,15 @@ def test_FindGas_successfully():
     If we ask this task to find something that is there, it should return
     the correct Mongo document/dictionary
     '''
+    gas = 'H2'
     vasp_settings = defaults.GAS_SETTINGS['vasp']
-    task = FindGas('H2', vasp_settings)
+    task = FindGas(gas, vasp_settings)
 
     try:
         task.run(_testing=True)
         doc = get_task_output(task)
         assert doc['type'] == 'gas'
-        assert doc['fwname']['gasname'] == 'H2'
+        assert doc['fwname']['gasname'] == gas
         _assert_vasp_settings(doc, vasp_settings)
 
         # Make sure we can turn it into an atoms object
@@ -138,12 +141,53 @@ def test_FindGas_unsuccessfully():
     If we ask this task to find something that is not there, it should return
     the correct dependency
     '''
-    task = FindGas('CHO', defaults.GAS_SETTINGS['vasp'])
+    gas = 'CHO'
+    task = FindGas(gas, defaults.GAS_SETTINGS['vasp'])
 
     try:
         dependency = task.run(_testing=True)
         assert isinstance(dependency, MakeGasFW)
-        assert dependency.gas_name == 'CHO'
+        assert dependency.gas_name == gas
+
+    finally:
+        clean_up_task(task)
+
+
+def test_FindBulk_successfully():
+    '''
+    If we ask this task to find something that is there, it should return
+    the correct Mongo document/dictionary
+    '''
+    mpid = 'mp-2'
+    vasp_settings = defaults.BULK_SETTINGS['vasp']
+    task = FindBulk(mpid, vasp_settings)
+
+    try:
+        task.run(_testing=True)
+        doc = get_task_output(task)
+        assert doc['type'] == 'bulk'
+        assert doc['fwname']['mpid'] == mpid
+        _assert_vasp_settings(doc, vasp_settings)
+
+        # Make sure we can turn it into an atoms object
+        _ = make_atoms_from_doc(doc)    # noqa: F841
+
+    finally:
+        clean_up_task(task)
+
+
+def test_FindBulk_unsuccessfully():
+    '''
+    If we ask this task to find something that is not there, it should return
+    the correct dependency
+    '''
+    mpid = 'mp-120'
+    task = FindBulk(mpid, defaults.BULK_SETTINGS['vasp'])
+
+    try:
+        dependency = task.run(_testing=True)
+        assert isinstance(dependency, MakeBulkFW)
+        assert dependency.mpid == mpid
 
     finally:
         clean_up_task(task)

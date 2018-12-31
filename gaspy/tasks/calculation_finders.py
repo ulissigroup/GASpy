@@ -10,7 +10,8 @@ import warnings
 import luigi
 from .. import defaults
 from .core import save_task_output, make_task_output_object
-from .make_fireworks.core import MakeGasFW
+from .make_fireworks.core import (MakeGasFW,
+                                  MakeBulkFW)
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import is_rocket_running
 
@@ -170,44 +171,40 @@ class FindGas(FindCalculation):
         self.dependency = MakeGasFW(self.gas_name, self.vasp_settings)
 
 
-#class FindBulk(FindCalculation):
-#    '''
-#    This task will try to find a unit cell calculation in either our auxiliary
-#    Mongo database or our FireWorks database. If the calculation is complete,
-#    then it will return the results. If the calculation is pending, it will
-#    wait. If the calculation has not yet been submitted, then it will start the
-#    calculation.
-#
-#    Args:
-#        mpid            A string indicating the Materials Project ID of the
-#                        bulk unit cell you are looking for
-#        vasp_settings   A dictionary containing your VASP settings
-#    Output:
-#        doc     When the calculation is found in our auxiliary Mongo database
-#                successfully, then this task's output will be a dictionary
-#                containing information about the relaxed system. You should
-#                also be able to turn the dictionary into an `ase.Atoms` object
-#                using `gaspy.mongo.make_atoms_from_doc`.
-#    '''
-#    # Actual arguments for this task
-#    mpid = luigi.Parameter()
-#    vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-#
-#    # Attributes required to make the parent task work
-#    gasdb_query = {'type': 'bulk', 'fwname.mpid': mpid}
-#    fw_query = {'name.calculation_type': 'unit cell optimization',
-#                'name.mpid': mpid}
-#    MakeBulkFW(mpid=mpid, vasp_settings=vasp_settings)
+class FindBulk(FindCalculation):
+    '''
+    This task will try to find a bulk calculation in either our auxiliary Mongo
+    database or our FireWorks database. If the calculation is complete, then it
+    will return the results. If the calculation is pending, it will wait. If
+    the calculation has not yet been submitted, then it will start the
+    calculation.
+
+    Args:
+        mpid            A string indicating the Materials Project ID of the bulk
+                        you are looking for (e.g., 'mp-30')
+        vasp_settings   A dictionary containing your VASP settings
+    saved output:
+        doc     When the calculation is found in our auxiliary Mongo database
+                successfully, then this task's output will be the matching
+                Mongo document (i.e., dictionary) with various information
+                about the system. Some import keys include 'fwid', 'fwname',
+                or 'results'. This document should  also be able to be turned
+                an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
+    '''
+    mpid = luigi.Parameter()
+    vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+
+    def _load_attributes(self):
+        '''
+        Parses and saves Luigi parameters into various class attributes
+        required to run this task, as per the parent class `FindCalculation`
+        '''
+        self.gasdb_query = {'type': 'bulk', 'fwname.mpid': self.mpid}
+        self.fw_query = {'name.calculation_type': 'unit cell optimization',
+                         'name.mpid': self.mpid}
+        self.dependency = MakeBulkFW(self.mpid, self.vasp_settings)
 
 
-#class FindBulk(luigi.Task):
-#        search_strings = {'type': 'bulk',
-#                          'fwname.mpid': self.parameters['bulk']['mpid']}
-#        for key in self.parameters['bulk']['vasp_settings']:
-#            search_strings['fwname.vasp_settings.%s' % key] = \
-#                self.parameters['bulk']['vasp_settings'][key]
-#
-#
 #class FindSlab(luigi.Task):
 #    elif self.calctype == 'slab':
 #        search_strings = {'type': 'slab',
