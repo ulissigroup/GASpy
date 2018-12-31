@@ -234,23 +234,14 @@ def test_submit_fwork():
     assert wflow.name == 'vasp optimization'
 
 
-def test_check_jobs_output_type():
-    ''' This function tests if the output is Pandas Dataframe '''
-    dataframe = check_jobs_status('zulissi', 10)
-    assert isinstance(dataframe, pd.DataFrame)
-
-
-@pytest.mark.parametrize('user', ['zulissi', 'apalizha'])
-def test_check_jobs_user(user):
+@pytest.mark.parametrize('user, n_jobs',
+                         [('zulissi', 10),
+                          ('apalizha', 10),
+                          ('zulissi', 20)])
+def test_check_jobs_user(user, n_jobs):
     ''' This function test if the DataFrame contains only the user inquired '''
-    dataframe = check_jobs_status(user, 10)
-    user_from_results = dataframe['user'].unique()
-    assert user == user_from_results
+    dataframe = check_jobs_status(user, n_jobs)
 
-
-@pytest.mark.parametrize('n_jobs', [10, 20])
-def test_check_jobs_num_jobs(n_jobs):
-    ''' This function test if the DataFrame contains the requested number of rows '''
-    dataframe = check_jobs_status('zulissi', n_jobs)
-    n_jobs_from_results = len(dataframe.index)
-    assert n_jobs == n_jobs_from_results
+    assert isinstance(dataframe, pd.DataFrame)
+    assert user == dataframe['user'].unique()
+    assert n_jobs == len(dataframe.index)
