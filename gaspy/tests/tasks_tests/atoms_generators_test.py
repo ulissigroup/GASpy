@@ -11,7 +11,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 # Things we're testing
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
-                                       GenerateSlabsFromUnrelaxedBulk,
+                                       GenerateSlabs,
                                        make_slab_docs_from_structs)
 
 # Things we need to do the tests
@@ -30,7 +30,8 @@ from ...utils import read_rc
 from ...mongo import make_atoms_from_doc
 
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
-REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/tasks/atoms_generators/'
+REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
+                                 '/tasks/atoms_generators/')
 
 
 @pytest.mark.parametrize('gas_name', ['CO', 'H'])
@@ -76,7 +77,7 @@ def test_GenerateBulk(mpid):
         clean_up_task(task)
 
 
-def test_GenerateSlabsFromUnrelaxedBulk():
+def test_GenerateSlabs():
     '''
     There are a lot of moving parts in here, so we rely on the unit testing of
     the underlying functions to ensure fidelity of this task. This test will
@@ -86,10 +87,10 @@ def test_GenerateSlabsFromUnrelaxedBulk():
     # Run the task and grab the output, which should be a list of docs
     slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    task = GenerateSlabsFromUnrelaxedBulk(mpid='mp-30',
-                                          miller_indices=(1, 0, 0),
-                                          slab_generator_settings=slab_generator_settings,
-                                          get_slab_settings=get_slab_settings)
+    task = GenerateSlabs(mpid='mp-2',
+                         miller_indices=(1, 0, 0),
+                         slab_generator_settings=slab_generator_settings,
+                         get_slab_settings=get_slab_settings)
     try:
         evaluate_luigi_task(task)
         docs = get_task_output(task)

@@ -9,19 +9,12 @@ output.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
-#import copy
-#from math import ceil
-#from collections import OrderedDict
 import pickle
-#import numpy as np
-#from numpy.linalg import norm
-#from ase import Atoms
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
 import luigi
 from .core import save_task_output, make_task_output_object
-#from .fireworks_submitters import SubmitToFW
 from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                orient_atoms_upwards,
                                constrain_slab,
@@ -86,9 +79,9 @@ class GenerateBulk(luigi.Task):
         return make_task_output_object(self)
 
 
-class GenerateSlabsFromUnrelaxedBulk(luigi.Task):
+class GenerateSlabs(luigi.Task):
     '''
-    This class enumerates slabs from unrelaxed bulk structures.
+    This class enumerates slabs from relaxed bulk structures.
 
     Arg:
         mpid                    A string indicating the Materials Project ID of
@@ -102,6 +95,16 @@ class GenerateSlabsFromUnrelaxedBulk(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
+    saved output:
+        docs    A list of dictionaries (also known as "documents", because
+                they'll eventually be put into Mongo as documents) that contain
+                information about slabs. These documents can be fed to the
+                `gaspy.mongo.make_atoms_from_docs` function to be turned
+                into `ase.Atoms` objects. These documents also contain
+                the 'shift' and 'top' fields to indicate the shift/termination
+                of the slab and whether or not the slab is oriented upwards
+                with respect to the way it was enumerated originally by
+                pymatgen.
     '''
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
@@ -109,7 +112,8 @@ class GenerateSlabsFromUnrelaxedBulk(luigi.Task):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
 
     def requires(self):
-        return GenerateBulk(mpid=self.mpid)
+        from .calculation_finders import FindBulk   # local import to avoid import errors
+        return FindBulk(mpid=self.mpid)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -176,49 +180,6 @@ def make_slab_docs_from_structs(slab_structures):
     return docs
 
 
-#class GenerateSlabsFromRelaxedBulk(luigi.Task):
-#    '''
-#    This class enumerates slabs from relaxed bulk structures.
-#
-#    Arg:
-#        mpid                    A string indicating the Materials Project ID of
-#                                the bulk you want to cut a slab from
-#        miller_indices          A 3-tuple containing the three Miller indices
-#                                of the slabs you want to enumerate
-#        bulk_vasp_settings      The vasp settings that should have been used
-#                                to relax the bulk structure from which we will
-#                                be enumerating slabs.
-#        slab_generator_settings We use pymatgen's `SlabGenerator` class to
-#                                enumerate surfaces. You can feed the arguments
-#                                for that class here as a dictionary.
-#        get_slab_settings       We use the `get_slabs` method of pymatgen's
-#                                `SlabGenerator` class. You can feed the
-#                                arguments for the `get_slabs` method here
-#                                as a dictionary.
-#    '''
-#    mpid = luigi.Parameter()
-#    miller_indices = luigi.TupleParameter()
-#    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-#    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
-#    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-#
-#    def requires(self):
-#        return GenerateBulk(mpid=self.mpid)
-#
-#    def run(self):
-#        with open(self.input().fn, 'rb') as file_handle:
-#            bulk_doc = pickle.load(file_handle)
-#        bulk_atoms = make_atoms_from_doc(bulk_doc)
-#        slab_structs = make_slabs_from_bulk_atoms(atoms=bulk_atoms,
-#                                                  miller_indices=self.miller_indices,
-#                                                  slab_generator_settings=self.slab_generator_settings,
-#                                                  get_slab_settings=self.get_slab_settings)
-#        slab_docs = make_slab_docs_from_structs(slab_structs)
-#        save_task_output(self, slab_docs)
-#
-#    def output(self):
-#        return make_task_output_object(self)
-#
 #class GenerateSiteMarkers(luigi.Task):
 #    '''
 #    This class will take a set of slabs, enumerate the adsorption sites on the slab, add a
