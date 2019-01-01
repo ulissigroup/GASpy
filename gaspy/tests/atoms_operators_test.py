@@ -13,13 +13,15 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                orient_atoms_upwards,
                                constrain_slab,
                                is_structure_invertible,
-                               flip_atoms)
+                               flip_atoms,
+                               tile_atoms)
 
 # Things we need to do the tests
 import os
 import pytest
 import warnings
 import pickle
+import numpy as np
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -217,6 +219,18 @@ def test_flip_atoms():
 
         expected_atoms = ase.io.read(REGRESSION_BASELINES_LOCATION + 'flipped_' + file_name)
         assert flipped_atoms == expected_atoms
+
+
+@pytest.mark.parametrize('min_x, min_y', [(4.5, 4.5), (0, 20), (50, 50)])
+def test_tile_atoms(min_x, min_y):
+    slabs_folder = '/home/GASpy/gaspy/tests/test_cases/slabs/'
+    for file_name in os.listdir(slabs_folder):
+        atoms = ase.io.read(slabs_folder + file_name)
+        atoms_tiled, _ = tile_atoms(atoms, min_x, min_y)
+        x_length = np.linalg.norm(atoms_tiled.cell[0])
+        y_length = np.linalg.norm(atoms_tiled.cell[1])
+        assert x_length >= min_x
+        assert y_length >= min_y
 
 
 #def test_remove_adsorbate():

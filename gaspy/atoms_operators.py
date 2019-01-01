@@ -7,6 +7,7 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import warnings
+import math
 import numpy as np
 from ase.build import rotate
 from ase.constraints import FixAtoms
@@ -179,6 +180,31 @@ def flip_atoms(atoms):
     atoms.wrap()
 
     return atoms
+
+
+def tile_atoms(atoms, min_x, min_y):
+    '''
+    This function will repeat an atoms structure in the x and y direction until
+    the x and y dimensions are at least as wide as the given parameters.
+
+    Args:
+        atoms   `ase.Atoms` object of the structure that you want to tile
+        min_x   The minimum width you want in the x-direction (Angstroms)
+        min_y   The minimum width you want in the y-direction (Angstroms)
+    Returns:
+        atoms_tiled     An `ase.Atoms` object that's just a tiled version of
+                        the `atoms` argument.
+        (nx, ny)        A 2-tuple containing integers for the number of times
+                        the original atoms object was repeated in the x
+                        direction and y direction, respectively.
+    '''
+    x_length = np.linalg.norm(atoms.cell[0])
+    y_length = np.linalg.norm(atoms.cell[1])
+    nx = int(math.ceil(min_x/x_length))
+    ny = int(math.ceil(min_y/y_length))
+    n_xyz = (nx, ny, 1)
+    atoms_tiled = atoms.repeat(n_xyz)
+    return atoms_tiled, (nx, ny)
 
 
 #def remove_adsorbate(adslab):
