@@ -20,7 +20,6 @@ from ase.constraints import FixAtoms
 from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.local_env import VoronoiNN
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 
 
 def read_rc(query=None):
@@ -373,21 +372,6 @@ def fingerprint_atoms(atoms):
             'neighborcoord': neighborcoord,
             'natoms': len(atoms),
             'nextnearestcoordination': coordination_nextnearest}
-
-
-def find_adsorption_sites(atoms):
-    '''
-    A wrapper for pymatgen to get all of the adsorption sites of a slab.
-
-    Arg:
-        atoms   The slab where you are trying to find adsorption sites in ase.Atoms format
-    Output:
-        sites   A list of [array]s, which contain the x-y-z coordinates of the adsorptions sites.
-    '''
-    struct = AseAtomsAdaptor.get_structure(atoms)
-    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
-    sites = sites_dict['all']
-    return sites
 
 
 def find_max_movement(atoms_initial, atoms_final):

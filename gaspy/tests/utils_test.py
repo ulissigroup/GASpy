@@ -12,7 +12,6 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ..utils import (read_rc,
                      _find_rc_file,
                      fingerprint_atoms,
-                     find_adsorption_sites,
                      unfreeze_dict,
                      encode_atoms_to_hex,
                      decode_hex_to_atoms,
@@ -23,11 +22,8 @@ from ..utils import (read_rc,
 # Things we need to do the tests
 import pytest
 import subprocess
-import pickle
 import collections
 import json
-import numpy as np
-import numpy.testing as npt
 import ase
 from luigi.parameter import _FrozenOrderedDict
 from fireworks.core.launchpad import LaunchPad
@@ -125,47 +121,6 @@ def test_fingerprint_atoms(collection_tag):
         atoms = make_atoms_from_doc(doc)
         fingerprint = fingerprint_atoms(atoms)
         assert fingerprint == expected_fingerprint
-
-
-@pytest.mark.baseline
-@pytest.mark.parametrize('slab_atoms_name',
-                         ['AlAu2Cu_210.traj',
-                          'CoSb2_110.traj',
-                          'Cu_211.traj',
-                          'FeNi_001.traj',
-                          'Ni4W_001.traj',
-                          'Pt12Si5_110.traj'])
-def test_to_create_adsorption_sites(slab_atoms_name):
-    atoms = test_cases.get_slab_atoms(slab_atoms_name)
-    sites = find_adsorption_sites(atoms)
-
-    file_name = REGRESSION_BASELINES_LOCATION + 'sites_for_' + slab_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(sites, file_handle)
-    assert True
-
-
-@pytest.mark.parametrize('slab_atoms_name',
-                         ['AlAu2Cu_210.traj',
-                          'CoSb2_110.traj',
-                          'Cu_211.traj',
-                          'FeNi_001.traj',
-                          'Ni4W_001.traj',
-                          'Pt12Si5_110.traj'])
-def test_find_adsorption_sites(slab_atoms_name):
-    '''
-    Check out `.learning_tests.pymatgen_test._get_sites_for_standard_structure`
-    to see what pymatgen gives us. Our `gaspy.utils.find_adsorption_sites` simply gives us
-    the value of that object when the key is 'all'.
-    '''
-    atoms = test_cases.get_slab_atoms(slab_atoms_name)
-    sites = find_adsorption_sites(atoms)
-
-    file_name = REGRESSION_BASELINES_LOCATION + 'sites_for_' + slab_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_sites = pickle.load(file_handle)
-
-    npt.assert_allclose(np.array(sites), np.array(expected_sites), rtol=1e-5, atol=1e-7)
 
 
 def test_unfreeze_dict():

@@ -14,6 +14,7 @@ from ase.constraints import FixAtoms
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from .utils import unfreeze_dict
 
 
@@ -205,6 +206,23 @@ def tile_atoms(atoms, min_x, min_y):
     n_xyz = (nx, ny, 1)
     atoms_tiled = atoms.repeat(n_xyz)
     return atoms_tiled, (nx, ny)
+
+
+def find_adsorption_sites(atoms):
+    '''
+    A wrapper for pymatgen to get all of the adsorption sites of a slab.
+
+    Arg:
+        atoms   The slab where you are trying to find adsorption sites in
+                `ase.Atoms` format
+    Output:
+        sites   A `numpy.ndarray` object that contains the x-y-z coordinates of
+                the adsorptions sites
+    '''
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
+    sites = sites_dict['all']
+    return sites
 
 
 #def remove_adsorbate(adslab):

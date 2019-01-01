@@ -14,7 +14,8 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                constrain_slab,
                                is_structure_invertible,
                                flip_atoms,
-                               tile_atoms)
+                               tile_atoms,
+                               find_adsorption_sites)
 
 # Things we need to do the tests
 import os
@@ -22,9 +23,11 @@ import pytest
 import warnings
 import pickle
 import numpy as np
+import numpy.testing as npt
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from . import test_cases
 from .tasks_tests.utils import clean_up_task
 from .. import defaults
 from ..tasks import get_task_output, evaluate_luigi_task
@@ -231,6 +234,41 @@ def test_tile_atoms(min_x, min_y):
         y_length = np.linalg.norm(atoms_tiled.cell[1])
         assert x_length >= min_x
         assert y_length >= min_y
+
+
+@pytest.mark.baseline
+def test_to_create_adsorption_sites():
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        atoms = test_cases.get_slab_atoms(slab_atoms_name)
+        sites = find_adsorption_sites(atoms)
+
+        file_name = (REGRESSION_BASELINES_LOCATION + 'sites_for_' +
+                     slab_atoms_name.split('.')[0] + '.pkl')
+        with open(file_name, 'wb') as file_handle:
+            pickle.dump(sites, file_handle)
+        assert True
+
+
+def test_find_adsorption_sites():
+    '''
+    Check out `.learning_tests.pymatgen_test._get_sites_for_standard_structure`
+    to see what pymatgen gives us. Our
+    `gaspy.atoms_operators.find_adsorption_sites` simply gives us the value of
+    that object when the key is 'all'.
+    '''
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        atoms = test_cases.get_slab_atoms(slab_atoms_name)
+        sites = find_adsorption_sites(atoms)
+
+        file_name = (REGRESSION_BASELINES_LOCATION + 'sites_for_' +
+                     slab_atoms_name.split('.')[0] + '.pkl')
+        with open(file_name, 'rb') as file_handle:
+            expected_sites = pickle.load(file_handle)
+
+        npt.assert_allclose(np.array(sites), np.array(expected_sites),
+                            rtol=1e-5, atol=1e-7)
 
 
 #def test_remove_adsorbate():
