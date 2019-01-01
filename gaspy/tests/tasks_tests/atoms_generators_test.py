@@ -12,12 +12,14 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateSlabs,
-                                       make_slab_docs_from_structs)
+                                       _make_slab_docs_from_structs,
+                                       GenerateAdsorptionSites)
 
 # Things we need to do the tests
 import os
 import pytest
 import pickle
+import numpy.testing as npt
 import ase.io
 from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
@@ -26,7 +28,7 @@ from .utils import clean_up_task
 from ... import defaults
 from ...atoms_operators import make_slabs_from_bulk_atoms
 from ...tasks import get_task_output, evaluate_luigi_task
-from ...utils import read_rc
+from ...utils import read_rc, unfreeze_dict
 from ...mongo import make_atoms_from_doc
 
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
@@ -84,19 +86,25 @@ def test_GenerateSlabs():
     instead verify that the output types of this task are what we expected them
     to be.
     '''
-    # Run the task and grab the output, which should be a list of docs
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
     slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    task = GenerateSlabs(mpid='mp-2',
-                         miller_indices=(1, 0, 0),
+
+    # Make the task and make sure the arguments were parsed correctly
+    task = GenerateSlabs(mpid=mpid,
+                         miller_indices=miller_indices,
                          slab_generator_settings=slab_generator_settings,
                          get_slab_settings=get_slab_settings)
+    assert task.mpid == mpid
+    assert task.miller_indices == miller_indices
+    assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
+    assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
+
     try:
+        # Run the task and make sure the task output has the correct format/fields
         evaluate_luigi_task(task)
         docs = get_task_output(task)
-
-        # The documents should all have the 'shift' and 'top' keys, and we
-        # should be able to make atoms objects from them, too
         for doc in docs:
             assert 'shift' in doc
             assert 'top' in doc
@@ -118,7 +126,7 @@ def test_to_create_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              defaults.SLAB_SETTINGS['slab_generator_settings'],
                                              defaults.SLAB_SETTINGS['get_slab_settings'])
-        docs = make_slab_docs_from_structs(structs)
+        docs = _make_slab_docs_from_structs(structs)
 
         # Save them
         bulk_name = file_name.split('.')[0]
@@ -127,10 +135,10 @@ def test_to_create_slab_docs_from_structs():
     assert True
 
 
-def test_make_slab_docs_from_structs():
+def test__make_slab_docs_from_structs():
     '''
     Another regression test because we rely mainly on the unit tests of the
-    functions that `make_slab_docs_from_structs` relies on.
+    functions that `_make_slab_docs_from_structs` relies on.
     '''
     # Make the documents for each test case
     bulks_folder = TEST_CASE_LOCATION + 'bulks/'
@@ -139,7 +147,8 @@ def test_make_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              defaults.SLAB_SETTINGS['slab_generator_settings'],
                                              defaults.SLAB_SETTINGS['get_slab_settings'])
-        docs = make_slab_docs_from_structs(structs)
+        docs = _make_slab_docs_from_structs(structs)
+
 
     # Get the regression baseline
     bulk_name = file_name.split('.')[0]
@@ -152,3 +161,39 @@ def test_make_slab_docs_from_structs():
         doc.pop('ctime', None)
         doc.pop('mtime', None)
     assert docs == expected_docs
+
+
+def test_GenerateAdsorptionSites():
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
+    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
+    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
+
+    # Make the task and make sure the arguments were parsed correctly
+    task = GenerateAdsorptionSites(mpid=mpid,
+                                   miller_indices=miller_indices,
+                                   slab_generator_settings=slab_generator_settings,
+                                   get_slab_settings=get_slab_settings,
+                                   min_xy=min_xy)
+    assert task.mpid == mpid
+    assert task.miller_indices == miller_indices
+    assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
+    assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
+    assert task.min_xy == min_xy
+
+    try:
+        evaluate_luigi_task(task)
+        docs = get_task_output(task)
+
+        for doc in docs:
+            assert 'slab_repeat' in doc
+
+            atoms = make_atoms_from_doc(doc)
+            for atom in atoms:
+                if atom.tag == 1:
+                    npt.assert_allclose(atom.position, doc['adsorption_site'])
+                    assert atom.symbol == 'U'
+
+    finally:
+        clean_up_task(task)

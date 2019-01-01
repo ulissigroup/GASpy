@@ -1,14 +1,12 @@
 '''
 This modules contains default settings for various function and queries used in GASpy and its
-submodules. 
+submodules.
 '''
 
 import warnings
-import copy
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
-from .utils import encode_atoms_to_hex
 
 
 # Vasp pseudopotential version
@@ -106,6 +104,22 @@ SLAB_SETTINGS = OrderedDict(max_miller=2,
                                                           max_broken_bonds=0,
                                                           symmetrize=False))
 
+# The default settings we use to enumerate adslab structures, along with the
+# subsequent DFT settings. `mix_xy` is the minimum with of the slab (Angstroms)
+# before we enumerate adsorption sites on it.
+ADSLAB_SETTINGS = OrderedDict(min_xy=4.5,
+                              vasp=OrderedDict(ibrion=2,
+                                               nsw=200,
+                                               isif=0,
+                                               isym=0,
+                                               kpts=[4, 4, 1],
+                                               lreal='Auto',
+                                               ediffg=-0.03,
+                                               symprec=1e-10,
+                                               encut=350.,
+                                               pp_version=PP_VERSION,
+                                               **XC_SETTINGS[XC]))
+
 # We use surrogate models to make predictions of DFT information. This is the
 # tag associated with our default model.
 MODEL = 'model0'
@@ -163,75 +177,6 @@ def adsorbates_dict():
     adsorbates['CHO'] = cho
 
     return adsorbates
-
-
-def adsorption_parameters(adsorbate,
-                          adsorption_site=None,
-                          adsorbate_rotation=None,
-                          slabrepeat='(1, 1)',
-                          num_slab_atoms=0):
-    '''
-    Generate some default parameters for an adsorption configuration and expected
-    relaxation settings
-
-    Args:
-        adsorbate       If this is a string, this function will try to find it in the
-                        default dictionary of adsorbates. If it is not in the default
-                        dictionary, then this function will assume that you have passed
-                        it an ase.Atoms object and then act accordingly.
-        adsorption_site A list of size 3 of the cartesian coordinates of the
-                        binding atom in the adsorbate.
-        slabrepeat      The number of times the basic slab has been repeated
-        numb_slab_atoms The number of atoms in the slab. We use this number to help
-                        differentiate slab and adsorbate atoms (later on).
-        settings        A string that's identical to one of the keys found in
-                        `gaspy.defaults.exchange_correlational_settings()`.
-                        This tells our DFT calculator what calculation
-                        settings to use. You can also make and pass your own
-                        dictionary settings, if you want.
-        encut           The energy cut-off (in eV) to use for DFT. Only works
-                        when the `xc` argument is a string. If you set
-                        `xc` yourself manually, then include encut there.
-        pp_version      A string indicating which version of VASP you want to use.
-                        Only works when the `xc` argument is a string. If you set
-                        `xc` yourself manually, then include encut there.
-    '''
-    # Python doesn't like mutable defaults, so we set it here
-    if adsorption_site is None:
-        adsorption_site = []
-
-    if adsorbate_rotation is None:
-        adsorbate_rotation = copy.deepcopy({'phi': 0., 'theta': 0., 'psi': 0.})
-
-    # Use EAFP to figure out if the adsorbate that the user passed is in the
-    # dictionary of default adsorbates, or if the user supplied an atoms object
-    try:
-        atoms = adsorbates_dict()[adsorbate]
-        name = adsorbate
-    except TypeError:
-        atoms = adsorbate
-        name = adsorbate.get_chemical_formula()
-
-    return OrderedDict(numtosubmit=2,
-                       min_xy=4.5,
-                       relaxed=True,
-                       num_slab_atoms=num_slab_atoms,
-                       slabrepeat=slabrepeat,
-                       adsorbates=[OrderedDict(name=name,
-                                               atoms=encode_atoms_to_hex(atoms),
-                                               adsorption_site=adsorption_site,
-                                               adsorbate_rotation=adsorbate_rotation)],
-                       vasp_settings=OrderedDict(ibrion=2,
-                                                 nsw=200,
-                                                 isif=0,
-                                                 isym=0,
-                                                 kpts=[4, 4, 1],
-                                                 lreal='Auto',
-                                                 ediffg=-0.03,
-                                                 symprec=1e-10,
-                                                 encut=350.,
-                                                 pp_version=PP_VERSION,
-                                                 **XC_SETTINGS[XC]))
 
 
 def adsorption_fingerprints():
