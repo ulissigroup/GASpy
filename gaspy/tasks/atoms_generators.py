@@ -22,7 +22,8 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                is_structure_invertible,
                                flip_atoms,
                                tile_atoms,
-                               find_adsorption_sites)
+                               find_adsorption_sites,
+                               add_adsorbate_onto_slab)
 from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from .. import utils, defaults
 
@@ -31,6 +32,7 @@ GAS_SETTINGS = defaults.GAS_SETTINGS
 BULK_SETTINGS = defaults.BULK_SETTINGS
 SLAB_SETTINGS = defaults.SLAB_SETTINGS
 ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+ADSORBATES = defaults.ADSORBATES
 
 
 class GenerateGas(luigi.Task):
@@ -240,12 +242,14 @@ class GenerateAdsorptionSites(luigi.Task):
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
             slab_docs = pickle.load(file_handle)
-        docs_adslabs = []
 
         # For each slab, tile it and then find all the adsorption sites
+        docs_sites = []
         for slab_doc in slab_docs:
             slab_atoms = make_atoms_from_doc(slab_doc)
-            slab_atoms_tiled, slab_repeat = tile_atoms(slab_atoms, self.min_xy, self.min_xy)
+            slab_atoms_tiled, slab_repeat = tile_atoms(atoms=slab_atoms,
+                                                       min_x=self.min_xy,
+                                                       min_y=self.min_xy)
             sites = find_adsorption_sites(slab_atoms_tiled)
 
             # Place a uranium atom on the adsorption site and then tag it with
@@ -260,84 +264,99 @@ class GenerateAdsorptionSites(luigi.Task):
                 doc = make_doc_from_atoms(adslab_atoms)
                 doc['slab_repeat'] = slab_repeat
                 doc['adsorption_site'] = site
-                docs_adslabs.append(doc)
-        save_task_output(self, docs_adslabs)
+                docs_sites.append(doc)
+        save_task_output(self, docs_sites)
 
     def output(self):
         return make_task_output_object(self)
 
 
-#class GenerateAdSlabs(luigi.Task):
-#    '''
-#    This class takes a set of adsorbate positions from SiteMarkers and replaces
-#    the marker (a uranium atom) with the correct adsorbate. Adding an adsorbate is done in two
-#    steps (marker enumeration, then replacement) so that the hard work of enumerating all
-#    adsorption sites is only done once and reused for every adsorbate
-#    '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#        '''
-#        We need the generated adsorbates with the marker atoms.  We delete
-#        parameters['adsorption']['adsorbates'] so that every generate_adsorbates_marker call
-#        looks the same, even with different adsorbates requested in this task
-#        '''
-#        parameters_no_adsorbate = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-#        del parameters_no_adsorbate['adsorption']['adsorbates']
-#        return GenerateSiteMarkers(parameters_no_adsorbate)
-#
-#    def run(self):
-#        # Load the configurations
-#        adsorbate_configs = pickle.load(open(self.input().fn, 'rb'))
-#
-#        # For each configuration replace the marker with the adsorbate
-#        for adsorbate_config in adsorbate_configs:
-#            # Load the atoms object for the slab and adsorbate
-#            slab = adsorbate_config['atoms']
-#            ads = utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms'])
-#
-#            # Rotate the adsorbate into place
-#            #this check is needed if adsorbate = '', in which case there is no adsorbate_rotation
-#            if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
-#                ads.euler_rotate(**self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation'])
-#
-#            # Find the position of the marker/adsorbate and the number of slab atoms
-#            ads_pos = slab[-1].position
-#            # Delete the marker on the slab, and then put the slab under the adsorbate.
-#            # Note that we add the slab to the adsorbate in order to maintain any
-#            # constraints that may be associated with the adsorbate (because ase only
-#            # keeps the constraints of the first atoms object).
-#            del slab[-1]
-#            ads.translate(ads_pos)
-#
-#            # If there is a hookean constraining the adsorbate to a local position, we need to adjust
-#            # it based on ads_pos. We only do this for hookean constraints fixed to a point
-#            for constraint in ads.constraints:
-#                dict_repr = constraint.todict()
-#                if dict_repr['name'] == 'Hookean' and constraint._type == 'point':
-#                    constraint.origin += ads_pos
-#
-#            adslab = ads + slab
-#            adslab.cell = slab.cell
-#            adslab.pbc = [True, True, True]
-#            # We set the tags of slab atoms to 0, and set the tags of the adsorbate to 1.
-#            # In future version of GASpy, we intend to set the tags of co-adsorbates
-#            # to 2, 3, 4... etc (per co-adsorbate)
-#            tags = [1]*len(ads)
-#            tags.extend([0]*len(slab))
-#            adslab.set_tags(tags)
-#            # Set constraints for the slab and update the list of dictionaries with
-#            # the correct atoms object adsorbate name.
-#            adsorbate_config['atoms'] = utils.constrain_slab(adslab)
-#            adsorbate_config['adsorbate'] = self.parameters['adsorption']['adsorbates'][0]['name']
-#
-#            #this check is needed if adsorbate = '', in which case there is no adsorbate_rotation
-#            if 'adsorbate_rotation' in self.parameters['adsorption']['adsorbates'][0]:
-#                adsorbate_config['adsorbate_rotation'] = self.parameters['adsorption']['adsorbates'][0]['adsorbate_rotation']
-#
-#        # Save the generated list of adsorbate configurations to a pkl file
-#        with self.output().temporary_path() as self.temp_output_path:
-#            pickle.dump(adsorbate_configs, open(self.temp_output_path, 'wb'))
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+class GenerateAdslabs(luigi.Task):
+    '''
+    This class takes a set of adsorbate positions from the
+    `GenerateAdsorptionSites` task and replaces the marker (a uranium atom)
+    with the correct adsorbate.
+
+    Args:
+        adsorbate_name          A string indicating which adsorbate to use. It
+                                should be one of the keys within the
+                                `gaspy.defaults.ADSORBATES` dictionary. If you
+                                want an adsorbate that is not in the dictionary,
+                                then you will need to add the adsorbate to that
+                                dictionary.
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to enumerate sites from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the slab[s] you want to enumerate sites from
+        rotation                A dictionary containing the angles (in degrees)
+                                in which to rotate the adsorbate after it is
+                                placed at the adsorption site. The keys for
+                                each of the angles are 'phi', 'theta', and
+                                psi'.
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here
+                                as a dictionary.
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
+    saved output:
+        docs    A list of dictionaries (also known as "documents", because
+                they'll eventually be put into Mongo as documents) that contain
+                information about the sites. These documents can be fed to the
+                `gaspy.mongo.make_atoms_from_docs` function to be turned
+                into `ase.Atoms` objects. These objects have a the adsorbate
+                tagged with a `1`. These documents also contain the following
+                fields:
+                    slab_repeat     2-tuple of integers indicating the number
+                                    of times the unit slab was repeated in the
+                                    x and y directions before site enumeration
+                    adsorption_site `np.ndarray` of length 3 containing the
+                                    containing the cartesian coordinates of the
+                                    adsorption site.
+    '''
+    adsorbate_name = luigi.Parameter()
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+
+    def requires(self):
+        return GenerateAdsorptionSites(mpid=self.mpid,
+                                       miller_indices=self.miller_indices,
+                                       slab_generator_settings=self.slab_generator_settings,
+                                       get_slab_settings=self.get_slab_settings,
+                                       min_xy=self.min_xy)
+
+    def run(self):
+        with open(self.input().path, 'rb') as file_handle:
+            site_docs = pickle.load(file_handle)
+
+        # Get and rotate the adsorbate
+        adsorbate = ADSORBATES[self.adsorbate_name].copy()
+        adsorbate.euler_rotate(**self.rotation)
+
+        # Fetch each slab and then replace the Uranium marker with the
+        # adsorbate
+        docs_adslabs = []
+        for site_doc in site_docs:
+            slab = make_atoms_from_doc(site_doc)
+            del slab[-1]
+            adslab = add_adsorbate_onto_slab(adsorbate=adsorbate,
+                                             slab=slab,
+                                             site=site_doc['adsorption_site'])
+
+            # Turn the adslab into a document, add the correct fields, and save
+            doc = make_doc_from_atoms(adslab)
+            doc['slab_repeat'] = site_doc['slab_repeat']
+            doc['adsorption_site'] = site_doc['adsorption_site']
+            docs_adslabs.append(doc)
+        save_task_output(self, docs_adslabs)
+
+    def output(self):
+        return make_task_output_object(self)

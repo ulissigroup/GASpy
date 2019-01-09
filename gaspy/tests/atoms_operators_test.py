@@ -15,11 +15,12 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                is_structure_invertible,
                                flip_atoms,
                                tile_atoms,
-                               find_adsorption_sites)
+                               find_adsorption_sites,
+                               add_adsorbate_onto_slab)
 
 # Things we need to do the tests
-import os
 import pytest
+import inspect
 import warnings
 import pickle
 import numpy as np
@@ -271,14 +272,60 @@ def test_find_adsorption_sites():
                             rtol=1e-5, atol=1e-7)
 
 
-#def test_remove_adsorbate():
-#    '''
-#    This test verifies that anything with a non-zero tag was removed.
-#    '''
-#    test_case_location = TEST_CASE_LOCATION + 'adslabs/'
-#    for file_name in os.listdir(test_case_location):
-#        adslab = ase.io.read(test_case_location + file_name)
-#
-#        slab = remove_adsorbate(adslab)
-#        tags = slab.get_tags()
-#        assert np.count_nonzero(tags) == 0
+def test_add_adsorbate_onto_slab():
+    '''
+    Yeah, I know I golfed the crap out of this. I'm sorry. I'm ill and cutting
+    corners.
+    '''
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        slab = test_cases.get_slab_atoms(slab_atoms_name)
+
+        for ads_name in ['H', 'CO', 'OH', 'OOH']:
+            adsorbate = defaults.ADSORBATES[ads_name].copy()
+
+            for site in [np.array([0., 0., 0.]), np.array([1., 1., 1.])]:
+                adslab = add_adsorbate_onto_slab(adsorbate, slab, site)
+
+                # Is the adsorbate in the correct position?
+                npt.assert_allclose(adslab[0].position, adsorbate[0].position+site)
+
+                # Is the adslab periodic and have the correct cell?
+                assert adslab.pbc.tolist() == [True, True, True]
+                npt.assert_allclose(adslab.cell, slab.cell)
+
+                # Are the adsorbate and slab atoms even correct?
+                npt.assert_array_equal(adslab[0:len(adsorbate)].symbols, adsorbate.symbols)
+                assert adslab[-len(slab):] == slab
+
+                # Did the adsorbate constraints carry over?
+                assert all(ads_constraint.todict() == adslab_constraint.todict()
+                           for ads_constraint, adslab_constraint
+                           in zip(adsorbate.constraints, adslab.constraints[:-1]))
+
+                # Is everything tagged correctly?
+                tags = adslab.get_tags()
+                assert all(tag == 1 for tag in tags[0:len(adsorbate)])
+                assert all(tag == 0 for tag in tags[-len(slab):])
+
+                # Are the correct slab atoms fixed?
+                fixed_atom_indices = adslab.constraints[-1].get_indices()
+                z_cutoff = inspect.signature(constrain_slab).parameters['z_cutoff'].default
+                # If the slab is pointing upwards...
+                if adslab.cell[2, 2] > 0:
+                    max_height = max(atom.position[2] for atom in adslab if atom.tag == 0)
+                    threshold = max_height - z_cutoff
+                    for i, atom in enumerate(adslab):
+                        if atom.tag == 0 and atom.position[2] < threshold:
+                            assert i in fixed_atom_indices
+                        else:
+                            assert i not in fixed_atom_indices
+                # If the slab is pointing downwards...
+                if adslab.cell[2, 2] < 0:
+                    min_height = min(atom.position[2] for atom in adslab if atom.tag == 0)
+                    threshold = min_height + z_cutoff
+                    for i, atom in enumerate(adslab):
+                        if atom.tag == 0 and atom.position[2] > threshold:
+                            assert i in fixed_atom_indices
+                        else:
+                            assert i not in fixed_atom_indices

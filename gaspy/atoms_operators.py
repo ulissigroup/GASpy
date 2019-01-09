@@ -225,24 +225,39 @@ def find_adsorption_sites(atoms):
     return sites
 
 
-#def remove_adsorbate(adslab):
-#    '''
-#    This function removes adsorbates from an adslab, as long as you've tagged
-#    the adslab correctly.
-#
-#    Input:
-#        adslab  The `ase.Atoms` object of the adslab. The adsorbate atom(s) must
-#                be tagged with non-zero integers, while the slab atoms must be
-#                tagged with zeroes.
-#    Outputs:
-#        slab    The `ase.Atoms` object of the bare slab.
-#    '''
-#    # Work on a copy so that we don't modify the original
-#    slab = adslab.copy()
-#
-#    # We remove the atoms in reverse order so that the indices of the atoms
-#    # don't change while we're iterating through them.
-#    for i, atom in reversed(list(enumerate(slab))):
-#        if atom.tag != 0:
-#            del slab[i]
-#    return slab
+def add_adsorbate_onto_slab(adsorbate, slab, site):
+    '''
+    There are a lot of small details that need to be considered when adding an
+    adsorbate onto a slab. This function will take care of those details for
+    you.
+
+    Args:
+        adsorbate   An `ase.Atoms` object of the adsorbate
+        slab        An `ase.Atoms` object of the slab
+        site        A 3-long sequence containing floats that indicate the
+                    cartesian coordinates of the site you want to add the
+                    adsorbate onto.
+    Returns:
+        adslab  An `ase.Atoms` object containing the slab and adsorbate.
+                The sub-surface slab atoms will be fixed, and all adsorbate
+                constraints should be preserved. Slab atoms will be tagged
+                with a `0` and adsorbate atoms will be tagged with a `1`.
+    '''
+    adsorbate = adsorbate.copy()    # To make sure we don't mess with the original
+    adsorbate.translate(site)
+
+    adslab = adsorbate + slab
+    adslab.cell = slab.cell
+    adslab.pbc = [True, True, True]
+
+    # We set the tags of slab atoms to 0, and set the tags of the adsorbate to 1.
+    # In future version of GASpy, we intend to set the tags of co-adsorbates
+    # to 2, 3, 4... etc (per co-adsorbate)
+    tags = [1]*len(adsorbate)
+    tags.extend([0]*len(slab))
+    adslab.set_tags(tags)
+
+    # Fix the sub-surface atoms
+    adslab_constrained = constrain_slab(adslab)
+
+    return adslab_constrained

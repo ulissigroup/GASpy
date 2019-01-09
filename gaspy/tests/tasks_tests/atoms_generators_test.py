@@ -13,7 +13,8 @@ from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateSlabs,
                                        _make_slab_docs_from_structs,
-                                       GenerateAdsorptionSites)
+                                       GenerateAdsorptionSites,
+                                       GenerateAdslabs)
 
 # Things we need to do the tests
 import os
@@ -194,6 +195,57 @@ def test_GenerateAdsorptionSites():
                 if atom.tag == 1:
                     npt.assert_allclose(atom.position, doc['adsorption_site'])
                     assert atom.symbol == 'U'
+
+    finally:
+        clean_up_task(task)
+
+
+def test_GenerateAdslabs():
+    '''
+    We only test some superficial things here. We rely heavily on the test for
+    the `add_adsorbate_onto_slab` function to make sure things go right.
+    '''
+    adsorbate_name = 'OH'
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
+    rotation = defaults.ADSLAB_SETTINGS['rotation']
+    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
+    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
+
+    # Make the task and make sure the arguments were parsed correctly
+    task = GenerateAdslabs(adsorbate_name=adsorbate_name,
+                           mpid=mpid,
+                           miller_indices=miller_indices,
+                           rotation=rotation,
+                           slab_generator_settings=slab_generator_settings,
+                           get_slab_settings=get_slab_settings,
+                           min_xy=min_xy)
+    assert task.adsorbate_name == adsorbate_name
+    assert task.mpid == mpid
+    assert task.miller_indices == miller_indices
+    assert unfreeze_dict(task.rotation) == rotation
+    assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
+    assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
+    assert task.min_xy == min_xy
+
+    try:
+        # Run the task and fetch the outputs
+        evaluate_luigi_task(task)
+        docs = get_task_output(task)
+        for doc in docs:
+            adslab = make_atoms_from_doc(doc)
+
+            # Make sure the extra document fields are correct
+            npt.assert_allclose(adslab[0].position, doc['adsorption_site'])
+            assert 'slab_repeat' in doc
+
+            # Make sure that the adsorbate was rotated correctly by checking
+            # the positions of the adsorbate
+            adsorbate = defaults.ADSORBATES[adsorbate_name].copy()
+            adsorbate.euler_rotate(**rotation)
+            npt.assert_allclose(adslab[0:len(adsorbate)].get_positions() - doc['adsorption_site'],
+                                adsorbate.positions)
 
     finally:
         clean_up_task(task)

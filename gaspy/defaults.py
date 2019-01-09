@@ -12,6 +12,7 @@ import ase.constraints
 # Vasp pseudopotential version
 PP_VERSION = '5.4'
 
+
 # A dictionary whose keys are some typical sets of exchange correlationals and
 # whose values are dictionaries with the corresponding pseudopotential (pp),
 # generalized gradient approximations (ggas), and other pertinent information.
@@ -52,8 +53,10 @@ XC_SETTINGS = OrderedDict(lda=OrderedDict(pp='LDA'),
                           hf=OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
                                          aldac=0.0, aggac=0.0))
 
+
 # Our default exchange correlational
 XC = 'rpbe'
+
 
 # The default settings we use to do DFT calculations of gases
 GAS_SETTINGS = OrderedDict(vasp=OrderedDict(ibrion=2,
@@ -64,6 +67,7 @@ GAS_SETTINGS = OrderedDict(vasp=OrderedDict(ibrion=2,
                                             encut=350.,
                                             pp_version=PP_VERSION,
                                             **XC_SETTINGS[XC]))
+
 
 # The default settings we use to do DFT calculations of bulks
 BULK_SETTINGS = OrderedDict(max_atoms=80,
@@ -77,6 +81,7 @@ BULK_SETTINGS = OrderedDict(max_atoms=80,
                                              encut=500.,
                                              pp_version=PP_VERSION,
                                              **XC_SETTINGS[XC]))
+
 
 # The default settings we use to enumerate slabs, along with the subsequent DFT
 # settings. The 'slab_generator_settings' are passed to the `SlabGenerator`
@@ -104,10 +109,12 @@ SLAB_SETTINGS = OrderedDict(max_miller=2,
                                                           max_broken_bonds=0,
                                                           symmetrize=False))
 
+
 # The default settings we use to enumerate adslab structures, along with the
 # subsequent DFT settings. `mix_xy` is the minimum with of the slab (Angstroms)
 # before we enumerate adsorption sites on it.
 ADSLAB_SETTINGS = OrderedDict(min_xy=4.5,
+                              rotation=OrderedDict(phi=0., theta=0., psi=0.),
                               vasp=OrderedDict(ibrion=2,
                                                nsw=200,
                                                isif=0,
@@ -120,63 +127,48 @@ ADSLAB_SETTINGS = OrderedDict(min_xy=4.5,
                                                pp_version=PP_VERSION,
                                                **XC_SETTINGS[XC]))
 
+
+# ADSORBATES is a dictionary whose keys are the simple string names of
+# adsorbates and whos values are their corresponding `ase.Atoms` objects. When
+# making new entries for this dictionary, we recommend "pointing" the adsorbate
+# upwards in the z-direction.
+ADSORBATES = {}
+ADSORBATES[''] = Atoms()
+# Uranium is a place-holder for an adsorbate
+ADSORBATES['U'] = Atoms('U')
+# Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
+ADSORBATES['H'] = Atoms('H', positions=[[0., 0., -0.5]])
+ADSORBATES['O'] = Atoms('O')
+ADSORBATES['C'] = Atoms('C')
+ADSORBATES['N'] = Atoms('N')
+# For diatomics (and above), it's a good practice to manually relax the gases
+# and then see how far apart they are. Then put first atom at the origin, and
+# put the second atom directly above it.
+ADSORBATES['CO'] = Atoms('CO', positions=[[0., 0., 0.],
+                                          [0., 0., 1.2]])
+ADSORBATES['OH'] = Atoms('OH', positions=[[0., 0., 0.],
+                                          [0.92, 0., 0.32]])
+# For OOH, we've found that most of our relaxations resulted in dissociation of
+# at least the hydrogen. As such, we put some Hookean springs between the atoms
+# to keep the adsorbate together.
+ADSORBATES['OOH'] = Atoms('OOH', positions=[[0., 0., 0.],
+                                            [1.28, 0., 0.67],
+                                            [1.44, -0.96, 0.81]])
+ADSORBATES['OOH'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
+                                  ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
+# For CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
+# Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure
+# is H-C-O
+ADSORBATES['CHO'] = Atoms('CHO', positions=[[0., 0., 1.],
+                                            [-0.94, 0.2, 1.7],      # position of H
+                                            [0.986, 0.6, 1.8]])     # position of O
+ADSORBATES['CHO'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),   # Bind CH, initially used k=7, lowered to 5
+                                  ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
+
+
 # We use surrogate models to make predictions of DFT information. This is the
 # tag associated with our default model.
 MODEL = 'model0'
-
-
-def adsorbates_dict():
-    '''
-    This function is intended to be used to generate (and store) a library of adsorbates
-    in dictionary form, where the key is a string for the adsorbate and the value is an
-    ase Atoms object (with constraints, where applicable).
-
-    When making new entries for this dictionary, we recommend "pointing"
-    the adsorbate upwards in the z-direction.
-    '''
-    ''' Nullatomic '''
-    adsorbates = {}
-    adsorbates[''] = Atoms()
-
-    ''' Monatomics '''
-    # Uranium is a place-holder for an adsorbate
-    adsorbates['U'] = Atoms('U')
-    # Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
-    adsorbates['H'] = Atoms('H', positions=[[0., 0., -0.5]])
-    adsorbates['O'] = Atoms('O')
-    adsorbates['C'] = Atoms('C')
-    adsorbates['N'] = Atoms('N')
-
-    ''' Diatomics '''
-    # For diatomics (and above), it's a good practice to manually relax the gases
-    # and then see how far apart they are. Then put first atom at the origin, and
-    # put the second atom directly above it.
-    adsorbates['CO'] = Atoms('CO', positions=[[0., 0., 0.],
-                                              [0., 0., 1.2]])
-    adsorbates['OH'] = Atoms('OH', positions=[[0., 0., 0.],
-                                              [0.92, 0., 0.32]])
-
-    ''' Triatomics '''
-    # For OOH, we've found that most of our relaxations resulted in dissociation
-    # of at least the hydrogen. As such, we put some hookean springs between
-    # the atoms to keep the adsorbate together.
-    ooh = Atoms('OOH', positions=[[0., 0., 0.],
-                                  [1.28, 0., 0.67],
-                                  [1.44, -0.96, 0.81]])
-    ooh.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
-                        ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
-    adsorbates['OOH'] = ooh
-    # For CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
-    # Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure is H-C-O
-    cho = Atoms('CHO', positions=[[0., 0., 1.],
-                                  [-0.94, 0.2, 1.7],  # position of H
-                                  [0.986, 0.6, 1.8]])  # position of O
-    cho.set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),
-                        # Bind CH, initially used k=7, lowered to 5
-                        ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
-    adsorbates['CHO'] = cho
-
-    return adsorbates
 
 
 def adsorption_fingerprints():
