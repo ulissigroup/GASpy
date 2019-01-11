@@ -291,10 +291,27 @@ class FindAdslab(FindCalculation):
                          'name.adsorbate_rotation.phi': self.rotation['phi'],
                          'name.adsorbate_rotation.theta': self.rotation['theta'],
                          'name.adsorbate_rotation.psi': self.rotation['psi']}
+
         for key, value in self.vasp_settings.items():
-            if key not in set(['nsw', 'isym', 'symprec']):  # Because we don't care if these change
+            # We don't care if these VASP settings change
+            if key not in set(['nsw', 'isym', 'symprec']):
                 self.gasdb_query['fwname.vasp_settings.%s' % key] = value
                 self.fw_query['name.vasp_settings.%s' % key] = value
+
+        # For historical reasons, we do bare slab relaxations with the adslab
+        # infrastructure. If this task happens to be for a bare slab, then we
+        # should take out some extraneous adsorbate information. We should have
+        # a separate set of tasks, but that's for future us to fix.
+        if self.adsorbate_name == '':
+            del self.gasdb_query['fwname.adsorption_site']
+            del self.gasdb_query['fwname.adsorbate_rotation.phi']
+            del self.gasdb_query['fwname.adsorbate_rotation.theta']
+            del self.gasdb_query['fwname.adsorbate_rotation.psi']
+            del self.fw_query['name.adsorption_site']
+            del self.fw_query['name.adsorbate_rotation.phi']
+            del self.fw_query['name.adsorbate_rotation.theta']
+            del self.fw_query['name.adsorbate_rotation.psi']
+
         self.dependency = MakeAdslabFW(adsorption_site=self.adsorption_site,
                                        shift=self.shift,
                                        top=self.top,
