@@ -153,7 +153,6 @@ def test__make_slab_docs_from_structs():
                                              defaults.SLAB_SETTINGS['get_slab_settings'])
         docs = _make_slab_docs_from_structs(structs)
 
-
     # Get the regression baseline
     bulk_name = file_name.split('.')[0]
     with open(REGRESSION_BASELINES_LOCATION + 'slab_docs_%s.pkl' % bulk_name, 'rb') as file_handle:

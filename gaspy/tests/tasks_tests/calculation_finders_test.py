@@ -152,8 +152,15 @@ def test_FindBulk_successfully():
     task = FindBulk(mpid, vasp_settings)
 
     try:
-        task.run(_testing=True)
+        # Some weird testing interactions mean that this task might already be
+        # done. If that happens, then just delete the output and try again
+        try:
+            task.run(_testing=True)
+        except luigi.target.FileAlreadyExists:
+            clean_up_task(task)
+            task.run(_testing=True)
         doc = get_task_output(task)
+
         assert doc['type'] == 'bulk'
         assert doc['fwname']['mpid'] == mpid
         _assert_vasp_settings(doc, vasp_settings)
