@@ -105,6 +105,8 @@ class GenerateSlabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate slabs from
     saved output:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
@@ -121,6 +123,7 @@ class GenerateSlabs(luigi.Task):
     miller_indices = luigi.TupleParameter()
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors
@@ -202,6 +205,9 @@ class GenerateAdsorptionSites(luigi.Task):
                                 the bulk you want to enumerate sites from
         miller_indices          A 3-tuple containing the three Miller indices
                                 of the slab[s] you want to enumerate sites from
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
         slab_generator_settings We use pymatgen's `SlabGenerator` class to
                                 enumerate surfaces. You can feed the arguments
                                 for that class here as a dictionary.
@@ -209,9 +215,8 @@ class GenerateAdsorptionSites(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        min_xy                  A float indicating the minimum width (in both
-                                the x and y directions) of the slab (Angstroms)
-                                before we enumerate adsorption sites on it.
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate slabs from
     saved output:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
@@ -220,6 +225,11 @@ class GenerateAdsorptionSites(luigi.Task):
                 into `ase.Atoms` objects. These objects have a uranium atom
                 placed at the adsorption site, and the uranium is tagged with
                 a `1`. These documents also contain the following fields:
+                    shift           Float indicating the shift/termination of
+                                    the slab
+                    top             Boolean indicating whether or not the slab
+                                    is oriented upwards with respect to the way
+                                    it was enumerated originally by pymatgen
                     slab_repeat     2-tuple of integers indicating the number
                                     of times the unit slab was repeated in the
                                     x and y directions before site enumeration
@@ -229,15 +239,17 @@ class GenerateAdsorptionSites(luigi.Task):
     '''
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return GenerateSlabs(mpid=self.mpid,
                              miller_indices=self.miller_indices,
                              slab_generator_settings=self.slab_generator_settings,
-                             get_slab_settings=self.get_slab_settings)
+                             get_slab_settings=self.get_slab_settings,
+                             bulk_vasp_settings=self.bulk_vasp_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -262,6 +274,8 @@ class GenerateAdsorptionSites(luigi.Task):
 
                 # Turn the atoms into a document, then save it
                 doc = make_doc_from_atoms(adslab_atoms)
+                doc['shift'] = slab_doc['shift']
+                doc['top'] = slab_doc['top']
                 doc['slab_repeat'] = slab_repeat
                 doc['adsorption_site'] = site
                 docs_sites.append(doc)
@@ -284,15 +298,18 @@ class GenerateAdslabs(luigi.Task):
                                 want an adsorbate that is not in the dictionary,
                                 then you will need to add the adsorbate to that
                                 dictionary.
-        mpid                    A string indicating the Materials Project ID of
-                                the bulk you want to enumerate sites from
-        miller_indices          A 3-tuple containing the three Miller indices
-                                of the slab[s] you want to enumerate sites from
         rotation                A dictionary containing the angles (in degrees)
                                 in which to rotate the adsorbate after it is
                                 placed at the adsorption site. The keys for
                                 each of the angles are 'phi', 'theta', and
                                 psi'.
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to enumerate sites from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the slab[s] you want to enumerate sites from
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
         slab_generator_settings We use pymatgen's `SlabGenerator` class to
                                 enumerate surfaces. You can feed the arguments
                                 for that class here as a dictionary.
@@ -300,9 +317,8 @@ class GenerateAdslabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        min_xy                  A float indicating the minimum width (in both
-                                the x and y directions) of the slab (Angstroms)
-                                before we enumerate adsorption sites on it.
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate slabs from
     saved output:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
@@ -311,6 +327,11 @@ class GenerateAdslabs(luigi.Task):
                 into `ase.Atoms` objects. These objects have a the adsorbate
                 tagged with a `1`. These documents also contain the following
                 fields:
+                    shift           Float indicating the shift/termination of
+                                    the slab
+                    top             Boolean indicating whether or not the slab
+                                    is oriented upwards with respect to the way
+                                    it was enumerated originally by pymatgen
                     slab_repeat     2-tuple of integers indicating the number
                                     of times the unit slab was repeated in the
                                     x and y directions before site enumeration
@@ -319,19 +340,21 @@ class GenerateAdslabs(luigi.Task):
                                     adsorption site.
     '''
     adsorbate_name = luigi.Parameter()
+    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
-    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return GenerateAdsorptionSites(mpid=self.mpid,
                                        miller_indices=self.miller_indices,
+                                       min_xy=self.min_xy,
                                        slab_generator_settings=self.slab_generator_settings,
                                        get_slab_settings=self.get_slab_settings,
-                                       min_xy=self.min_xy)
+                                       bulk_vasp_settings=self.bulk_vasp_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -353,6 +376,8 @@ class GenerateAdslabs(luigi.Task):
 
             # Turn the adslab into a document, add the correct fields, and save
             doc = make_doc_from_atoms(adslab)
+            doc['shift'] = site_doc['shift']
+            doc['top'] = site_doc['top']
             doc['slab_repeat'] = site_doc['slab_repeat']
             doc['adsorption_site'] = site_doc['adsorption_site']
             docs_adslabs.append(doc)

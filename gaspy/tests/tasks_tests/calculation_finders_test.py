@@ -10,22 +10,24 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.calculation_finders import (FindCalculation,
-                                          _find_docs_in_atoms_collection,
                                           _remove_old_docs,
                                           FindGas,
-                                          FindBulk)
+                                          FindBulk,
+                                          FindAdslab)
 
 # Things we need to do the tests
 import pytest
 import warnings
-from bson.objectid import ObjectId
+import math
 import luigi
 from .utils import clean_up_task
 from ... import defaults
+from ...utils import turn_site_into_str, unfreeze_dict
 from ...mongo import make_atoms_from_doc
 from ...tasks.core import get_task_output
-from ...tasks.make_fireworks.core import (MakeGasFW,
-                                          MakeBulkFW)
+from ...tasks.make_fireworks import (MakeGasFW,
+                                     MakeBulkFW,
+                                     MakeAdslabFW)
 
 
 def test_FindCalculation():
@@ -37,31 +39,6 @@ def test_FindCalculation():
     assert isinstance(finder, luigi.Task)
     assert hasattr(finder, 'run')
     assert hasattr(finder, 'output')
-
-
-def test__find_docs_in_atoms_collection():
-    '''
-    We should probably have more test cases than this.
-    But I'm too lazy right now.
-    '''
-    query = {'type': 'gas', 'fwname.gasname': 'CO'}
-    vasp_settings = {'kpts': [1, 1, 1],
-                     'xc': 'beef-vdw',
-                     'encut': 350,
-                     'isif': 0,
-                     'ibrion': 2,
-                     'ediffg': -0.03,
-                     'nsw': 100,
-                     'pp_version': '5.3.5',
-                     'pp_guessed': True,
-                     'pp': 'PBE',
-                     'gga': 'BF',
-                     'luse_vdw': True,
-                     'zab_vdw': -1.8867,
-                     'lbeefens': True}
-    docs = _find_docs_in_atoms_collection(query, vasp_settings)
-    assert len(docs) == 1
-    assert docs[0]['_id'] == ObjectId('5b84e3190b0c9ee53cfc2848')
 
 
 def test__remove_old_docs():
@@ -85,7 +62,7 @@ def test__remove_old_docs():
 
     # If there's nothing, make sure we get an error
     docs = []
-    with pytest.raises(SyntaxError, message='Expected a RuntimeError') as exc_info:
+    with pytest.raises(SyntaxError, message='Expected a SyntaxError') as exc_info:
         doc = _remove_old_docs(docs)
         assert ('You tried to parse out old documents, but did not pass any'
                 in str(exc_info.value))
@@ -109,6 +86,18 @@ def _assert_vasp_settings(doc, vasp_settings):
         except AssertionError:
             if isinstance(value, tuple):
                 assert doc['fwname']['vasp_settings'][key] == list(value)
+
+        except KeyError:
+            # If we're looking at an adslab, then we don't care about certain
+            # vasp settings
+            if doc['type'] == 'slab+adsorbate' and key in set(['nsw', 'isym', 'symprec']):
+                pass
+
+            # If we're looking at a slab, then we don't care about certain
+            # vasp settings
+            elif doc['type'] == 'slab+adsorbate' and key in set(['isym']):
+                pass
+
             else:
                 raise
 
@@ -188,6 +177,86 @@ def test_FindBulk_unsuccessfully():
         dependency = task.run(_testing=True)
         assert isinstance(dependency, MakeBulkFW)
         assert dependency.mpid == mpid
+
+    finally:
+        clean_up_task(task)
+
+
+def test_FindAdslab_successfully():
+    '''
+    If we ask this task to find something that is there, it should return
+    the correct Mongo document/dictionary
+    '''
+    adsorption_site = (0., 1.41, 20.52)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'CO'
+    rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
+    vasp_settings = defaults.ADSLAB_SETTINGS['vasp']
+    task = FindAdslab(adsorption_site=adsorption_site,
+                      shift=shift,
+                      top=top,
+                      adsorbate_name=adsorbate_name,
+                      rotation=rotation,
+                      mpid=mpid,
+                      miller_indices=miller_indices,
+                      vasp_settings=vasp_settings)
+
+    try:
+        task.run(_testing=True)
+        doc = get_task_output(task)
+        assert doc['type'] == 'slab+adsorbate'
+        assert doc['fwname']['adsorption_site'] == turn_site_into_str(adsorption_site)
+        assert math.isclose(doc['fwname']['shift'], shift)
+        assert doc['fwname']['top'] == top
+        assert doc['fwname']['adsorbate'] == adsorbate_name
+        assert doc['fwname']['adsorbate_rotation'] == rotation
+        assert doc['fwname']['mpid'] == mpid
+        assert tuple(doc['fwname']['miller']) == miller_indices
+        _assert_vasp_settings(doc, vasp_settings)
+
+        # Make sure we can turn it into an atoms object
+        _ = make_atoms_from_doc(doc)    # noqa: F841
+
+    finally:
+        clean_up_task(task)
+
+
+def test_FindAdslab_unsuccessfully():
+    '''
+    If we ask this task to find something that is not there, it should return
+    the correct dependency
+    '''
+    adsorption_site = (0., 1.41, 20.52)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'OOH'
+    rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
+    vasp_settings = defaults.ADSLAB_SETTINGS['vasp']
+    task = FindAdslab(adsorption_site=adsorption_site,
+                      shift=shift,
+                      top=top,
+                      adsorbate_name=adsorbate_name,
+                      rotation=rotation,
+                      mpid=mpid,
+                      miller_indices=miller_indices,
+                      vasp_settings=vasp_settings)
+
+    try:
+        dependency = task.run(_testing=True)
+        assert isinstance(dependency, MakeAdslabFW)
+        assert dependency.mpid == mpid
+        assert dependency.adsorption_site == adsorption_site
+        assert dependency.shift == shift
+        assert dependency.top == top
+        assert dependency.adsorbate_name == adsorbate_name
+        assert unfreeze_dict(dependency.rotation) == rotation
+        assert dependency.mpid == mpid
+        assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
 
     finally:
         clean_up_task(task)

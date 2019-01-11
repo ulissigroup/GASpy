@@ -15,9 +15,9 @@ from ..utils import (read_rc,
                      unfreeze_dict,
                      encode_atoms_to_hex,
                      decode_hex_to_atoms,
-                     get_lpad,
                      get_final_atoms_object_with_vasp_forces,
-                     _dump_file_to_tmp)
+                     _dump_file_to_tmp,
+                     turn_site_into_str)
 
 # Things we need to do the tests
 import pytest
@@ -26,7 +26,6 @@ import collections
 import json
 import ase
 from luigi.parameter import _FrozenOrderedDict
-from fireworks.core.launchpad import LaunchPad
 from . import test_cases
 from .. import defaults
 from ..mongo import make_atoms_from_doc
@@ -204,17 +203,6 @@ def test_decode_hex_to_atoms():
     assert atoms == expected_atoms
 
 
-def test_get_lpad():
-    lpad = get_lpad()
-
-    assert isinstance(lpad, LaunchPad)
-
-    lpad_info = read_rc('lpad')
-    lpad_info['port'] = int(lpad_info['port'])
-    for key, expected_value in lpad_info.items():
-        assert getattr(lpad, key) == expected_value
-
-
 def test_get_final_atoms_object_with_vasp_forces():
     atoms = get_final_atoms_object_with_vasp_forces(101392)
     assert type(atoms) == ase.atoms.Atoms
@@ -239,3 +227,11 @@ def test__dump_directory_to_tmp():
     # Clean up
     finally:
         subprocess.call('rm -r %s' % temp_loc, shell=True)
+
+
+def test_turn_site_into_str():
+    assert turn_site_into_str([0., 0., 0.]) == '[  0.     0.     0.  ]'
+    assert turn_site_into_str([-0., 0., 0.]) == '[ -0.     0.     0.  ]'
+    assert turn_site_into_str([1.23, 4.56, -7.89]) == '[  1.23   4.56  -7.89]'
+    assert turn_site_into_str([10.23, -40.56, 70.89]) == '[ 10.23 -40.56  70.89]'
+    assert turn_site_into_str([-10.23, -40.56, 70.89]) == '[-10.23 -40.56  70.89]'

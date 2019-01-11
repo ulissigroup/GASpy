@@ -596,3 +596,27 @@ def _dump_file_to_tmp(file_name):
     subprocess.call('gunzip -q %s/* > /dev/null' % temp_loc, shell=True)
 
     return temp_loc
+
+
+def turn_site_into_str(site):
+    '''
+    For some reason, we have historically been storing adsorption sites as
+    strings instead of arrays. We suspect it has to do with rounding, although
+    we should have probably just rounded the floats inside the arrays.
+    Regardless, this function will turn a site into a string consistently.
+
+    Arg:
+        site    A 3-long sequence of floats, probably carterias coordinates
+    Returns:
+        site_str    The `site` argument, but formatted with brackets, spaces,
+                    and as a string. For example:
+                        [0, 0, 0]               --> '[  0.     0.     0.  ]'
+                        [1.23, 4.56, -7.89]     --> '[  1.23   4.56  -7.89]'
+                        [10.23, -40.56, 70.89]  --> '[ 10.23 -40.56  70.89]'
+                        [-10.23, -40.56, 70.89] --> '[-10.23 -40.56  70.89]'
+    '''
+    # Yeah, this code is an illegible golf mess. I'm leaving it partly because
+    # of laziness and partly out of objection to the fact that we actually need
+    # to make this function in the first place.
+    site_str = '[' + ' '.join('{:6.2f}'.format(coord).rstrip('0').ljust(6, ' ') for coord in site) + ']'
+    return site_str

@@ -91,24 +91,27 @@ def test_GenerateSlabs():
     miller_indices = (1, 0, 0)
     slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
+    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateSlabs(mpid=mpid,
                          miller_indices=miller_indices,
                          slab_generator_settings=slab_generator_settings,
-                         get_slab_settings=get_slab_settings)
+                         get_slab_settings=get_slab_settings,
+                         bulk_vasp_settings=bulk_vasp_settings)
     assert task.mpid == mpid
     assert task.miller_indices == miller_indices
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
+    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
 
     try:
         # Run the task and make sure the task output has the correct format/fields
         evaluate_luigi_task(task)
         docs = get_task_output(task)
         for doc in docs:
-            assert 'shift' in doc
-            assert 'top' in doc
+            assert isinstance(doc['shift'], float)
+            assert isinstance(doc['top'], bool)
             _ = make_atoms_from_doc(doc)    # noqa: F841
 
     finally:
@@ -165,30 +168,42 @@ def test__make_slab_docs_from_structs():
 
 
 def test_GenerateAdsorptionSites():
+    '''
+    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
+    collection. If you copy/paste this test into somewhere else, make sure
+    that you use `evaluate_luigi_task` appropriately.
+    '''
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
+    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
+    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdsorptionSites(mpid=mpid,
                                    miller_indices=miller_indices,
+                                   min_xy=min_xy,
                                    slab_generator_settings=slab_generator_settings,
                                    get_slab_settings=get_slab_settings,
-                                   min_xy=min_xy)
+                                   bulk_vasp_settings=bulk_vasp_settings)
     assert task.mpid == mpid
     assert task.miller_indices == miller_indices
+    assert task.min_xy == min_xy
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
-    assert task.min_xy == min_xy
+    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
 
     try:
         evaluate_luigi_task(task)
         docs = get_task_output(task)
 
         for doc in docs:
-            assert 'slab_repeat' in doc
+            assert isinstance(doc['shift'], float)
+            assert isinstance(doc['top'], bool)
+            assert isinstance(doc['slab_repeat'], tuple)
 
             atoms = make_atoms_from_doc(doc)
             for atom in atoms:
@@ -202,32 +217,41 @@ def test_GenerateAdsorptionSites():
 
 def test_GenerateAdslabs():
     '''
+    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
+    collection. If you copy/paste this test into somewhere else, make sure
+    that you use `evaluate_luigi_task` appropriately.
+
     We only test some superficial things here. We rely heavily on the test for
     the `add_adsorbate_onto_slab` function to make sure things go right.
     '''
     adsorbate_name = 'OH'
+    rotation = defaults.ADSLAB_SETTINGS['rotation']
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    rotation = defaults.ADSLAB_SETTINGS['rotation']
+    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
+    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdslabs(adsorbate_name=adsorbate_name,
+                           rotation=rotation,
                            mpid=mpid,
                            miller_indices=miller_indices,
-                           rotation=rotation,
+                           min_xy=min_xy,
                            slab_generator_settings=slab_generator_settings,
                            get_slab_settings=get_slab_settings,
-                           min_xy=min_xy)
+                           bulk_vasp_settings=bulk_vasp_settings)
     assert task.adsorbate_name == adsorbate_name
+    assert unfreeze_dict(task.rotation) == rotation
     assert task.mpid == mpid
     assert task.miller_indices == miller_indices
-    assert unfreeze_dict(task.rotation) == rotation
+    assert task.min_xy == min_xy
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
-    assert task.min_xy == min_xy
+    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
 
     try:
         # Run the task and fetch the outputs
@@ -238,7 +262,9 @@ def test_GenerateAdslabs():
 
             # Make sure the extra document fields are correct
             npt.assert_allclose(adslab[0].position, doc['adsorption_site'])
-            assert 'slab_repeat' in doc
+            assert isinstance(doc['shift'], float)
+            assert isinstance(doc['top'], bool)
+            assert isinstance(doc['slab_repeat'], tuple)
 
             # Make sure that the adsorbate was rotated correctly by checking
             # the positions of the adsorbate
