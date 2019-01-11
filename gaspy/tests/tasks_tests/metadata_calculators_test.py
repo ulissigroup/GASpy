@@ -9,15 +9,57 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ...tasks.metadata_calculators import (CalculateAdsorbateEnergy,
+from ...tasks.metadata_calculators import (CalculateAdsorptionEnergy,
+                                           CalculateAdsorbateEnergy,
                                            CalculateAdsorbateBasisEnergies)
 
 # Things we need to do the tests
 import pytest
+import math
 from .utils import clean_up_task
 from ... import defaults
 from ...utils import unfreeze_dict
+from ...mongo import make_atoms_from_doc
 from ...tasks import get_task_output, evaluate_luigi_task
+
+
+def test_CalculateAdsorptionEnergy():
+    '''
+    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make sure that you have all of the gas calculations in the unit testing
+    atoms collection.  If you copy/paste this test into somewhere else, make
+    sure that you use `evaluate_luigi_task` appropriately.
+    '''
+    adsorption_site = (0., 1.41, 20.52)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'CO'
+    mpid = 'mp-2'
+    miller_indices = (1, 0, 0)
+    task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,
+                                     shift=shift,
+                                     top=top,
+                                     adsorbate_name=adsorbate_name,
+                                     mpid=mpid,
+                                     miller_indices=miller_indices,)
+
+    try:
+        evaluate_luigi_task(task)
+        doc = get_task_output(task)
+
+        # I just checked this one calculation by hand and found some
+        # key information about it.
+        assert math.isclose(doc['adsorption_energy'], -1.5959449799999899)
+        assert doc['slab']['fwid'] == 124894
+        assert doc['adslab']['fwid'] == 124897
+        # Make sure we can actually turn the subdictionaries into `ase.Atoms`
+        # objects
+        _ = make_atoms_from_doc(doc['slab'])    # noqa: F841
+        _ = make_atoms_from_doc(doc['adslab'])  # noqa: F841
+
+    finally:
+        clean_up_task(task)
 
 
 def test_CalculateAdsorbateEnergy():

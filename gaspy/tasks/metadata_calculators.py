@@ -10,7 +10,7 @@ import pickle
 #from ase.calculators.singlepoint import SinglePointCalculator
 import luigi
 from .core import save_task_output, make_task_output_object
-from .calculation_finders import FindGas  # , FindAdslab
+from .calculation_finders import FindGas, FindAdslab
 from ..mongo import make_atoms_from_doc
 from .. import utils
 from .. import defaults
@@ -23,100 +23,128 @@ ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
 ADSORBATES = defaults.ADSORBATES
 
 
-#class CalculateAdsorptionEnergy(luigi.Task):
-#    '''
-#    '''
-#    # Adsorbate information
-#    adsorbate_name = luigi.Parameter()
-#    adsorption_site = luigi.TupleParameter()
-#    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
-#
-#    # Bulk information
-#    mpid = luigi.Parameter()
-#
-#    # Slab information
-#    miller_indices = luigi.TupleParameter()
-#    shift = luigi.FloatParameter()
-#    top = luigi.BoolParameter()
-#    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
-#    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
-#    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-#
-#    # VASP settings
-#    gas_vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
-#    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-#    adslab_vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
-#
-#    def requires(self):
-#        return {'adsorbate': CalculateAdsorbateEnergy(self.adsorbate_name,
-#                                                      self.gas_vasp_settings),
-#                'bare_slab': FindAdslab(adsorption_site=(0., 0., 0.),
-#                                        shift=self.shift,
-#                                        top=self.top,
-#                                        vasp_settings=self.adslab_vasp_settings,
-#                                        adsorbate_name='',
-#                                        rotation={'phi': 0., 'theta': 0., 'psi': 0.},
-#                                        mpid=self.mpid,
-#                                        miller_indices=self.miller_indices,
-#                                        min_xy=self.min_xy,
-#                                        slab_generator_settings=self.slab_generator_settings,
-#                                        get_slab_settings=self.get_slab_settings,
-#                                        bulk_vasp_settings=self.bulk_vasp_settings),
-#                'adslab': FindAdslab(adsorption_site=self.adsorption_site,
-#                                     shift=self.shift,
-#                                     top=self.top,
-#                                     vasp_settings=self.adslab_vasp_settings,
-#                                     adsorbate_name=self.adsorbate_name,
-#                                     rotation=self.rotation,
-#                                     mpid=self.mpid,
-#                                     miller_indices=self.miller_indices,
-#                                     min_xy=self.min_xy,
-#                                     slab_generator_settings=self.slab_generator_settings,
-#                                     get_slab_settings=self.get_slab_settings,
-#                                     bulk_vasp_settings=self.bulk_vasp_settings)}
-#
-#    def run(self):
-#        gas_energy = 0
-#        for ads in self.parameters['adsorption']['adsorbates']:
-#            gas_energy += np.sum([mono_atom_energies[x] for x in
-#                                  utils.ads_dict(ads['name']).get_chemical_symbols()])
-#
-#
-#        with open(self.input()['bare_slab'].path, 'rb') as file_handle:
-#            slab_doc = pickle.load(file_handle)
-#            slab_atoms = make_atoms_from_doc(slab_doc)
-#            slab_energy = slab_atoms.get_potential_energy()
-#
-#        with open(self.input()['adslab'].path, 'rb') as file_handle:
-#            adslab_doc = pickle.load(file_handle)
-#            adslab_atoms = make_atoms_from_doc(adslab_doc)
-#            adslab_energy = adslab_atoms.get_potential_energy()
-#
-#        # Calculate the adsorption energy
-#        dE = adslab_energy - slab_energy - gas_energy
-#
-#        # Make an atoms object with a single-point calculator that contains the potential energy
-#        adjusted_atoms = make_atoms_from_doc(adslab_docs[lowest_energy_adslab])
-#        adjusted_atoms.set_calculator(SinglePointCalculator(adjusted_atoms,
-#                                                            forces=adjusted_atoms.get_forces(apply_constraint=False),
-#                                                            energy=dE))
-#
-#        # Write a dictionary with the results and the entries that were used for the calculations
-#        # so that fwid/etc for each can be recorded
-#        towrite = {'atoms': adjusted_atoms,
-#                   'slab+ads': adslab_docs[lowest_energy_adslab],
-#                   'slab': slab_docs[lowest_energy_slab],
-#                   'gas': {'CO': pickle.load(open(inputs[2].fn, 'rb'))[0],
-#                           'H2': pickle.load(open(inputs[3].fn, 'rb'))[0],
-#                           'H2O': pickle.load(open(inputs[4].fn, 'rb'))[0],
-#                           'N2': pickle.load(open(inputs[5].fn, 'rb'))}}
-#
-#        # Write the dictionary as a pickle
-#        with self.output().temporary_path() as self.temp_output_path:
-#            pickle.dump(towrite, open(self.temp_output_path, 'wb'))
-#
-#    def output(self):
-#        return make_task_output_object(self)
+class CalculateAdsorptionEnergy(luigi.Task):
+    '''
+    This task will calculate the adsorption energy of a system you specify.
+
+    Args:
+        adsorption_site         A 3-tuple of floats containing the Cartesian
+                                coordinates of the adsorption site you want to
+                                make a FW for
+        shift                   A float indicating the shift of the slab
+        top                     A Boolean indicating whether the adsorption
+                                site is on the top or the bottom of the slab
+        adsorbate_name          A string indicating which adsorbate to use. It
+                                should be one of the keys within the
+                                `gaspy.defaults.ADSORBATES` dictionary. If you
+                                want an adsorbate that is not in the dictionary,
+                                then you will need to add the adsorbate to that
+                                dictionary.
+        rotation                A dictionary containing the angles (in degrees)
+                                in which to rotate the adsorbate after it is
+                                placed at the adsorption site. The keys for
+                                each of the angles are 'phi', 'theta', and
+                                psi'.
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to enumerate sites from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the slab[s] you want to enumerate sites from
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here
+                                as a dictionary.
+        gas_vasp_settings       A dictionary containing the VASP settings of
+                                the gas relaxation of the adsorbate
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate slabs from
+        adslab_vasp_settings    A dictionary containing your VASP settings
+                                for the adslab relaxation
+    Returns:
+        doc A dictionary with the following keys:
+                adsorption_energy   A float indicating the adsorption energy
+                slab                A dictionary identical to the Mongo
+                                    document of the bare slab as found in
+                                    the `atoms` collection of our MongoDB.
+                                    You should be able to apply the
+                                    `gaspy.mongo.make_atoms_from_doc` to
+                                    this subdictionary to get the slab.
+                slab                A dictionary identical to the Mongo
+                                    document of the adslab as found in
+                                    the `atoms` collection of our MongoDB
+                                    You should be able to apply the
+                                    `gaspy.mongo.make_atoms_from_doc` to
+                                    this subdictionary to get the adslab.
+    '''
+    adsorption_site = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    top = luigi.BoolParameter()
+    adsorbate_name = luigi.Parameter()
+    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    gas_vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    adslab_vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+
+    def requires(self):
+        return {'adsorbate_energy': CalculateAdsorbateEnergy(self.adsorbate_name,
+                                                             self.gas_vasp_settings),
+                'bare_slab_doc': FindAdslab(adsorption_site=(0., 0., 0.),
+                                            shift=self.shift,
+                                            top=self.top,
+                                            vasp_settings=self.adslab_vasp_settings,
+                                            adsorbate_name='',
+                                            rotation={'phi': 0., 'theta': 0., 'psi': 0.},
+                                            mpid=self.mpid,
+                                            miller_indices=self.miller_indices,
+                                            min_xy=self.min_xy,
+                                            slab_generator_settings=self.slab_generator_settings,
+                                            get_slab_settings=self.get_slab_settings,
+                                            bulk_vasp_settings=self.bulk_vasp_settings),
+                'adslab_doc': FindAdslab(adsorption_site=self.adsorption_site,
+                                         shift=self.shift,
+                                         top=self.top,
+                                         vasp_settings=self.adslab_vasp_settings,
+                                         adsorbate_name=self.adsorbate_name,
+                                         rotation=self.rotation,
+                                         mpid=self.mpid,
+                                         miller_indices=self.miller_indices,
+                                         min_xy=self.min_xy,
+                                         slab_generator_settings=self.slab_generator_settings,
+                                         get_slab_settings=self.get_slab_settings,
+                                         bulk_vasp_settings=self.bulk_vasp_settings)}
+
+    def run(self):
+        with open(self.input()['adsorbate_energy'].path, 'rb') as file_handle:
+            ads_energy = pickle.load(file_handle)
+
+        with open(self.input()['bare_slab_doc'].path, 'rb') as file_handle:
+            slab_doc = pickle.load(file_handle)
+        slab_atoms = make_atoms_from_doc(slab_doc)
+        slab_energy = slab_atoms.get_potential_energy(apply_constraint=False)
+
+        with open(self.input()['adslab_doc'].path, 'rb') as file_handle:
+            adslab_doc = pickle.load(file_handle)
+        adslab_atoms = make_atoms_from_doc(adslab_doc)
+        adslab_energy = adslab_atoms.get_potential_energy(apply_constraint=False)
+
+        adsorption_energy = adslab_energy - slab_energy - ads_energy
+        doc = {'adsorption_energy': adsorption_energy,
+               'slab': slab_doc,
+               'adslab': adslab_doc}
+        save_task_output(self, doc)
+
+    def output(self):
+        return make_task_output_object(self)
 
 
 class CalculateAdsorbateEnergy(luigi.Task):
@@ -193,7 +221,7 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
             with open(target.path, 'rb') as file_handle:
                 doc = pickle.load(file_handle)
             atoms = make_atoms_from_doc(doc)
-            gas_energies[adsorbate_name] = atoms.get_potential_energy()
+            gas_energies[adsorbate_name] = atoms.get_potential_energy(apply_constraint=False)
 
         # Calculate and save the basis energies from the gas phase energies
         basis_energies = {'H': gas_energies['H2']/2.,
