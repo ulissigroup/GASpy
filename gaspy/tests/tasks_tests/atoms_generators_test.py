@@ -1,4 +1,4 @@
-''' Tests for the `gaspy.tasks.generators` submodule '''
+''' Tests for the `gaspy.tasks.atoms_generators` submodule '''
 
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
@@ -17,7 +17,6 @@ from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateAdslabs)
 
 # Things we need to do the tests
-import os
 import pytest
 import pickle
 import numpy.testing as npt
