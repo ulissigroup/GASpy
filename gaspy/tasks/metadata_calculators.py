@@ -5,12 +5,12 @@ This module analyzes our raw data and parses it into various metadata
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+import sys
 import pickle
-#import numpy as np
 #from ase.calculators.singlepoint import SinglePointCalculator
 import luigi
 from .core import save_task_output, make_task_output_object
-from .calculation_finders import FindGas#, FindAdslab
+from .calculation_finders import FindGas  # , FindAdslab
 from ..mongo import make_atoms_from_doc
 from .. import utils
 from .. import defaults
@@ -19,7 +19,8 @@ GASDB_PATH = utils.read_rc('gasdb_path')
 GAS_SETTINGS = defaults.GAS_SETTINGS
 BULK_SETTINGS = defaults.BULK_SETTINGS
 SLAB_SETTINGS = defaults.SLAB_SETTINGS
-ADSLAB_SETTINGS = defaults.GAS_SETTINGS
+ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+ADSORBATES = defaults.ADSORBATES
 
 
 #class CalculateAdsorptionEnergy(luigi.Task):
@@ -47,16 +48,14 @@ ADSLAB_SETTINGS = defaults.GAS_SETTINGS
 #    adslab_vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
 #
 #    def requires(self):
-#        return {'CO_gas': FindGas(gas_name='CO', vasp_settings=self.gas_vasp_settings),
-#                'H2_gas': FindGas(gas_name='H2', vasp_settings=self.gas_vasp_settings),
-#                'H2O_gas': FindGas(gas_name='H2O', vasp_settings=self.gas_vasp_settings),
-#                'N2_gas': FindGas(gas_name='N2', vasp_settings=self.gas_vasp_settings),
+#        return {'adsorbate': CalculateAdsorbateEnergy(self.adsorbate_name,
+#                                                      self.gas_vasp_settings),
 #                'bare_slab': FindAdslab(adsorption_site=(0., 0., 0.),
 #                                        shift=self.shift,
 #                                        top=self.top,
 #                                        vasp_settings=self.adslab_vasp_settings,
 #                                        adsorbate_name='',
-#                                        rotation=ADSLAB_SETTINGS['rotation'],
+#                                        rotation={'phi': 0., 'theta': 0., 'psi': 0.},
 #                                        mpid=self.mpid,
 #                                        miller_indices=self.miller_indices,
 #                                        min_xy=self.min_xy,
@@ -77,36 +76,21 @@ ADSLAB_SETTINGS = defaults.GAS_SETTINGS
 #                                     bulk_vasp_settings=self.bulk_vasp_settings)}
 #
 #    def run(self):
-#        inputs = self.input()
-#
-#        # Load the gas phase energies
-#        gasEnergies = {}
-#        gasEnergies['CO'] = make_atoms_from_doc(pickle.load(open(inputs[2].fn, 'rb'))[0]).get_potential_energy()
-#        gasEnergies['H2'] = make_atoms_from_doc(pickle.load(open(inputs[3].fn, 'rb'))[0]).get_potential_energy()
-#        gasEnergies['H2O'] = make_atoms_from_doc(pickle.load(open(inputs[4].fn, 'rb'))[0]).get_potential_energy()
-#        gasEnergies['N2'] = make_atoms_from_doc(pickle.load(open(inputs[5].fn, 'rb'))[0]).get_potential_energy()
-#
-#        # Load the slab+adsorbate relaxed structures, and take the lowest energy one
-#        adslab_docs = pickle.load(open(inputs[0].fn, 'rb'))
-#        lowest_energy_adslab = np.argmin([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in adslab_docs])
-#        adslab_energy = make_atoms_from_doc(adslab_docs[lowest_energy_adslab]).get_potential_energy(apply_constraint=False)
-#
-#        # Load the slab relaxed structures, and take the lowest energy one
-#        slab_docs = pickle.load(open(inputs[1].fn, 'rb'))
-#        lowest_energy_slab = np.argmin([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in slab_docs])
-#        slab_energy = np.min([make_atoms_from_doc(doc).get_potential_energy(apply_constraint=False) for doc in slab_docs])
-#
-#        # Get the per-atom energies as a linear combination of the basis set
-#        mono_atom_energies = {'H': gasEnergies['H2']/2.,
-#                              'O': gasEnergies['H2O'] - gasEnergies['H2'],
-#                              'C': gasEnergies['CO'] - (gasEnergies['H2O']-gasEnergies['H2']),
-#                              'N': gasEnergies['N2']/2.}
-#
-#        # Get the total energy of the stoichiometry amount of gas reference species
 #        gas_energy = 0
 #        for ads in self.parameters['adsorption']['adsorbates']:
 #            gas_energy += np.sum([mono_atom_energies[x] for x in
-#                                 utils.ads_dict(ads['name']).get_chemical_symbols()])
+#                                  utils.ads_dict(ads['name']).get_chemical_symbols()])
+#
+#
+#        with open(self.input()['bare_slab'].path, 'rb') as file_handle:
+#            slab_doc = pickle.load(file_handle)
+#            slab_atoms = make_atoms_from_doc(slab_doc)
+#            slab_energy = slab_atoms.get_potential_energy()
+#
+#        with open(self.input()['adslab'].path, 'rb') as file_handle:
+#            adslab_doc = pickle.load(file_handle)
+#            adslab_atoms = make_atoms_from_doc(adslab_doc)
+#            adslab_energy = adslab_atoms.get_potential_energy()
 #
 #        # Calculate the adsorption energy
 #        dE = adslab_energy - slab_energy - gas_energy
@@ -131,15 +115,47 @@ ADSLAB_SETTINGS = defaults.GAS_SETTINGS
 #        with self.output().temporary_path() as self.temp_output_path:
 #            pickle.dump(towrite, open(self.temp_output_path, 'wb'))
 #
-#        for ads in self.parameters['adsorption']['adsorbates']:
-#            print('Finished CalculateEnergy for %s on the %s site of %s %s:  %s eV' % (ads['name'],
-#                  self.parameters['adsorption']['adsorbates'][0]['adsorption_site'],
-#                  self.parameters['bulk']['mpid'],
-#                  self.parameters['slab']['miller'],
-#                  dE))
-#
 #    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+#        return make_task_output_object(self)
+
+
+class CalculateAdsorbateEnergy(luigi.Task):
+    '''
+    This task will calculate the energy of an adsorbate via algebraic
+    summation/subtraction of a basis set of energies.
+
+    Arg:
+        adsorbate_name  A string indicating the name of the adsorbate you
+                        want to calculate the energy of
+        vasp_settings   A dictionary containing the VASP settings you want to
+                        use for the DFT relaxations of the basis set
+    Returns:
+        energy  The DFT-calculated energy of the adsorbate
+    '''
+    adsorbate_name = luigi.Parameter()
+    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+
+    def requires(self):
+        return CalculateAdsorbateBasisEnergies(self.vasp_settings)
+
+    def run(self):
+        with open(self.input().path, 'rb') as file_handle:
+            basis_energies = pickle.load(file_handle)
+
+        # Fetch the adsorbate from our dictionary. If it's not there, yell
+        try:
+            adsorbate = ADSORBATES[self.adsorbate_name]
+        except KeyError as error:
+            raise type(error)('You are trying to calculate the adsorbate energy '
+                              'of an undefined adsorbate, %s. Please define the '
+                              'adsorbate within `gaspy.defaults.ADSORBATES' %
+                              self.adsorbate_name).with_traceback(sys.exc_info()[2])
+
+        energy = sum(basis_energies[atom] for atom in adsorbate.get_chemical_symbols())
+        save_task_output(self, energy)
+
+    def output(self):
+        return make_task_output_object(self)
 
 
 class CalculateAdsorbateBasisEnergies(luigi.Task):
