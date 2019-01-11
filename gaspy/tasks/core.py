@@ -117,7 +117,12 @@ def evaluate_luigi_task(task, force=False):
         # Execute prerequisite task[s] recursively
         requirements = task.requires()
         if requirements:
-            if isinstance(requirements, Iterable):
+            if isinstance(requirements, dict):
+                for req in requirements.values():
+                    if not(req.complete()) or force:
+                        evaluate_luigi_task(req, force)
+
+            elif isinstance(requirements, Iterable):
                 for req in requirements:
                     if not(req.complete()) or force:
                         evaluate_luigi_task(req, force)
