@@ -9,12 +9,15 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import warnings
 import math
 import numpy as np
+from scipy.spatial.qhull import QhullError
+from ase import Atoms
 from ase.build import rotate
 from ase.constraints import FixAtoms
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+from pymatgen.analysis.local_env import VoronoiNN
 from .utils import unfreeze_dict
 
 
@@ -261,3 +264,134 @@ def add_adsorbate_onto_slab(adsorbate, slab, site):
     adslab_constrained = constrain_slab(adslab)
 
     return adslab_constrained
+
+
+def fingerprint_adslab(atoms):
+    '''
+    This function will fingerprint a slab+adsorbate atoms object for you.
+    Currently, it only works with one adsorbate.
+
+    Arg:
+        atoms   `ase.Atoms` object to fingerprint. The slab atoms must be
+                tagged with 0 and adsorbate atoms must be tagged with
+                non-zero integers.  This function also assumes that the
+                first atom in each adsorbate is the binding atom (e.g.,
+                of all atoms with tag==1, the first atom is the binding;
+                the same goes for tag==2 and tag==3 etc.).
+    Returns:
+        fingerprint A dictionary whose keys are:
+                        coordination            A string indicating the
+                                                first shell of
+                                                coordinated atoms
+                        neighborcoord           A list of strings
+                                                indicating the coordination
+                                                of each of the atoms in
+                                                the first shell of
+                                                coordinated atoms
+                        nextnearestcoordination A string identifying the
+                                                coordination of the
+                                                adsorbate when using a
+                                                loose tolerance for
+                                                identifying "neighbors"
+    '''
+    # Replace the adsorbate[s] with a single Uranium atom at the first binding
+    # site. We need the Uranium there so that pymatgen can find its
+    # coordination.
+    atoms, binding_positions = remove_adsorbate(atoms)
+    atoms += Atoms('U', positions=[binding_positions[1]])
+    uranium_index = atoms.get_chemical_symbols().index('U')
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    try:
+        # We have a standard and a loose Voronoi neighbor finder for various
+        # purposes
+        vnn = VoronoiNN(allow_pathological=True, tol=0.8, cutoff=10)
+        vnn_loose = VoronoiNN(allow_pathological=True, tol=0.2, cutoff=10)
+
+        # Find the coordination
+        nn_info = vnn.get_nn_info(struct, n=uranium_index)
+        coordination = __get_coordination_string(nn_info)
+
+        # Find the neighborcoord
+        neighborcoord = []
+        for neighbor_info in nn_info:
+            # Get the coordination of this neighbor atom, e.g., 'Cu-Cu'
+            neighbor_index = neighbor_info['site_index']
+            neighbor_nn_info = vnn_loose.get_nn_info(struct, n=neighbor_index)
+            neighbor_coord = __get_coordination_string(neighbor_nn_info)
+            # Prefix the coordination of this neighbor atom with the identity
+            # of the neighber, e.g. 'Cu:Cu-Cu'
+            neighbor_element = neighbor_info['site'].species_string
+            neighbor_coord_labeled = neighbor_element + ':' + neighbor_coord
+            neighborcoord.append(neighbor_coord_labeled)
+
+        # Find the nextnearestcoordination
+        nn_info_loose = vnn_loose.get_nn_info(struct, n=uranium_index)
+        nextnearestcoordination = __get_coordination_string(nn_info_loose)
+
+        return {'coordination': coordination,
+                'neighborcoord': neighborcoord,
+                'nextnearestcoordination': nextnearestcoordination}
+    # If we get some QHull error, then just assume that the adsorbate desorbed
+    except QhullError:
+        return {'coordination': '',
+                'neighborcoord': '',
+                'nextnearestcoordination': ''}
+    # If we get some ValueError, then just assume that the adsorbate desorbed
+    except ValueError:
+        return {'coordination': '',
+                'neighborcoord': '',
+                'nextnearestcoordination': ''}
+
+
+def remove_adsorbate(adslab):
+    '''
+    This function removes adsorbates from an adslab and gives you the locations
+    of the binding atoms. Note that we assume that the first atom in each adsorbate
+    is the binding atom.
+
+    Arg:
+        adslab  The `ase.Atoms` object of the adslab. The adsorbate atom(s) must
+                be tagged with non-zero integers, while the slab atoms must be
+                tagged with zeroes. We assume that for each adsorbate, the first
+                atom (i.e., the atom with the lowest index) is the binding atom.
+    Returns:
+        slab                The `ase.Atoms` object of the bare slab.
+        binding_positions   A dictionary whose keys are the tags of the
+                            adsorbates and whose values are the cartesian
+                            coordinates of the binding site.
+    '''
+    # Operate on a local copy so we don't propagate changes to the original
+    slab = adslab.copy()
+
+    # Remove all the constraints and then re-constrain the slab. We do this
+    # because ase does not like it when we delete atoms with constraints.
+    slab.set_constraint()
+    slab = constrain_slab(slab)
+
+    # Delete atoms in reverse order to preserve correct indexing
+    binding_positions = {}
+    for i, atom in reversed(list(enumerate(slab))):
+        if atom.tag != 0:
+            binding_positions[atom.tag] = atom.position
+            del slab[i]
+
+    return slab, binding_positions
+
+
+def __get_coordination_string(nn_info):
+    '''
+    This helper function takes the output of the `VoronoiNN.get_nn_info` method
+    and gives you a standardized coordination string.
+
+    Arg:
+        nn_info     The output of the
+                    `pymatgen.analysis.local_env.VoronoiNN.get_nn_info` method.
+    Returns:
+        coordination    A string indicating the coordination of the site
+                        you fed implicitly through the argument, e.g., 'Cu-Cu-Cu'
+    '''
+    coordinated_atoms = [neighbor_info['site'].species_string
+                         for neighbor_info in nn_info
+                         if neighbor_info['site'].species_string != 'U']
+    coordination = '-'.join(sorted(coordinated_atoms))
+    return coordination

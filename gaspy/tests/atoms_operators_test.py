@@ -16,7 +16,10 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                flip_atoms,
                                tile_atoms,
                                find_adsorption_sites,
-                               add_adsorbate_onto_slab)
+                               add_adsorbate_onto_slab,
+                               fingerprint_adslab,
+                               remove_adsorbate,
+                               __get_coordination_string)
 
 # Things we need to do the tests
 import pytest
@@ -28,6 +31,7 @@ import numpy.testing as npt
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.analysis.local_env import VoronoiNN
 from . import test_cases
 from .tasks_tests.utils import clean_up_task
 from .. import defaults
@@ -329,3 +333,48 @@ def test_add_adsorbate_onto_slab():
                             assert i in fixed_atom_indices
                         else:
                             assert i not in fixed_atom_indices
+
+
+@pytest.mark.baseline
+def test_to_create_adslab_fingerprints():
+    adslabs_folder = TEST_CASE_LOCATION + 'adslabs/'
+    for file_name in os.listdir(adslabs_folder):
+        atoms = ase.io.read(adslabs_folder + file_name)
+        fingerprint = fingerprint_adslab(atoms)
+
+        with open(REGRESSION_BASELINES_LOCATION + file_name.split('.')[0] +
+                  '_fingerprint.pkl', 'wb') as file_handle:
+            pickle.dump(fingerprint, file_handle)
+    assert True
+
+
+def test_fingerprint_adslab():
+    adslabs_folder = TEST_CASE_LOCATION + 'adslabs/'
+    for file_name in os.listdir(adslabs_folder):
+        atoms = ase.io.read(adslabs_folder + file_name)
+        fingerprint = fingerprint_adslab(atoms)
+
+        with open(REGRESSION_BASELINES_LOCATION + file_name.split('.')[0] +
+                  '_fingerprint.pkl', 'rb') as file_handle:
+            expected_fingerprint = pickle.load(file_handle)
+        assert fingerprint == expected_fingerprint
+
+
+def test_remove_adsorbate():
+    adslabs_folder = TEST_CASE_LOCATION + 'adslabs/'
+    for file_name in os.listdir(adslabs_folder):
+        adslab = ase.io.read(adslabs_folder + file_name)
+        slab, positions = remove_adsorbate(adslab)
+
+        # Make sure the positions are correct
+        for tag, position in positions.items():
+            binding_atom_index = np.where(adslab.get_tags() == tag)[0][0]
+            expected_position = adslab[binding_atom_index].position
+            npt.assert_allclose(position, expected_position)
+
+        # Make sure adsorbates are gone
+        for atom in slab:
+            assert atom.tag == 0
+
+        # Make sure the slab is still constrained
+        assert slab == constrain_slab(slab)
