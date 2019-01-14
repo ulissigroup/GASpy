@@ -1,4 +1,4 @@
-''' Tests for the `gaspy.tasks.make_fireworks.gases` submodule '''
+''' Tests for the `gaspy.tasks.make_fireworks` submodule '''
 
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
