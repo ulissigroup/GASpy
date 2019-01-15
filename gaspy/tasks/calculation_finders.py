@@ -84,7 +84,7 @@ class FindCalculation(luigi.Task):
 
             # If we are running, then just wait
             else:
-                pass
+                raise RuntimeError('Waiting on a FireWork to finish running')
 
     def output(self):
         return make_task_output_object(self)
