@@ -20,6 +20,20 @@ GASDB_PATH = utils.read_rc('gasdb_path')
 TASKS_CACHE_LOCATION = utils.read_rc('gasdb_path') + '/pickles/'
 
 
+def run_tasks(tasks, workers=1):
+    '''
+    This light wrapping function will execute any tasks you want through the
+    Luigi host that is listed in the `.gaspyrc.json` file.
+
+    Arg:
+        tasks   An iterable of `luigi.Task` instances
+        workers An integer indicating how many processes/workers
+                you want executing the tasks and prerequisite tasks.
+    '''
+    luigi_host = utils.read_rc('luigi_host')
+    luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
+
+
 def make_task_output_object(task):
     '''
     This function will create an instance of a luigi.LocalTarget object, which
