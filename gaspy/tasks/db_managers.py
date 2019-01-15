@@ -66,7 +66,7 @@ class UpdateCatalogCollection(luigi.Task):
         for mpid in mpids:
             enumerate_output = yield _EnumerateDistinctFacets(mpid=mpid,
                                                               max_miller=self.max_miller,
-                                                              vasp_settings=self.bulk_vasp_settings)
+                                                              bulk_vasp_settings=self.bulk_vasp_settings)
             with open(enumerate_output.path, 'rb') as file_handle:
                 distinct_millers = pickle.load(file_handle)
 
