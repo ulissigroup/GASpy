@@ -31,7 +31,14 @@ def run_tasks(tasks, workers=1):
                 you want executing the tasks and prerequisite tasks.
     '''
     luigi_host = utils.read_rc('luigi_host')
-    luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
+
+    # Ignore this silly Luigi warning that they're too lazy to fix
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='Parameter '
+                                '"task_process_context" with value "None" is not '
+                                'of type string.')
+
+        luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
 
 
 def make_task_output_object(task):
