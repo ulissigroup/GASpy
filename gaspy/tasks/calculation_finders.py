@@ -80,7 +80,7 @@ class FindCalculation(luigi.Task):
             if is_rocket_running(self.fw_query,
                                  self.vasp_settings,
                                  _testing=_testing) is False:
-                return self.dependency
+                yield self.dependency
 
             # If we are running, then just wait
             else:
