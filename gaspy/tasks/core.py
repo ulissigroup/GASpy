@@ -123,6 +123,11 @@ def evaluate_luigi_task(task, force=False):
     requirements. This is useful for executing tasks that are typically
     independent of other tasks, e.g., populating a catalog of sites.
 
+    This differs from `run_tasks` in that this function will execute the task
+    manually, while `run_tasks` will get the Luigi daemon/scheduler to do it.
+    This function should be used for debugging and/or testing, while
+    `run_tasks` should be used for production.
+
     Arg:
         task    Class instance of a luigi task
         force   A boolean indicating whether or not you want to forcibly
