@@ -97,7 +97,12 @@ class FindCalculation(luigi.Task):
 
         # Save the match
         doc = self._remove_old_docs(docs)
-        save_task_output(self, doc)
+        try:
+            save_task_output(self, doc)
+
+        # If we've already saved the output, then move on
+        except luigi.target.FileAlreadyExists:
+            pass
 
 
     @staticmethod
