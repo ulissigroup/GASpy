@@ -139,61 +139,61 @@ class GenerateSlabs(luigi.Task):
                                                   miller_indices=self.miller_indices,
                                                   slab_generator_settings=self.slab_generator_settings,
                                                   get_slab_settings=self.get_slab_settings)
-        slab_docs = _make_slab_docs_from_structs(slab_structs)
+        slab_docs = self._make_slab_docs_from_structs(slab_structs)
         save_task_output(self, slab_docs)
+
+    @staticmethod
+    def _make_slab_docs_from_structs(slab_structures):
+        '''
+        This function will take a list of pymatgen.Structure slabs, convert them
+        into `ase.Atoms` objects, orient the slabs upwards, fix the subsurface
+        atoms, and then turn those atoms objects into dictionaries (i.e.,
+        documents). This function will also enumerate and return new documents for
+        invertible slabs that you give it, so the number of documents you get out
+        may be greater than the number of structures you put in.
+
+        Arg:
+            slab_structures     A list of pymatgen.Structure objects. They should
+                                probably be created by the
+                                `make_slabs_from_bulk_atoms` function, but you do
+                                you.
+        Returns:
+            docs    A list of dictionaries (also known as "documents", because
+                    they'll eventually be put into Mongo as documents) that contain
+                    information about slabs. These documents can be fed to the
+                    `gaspy.mongo.make_atoms_from_docs` function to be turned
+                    into `ase.Atoms` objects. These documents also contain
+                    the 'shift' and 'top' fields to indicate the shift/termination
+                    of the slab and whether or not the slab is oriented upwards
+                    with respect to the way it was enumerated originally by
+                    pymatgen.
+        '''
+        docs = []
+        for struct in slab_structures:
+            atoms = AseAtomsAdaptor.get_atoms(struct)
+            atoms = orient_atoms_upwards(atoms)
+
+            # Convert each slab into dictionaries/documents
+            atoms_constrained = constrain_slab(atoms)
+            doc = make_doc_from_atoms(atoms_constrained)
+            doc['shift'] = struct.shift
+            doc['top'] = True
+            docs.append(doc)
+
+            # If slabs are invertible (i.e., are not symmetric about the x-y
+            # plane), then flip it and make another document out of it.
+            if is_structure_invertible(struct) is True:
+                atoms_flipped = flip_atoms(atoms)
+                atoms_flipped_constrained = constrain_slab(atoms_flipped)
+                doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
+                doc_flipped['shift'] = struct.shift
+                doc_flipped['top'] = False
+                docs.append(doc_flipped)
+
+        return docs
 
     def output(self):
         return make_task_output_object(self)
-
-
-def _make_slab_docs_from_structs(slab_structures):
-    '''
-    This function will take a list of pymatgen.Structure slabs, convert them
-    into `ase.Atoms` objects, orient the slabs upwards, fix the subsurface
-    atoms, and then turn those atoms objects into dictionaries (i.e.,
-    documents). This function will also enumerate and return new documents for
-    invertible slabs that you give it, so the number of documents you get out
-    may be greater than the number of structures you put in.
-
-    Arg:
-        slab_structures     A list of pymatgen.Structure objects. They should
-                            probably be created by the
-                            `make_slabs_from_bulk_atoms` function, but you do
-                            you.
-    Returns:
-        docs    A list of dictionaries (also known as "documents", because
-                they'll eventually be put into Mongo as documents) that contain
-                information about slabs. These documents can be fed to the
-                `gaspy.mongo.make_atoms_from_docs` function to be turned
-                into `ase.Atoms` objects. These documents also contain
-                the 'shift' and 'top' fields to indicate the shift/termination
-                of the slab and whether or not the slab is oriented upwards
-                with respect to the way it was enumerated originally by
-                pymatgen.
-    '''
-    docs = []
-    for struct in slab_structures:
-        atoms = AseAtomsAdaptor.get_atoms(struct)
-        atoms = orient_atoms_upwards(atoms)
-
-        # Convert each slab into dictionaries/documents
-        atoms_constrained = constrain_slab(atoms)
-        doc = make_doc_from_atoms(atoms_constrained)
-        doc['shift'] = struct.shift
-        doc['top'] = True
-        docs.append(doc)
-
-        # If slabs are invertible (i.e., are not symmetric about the x-y
-        # plane), then flip it and make another document out of it.
-        if is_structure_invertible(struct) is True:
-            atoms_flipped = flip_atoms(atoms)
-            atoms_flipped_constrained = constrain_slab(atoms_flipped)
-            doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
-            doc_flipped['shift'] = struct.shift
-            doc_flipped['top'] = False
-            docs.append(doc_flipped)
-
-    return docs
 
 
 class GenerateAdsorptionSites(luigi.Task):

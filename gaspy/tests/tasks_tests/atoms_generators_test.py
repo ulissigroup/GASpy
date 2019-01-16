@@ -12,7 +12,6 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateSlabs,
-                                       _make_slab_docs_from_structs,
                                        GenerateAdsorptionSites,
                                        GenerateAdslabs,
                                        GenerateAllSitesFromBulk,
@@ -134,7 +133,7 @@ def test_to_create_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              defaults.SLAB_SETTINGS['slab_generator_settings'],
                                              defaults.SLAB_SETTINGS['get_slab_settings'])
-        docs = _make_slab_docs_from_structs(structs)
+        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
 
         # Save them
         bulk_name = file_name.split('.')[0]
@@ -146,7 +145,7 @@ def test_to_create_slab_docs_from_structs():
 def test__make_slab_docs_from_structs():
     '''
     Another regression test because we rely mainly on the unit tests of the
-    functions that `_make_slab_docs_from_structs` relies on.
+    functions that `GenerateSlabs._make_slab_docs_from_structs` relies on.
     '''
     # Make the documents for each test case
     bulks_folder = TEST_CASE_LOCATION + 'bulks/'
@@ -155,7 +154,7 @@ def test__make_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              defaults.SLAB_SETTINGS['slab_generator_settings'],
                                              defaults.SLAB_SETTINGS['get_slab_settings'])
-        docs = _make_slab_docs_from_structs(structs)
+        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
 
     # Get the regression baseline
     bulk_name = file_name.split('.')[0]
