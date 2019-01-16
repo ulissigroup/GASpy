@@ -14,16 +14,20 @@ from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateSlabs,
                                        _make_slab_docs_from_structs,
                                        GenerateAdsorptionSites,
-                                       GenerateAdslabs)
+                                       GenerateAdslabs,
+                                       GenerateAllSitesFromBulk,
+                                       _EnumerateDistinctFacets)
 
 # Things we need to do the tests
 import pytest
+from itertools import combinations
 import pickle
 import numpy.testing as npt
 import ase.io
 from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.analysis.structure_matcher import StructureMatcher
 from .utils import clean_up_task
 from ... import defaults
 from ...atoms_operators import make_slabs_from_bulk_atoms
@@ -34,6 +38,7 @@ from ...mongo import make_atoms_from_doc
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
 REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
                                  '/tasks/atoms_generators/')
+SLAB_SETTINGS = defaults.SLAB_SETTINGS
 
 
 @pytest.mark.parametrize('gas_name', ['CO', 'H'])
@@ -270,6 +275,84 @@ def test_GenerateAdslabs():
             adsorbate.euler_rotate(**rotation)
             npt.assert_allclose(adslab[0:len(adsorbate)].get_positions() - doc['adsorption_site'],
                                 adsorbate.positions)
+
+    finally:
+        clean_up_task(task)
+
+
+def test_GenerateAllSitesFromBulk():
+    '''
+    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
+    collection. If you copy/paste this test into somewhere else, make sure
+    that you use `evaluate_luigi_task` appropriately.
+    '''
+    mpid = 'mp-2'
+    max_miller = 2
+    site_generator = GenerateAllSitesFromBulk(mpid=mpid, max_miller=max_miller)
+
+    try:
+        # This task has dynamic dependencies, which need to be tested
+        # differently.  Let's start by running the requirements.
+        enumerator = site_generator.requires()
+        evaluate_luigi_task(enumerator)
+
+        # Get the dynamic dependencies, then find the distinct miller indices
+        # from them
+        dynamic_dependencies = site_generator.run().send(None)
+        distinct_millers = set()
+        for dep in dynamic_dependencies:
+            distinct_millers.add(dep.miller_indices)
+
+        # Get all the unique Miller indices that we were supoosed to get, and
+        # compare
+        expected_distinct_millers = set(get_task_output(enumerator))
+        assert distinct_millers == expected_distinct_millers
+
+    finally:
+        clean_up_task(site_generator)
+
+
+def test__EnumerateDistinctFacets():
+    '''
+    We take all the facets that the task are distinct/unique, then actually
+    make slabs out of them and compare all the slabs to see if they are
+    identical. Note that this tests only if we get repeats. It does not
+    test if we missed anything.
+
+    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make sure that you have all of the gas calculations in the unit testing
+    atoms collection.  If you copy/paste this test into somewhere else, make
+    sure that you use `evaluate_luigi_task` appropriately.
+    '''
+    mpid = 'mp-2'
+    max_miller = 2
+    task = _EnumerateDistinctFacets(mpid=mpid, max_miller=max_miller)
+
+    # Run the task to get the facets, and also get the bulk structure so we can
+    # actually make slabs to check
+    try:
+        evaluate_luigi_task(task)
+        distinct_millers = get_task_output(task)
+        with open(task.input().path, 'rb') as file_handle:
+            bulk_doc = pickle.load(file_handle)
+        bulk_atoms = make_atoms_from_doc(bulk_doc)
+
+        # Make all the slabs that the task said are distinct
+        all_slabs = []
+        for miller in distinct_millers:
+            slabs = make_slabs_from_bulk_atoms(bulk_atoms,
+                                               miller,
+                                               SLAB_SETTINGS['slab_generator_settings'],
+                                               SLAB_SETTINGS['get_slab_settings'],)
+            all_slabs.extend(slabs)
+
+        # Check that the slabs are actually different
+        matcher = StructureMatcher()
+        for slabs_to_compare in combinations(all_slabs, 2):
+            assert not matcher.fit(*slabs_to_compare)
 
     finally:
         clean_up_task(task)

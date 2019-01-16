@@ -1,5 +1,5 @@
 '''
-This module houses various tasks to manage our databases.
+This module houses various tasks to manage our Mongo collections/databases.
 '''
 
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
@@ -7,13 +7,9 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import pickle
 import luigi
-from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
-from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from .core import save_task_output, make_task_output_object
-from .atoms_generators import GenerateAdsorptionSites
-from .calculation_finders import FindBulk
+from .atoms_generators import GenerateAllSitesFromBulk
 from .. import defaults
 from ..utils import read_rc, unfreeze_dict
 from ..mongo import make_atoms_from_doc
@@ -62,22 +58,19 @@ class UpdateCatalogCollection(luigi.Task):
         with open(self.input().path, 'rb') as file_handle:
             mpids = pickle.load(file_handle)
 
-        # For each MPID, enumerate all the symmetrically distinct Miller indices
+        # Add the sites of each bulk to the catalog
+        insertion_tasks = []
         for mpid in mpids:
-            enumerate_output = yield _EnumerateDistinctFacets(mpid=mpid,
-                                                              max_miller=self.max_miller,
-                                                              bulk_vasp_settings=self.bulk_vasp_settings)
-            with open(enumerate_output.path, 'rb') as file_handle:
-                distinct_millers = pickle.load(file_handle)
-
-            # For each distinct facet of this bulk, insert all the sites.
-            for miller in distinct_millers:
-                yield _InsertFacetIntoCatalog(mpid=mpid,
-                                              miller_indices=miller,
-                                              min_xy=self.min_xy,
-                                              slab_generator_settings=self.slab_generator_settings,
-                                              get_slab_settings=self.get_slab_settings,
-                                              bulk_vasp_settings=self.bulk_vasp_settings)
+            task = _InsertSitesToCatalog(mpid=mpid,
+                                         max_miller=self.miller,
+                                         min_xy=self.min_xy,
+                                         slab_generator_settings=self.slab_generator_settings,
+                                         get_slab_settings=self.get_slab_settings,
+                                         bulk_vasp_settings=self.bulk_vasp_settings)
+            insertion_tasks.append(task)
+        # Yield all the tasks at once so that Luigi performs them in parallel
+        # instead of sequentially
+        yield insertion_tasks
 
     def output(self):
         return make_task_output_object(self)
@@ -139,47 +132,7 @@ class _GetMpids(luigi.Task):
         return make_task_output_object(self)
 
 
-class _EnumerateDistinctFacets(luigi.Task):
-    '''
-    This task will enumerate the symmetrically distinct facets of a bulk
-    material.
-
-    Args:
-        mpid                A string indicating the Materials Project ID, e.g.,
-                            'mp-2'
-        max_miller          An integer indicating the maximum Miller index to
-                            be enumerated
-        bulk_vasp_settings  A dictionary containing the VASP settings of the
-                            relaxed bulk to enumerate slabs from
-    '''
-    mpid = luigi.Parameter()
-    max_miller = luigi.IntParameter()
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-
-    def requires(self):
-        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
-
-    def run(self):
-        with open(self.input().path, 'rb') as file_handle:
-            bulk_doc = pickle.load(file_handle)
-
-        # Convert the bulk into a `pytmatgen.Structure` and then standardize it
-        # for consistency
-        bulk_atoms = make_atoms_from_doc(bulk_doc)
-        bulk_structure = AseAtomsAdaptor.get_structure(bulk_atoms)
-        sga = SpacegroupAnalyzer(bulk_structure, symprec=0.1)
-        bulk_struct_standard = sga.get_conventional_standard_structure()
-
-        # Enumerate and save the distinct Miller indices
-        distinct_millers = get_symmetrically_distinct_miller_indices(bulk_struct_standard,
-                                                                     self.max_miller)
-        save_task_output(self, distinct_millers)
-
-    def output(self):
-        return make_task_output_object(self)
-
-
-class _InsertFacetIntoCatalog(luigi.Task):
+class _InsertSitesToCatalog(luigi.Task):
     '''
     This task will enumerate a set of adsorption sites, and then it will find
     these sites in the `catalog` Mongo collection. If any site is not in the
@@ -193,8 +146,8 @@ class _InsertFacetIntoCatalog(luigi.Task):
     Args:
         mpid                    A string indicating the Materials Project ID of
                                 the bulk you want to enumerate sites from
-        miller_indices          A 3-tuple containing the three Miller indices
-                                of the slab[s] you want to enumerate sites from
+        max_miller              An integer indicating the maximum Miller index
+                                to be enumerated
         min_xy                  A float indicating the minimum width (in both
                                 the x and y directions) of the slab (Angstroms)
                                 before we enumerate adsorption sites on it.
@@ -213,19 +166,19 @@ class _InsertFacetIntoCatalog(luigi.Task):
                 fed to this task + the documents that we just added
     '''
     mpid = luigi.Parameter()
-    miller_indices = luigi.TupleParameter()
+    max_miller = luigi.IntParameter()
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
-        return GenerateAdsorptionSites(mpid=self.mpid,
-                                       miller_indices=self.miller_indices,
-                                       min_xy=self.min_xy,
-                                       slab_generator_settings=self.slab_generator_settings,
-                                       get_slab_settings=self.get_slab_settings,
-                                       bulk_vasp_settings=self.bulk_vasp_settings)
+        return GenerateAllSitesFromBulk(mpid=self.mpid,
+                                        max_miller=self.max_miller,
+                                        min_xy=self.min_xy,
+                                        slab_generator_settings=self.slab_generator_settings,
+                                        get_slab_settings=self.get_slab_settings,
+                                        bulk_vasp_settings=self.bulk_vasp_settings)
 
     def run(self, _testing=False):
         '''
@@ -233,11 +186,11 @@ class _InsertFacetIntoCatalog(luigi.Task):
         '''
         with open(self.input().path, 'rb') as file_handle:
             site_docs = pickle.load(file_handle)
-
-        # Try to find each adsorption site in our catalog
-        incumbent_docs = []
-        inserted_docs = []
         with get_mongo_collection('catalog') as collection:
+
+            # Try to find each adsorption site in our catalog
+            incumbent_docs = []
+            inserted_docs = []
             for site_doc in site_docs:
                 query = {'mpid': self.mpid,
                          'miller': self.miller_indices,
@@ -249,14 +202,14 @@ class _InsertFacetIntoCatalog(luigi.Task):
                          'top': site_doc['top'],
                          'slab_repeat': site_doc['slab_repeat'],
                          'adsorption_site': tuple(site_doc['adsorption_site'])}
-                matching_docs = list(collection.find(query))
+                docs_in_catalog = list(collection.find(query))
 
                 # If a site is in the catalog, then we don't need to add it
-                if len(matching_docs) >= 1:
-                    incumbent_docs.append(matching_docs[0])
+                if len(docs_in_catalog) >= 1:
+                    incumbent_docs.append(docs_in_catalog[0])
 
                 # If a site is not in the catalog, then create the document
-                elif len(matching_docs) == 0:
+                elif len(docs_in_catalog) == 0:
                     doc = site_doc.copy()
                     doc['mpid'] = self.mpid
                     doc['miller'] = self.miller_indices

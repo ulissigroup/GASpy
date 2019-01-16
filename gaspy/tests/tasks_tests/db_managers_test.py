@@ -11,18 +11,13 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 # Things we're testing
 from ...tasks.db_managers import (UpdateCatalogCollection,
                                   _GetMpids,
-                                  _EnumerateDistinctFacets,
-                                  _InsertFacetIntoCatalog)
+                                  _InsertSitesToCatalog)
 
 # Things we need to do the tests
-from itertools import combinations
-import pickle
 import numpy.testing as npt
 from pymatgen.ext.matproj import MPRester
-from pymatgen.analysis.structure_matcher import StructureMatcher
 from .utils import clean_up_task
 from ... import defaults
-from ...atoms_operators import make_slabs_from_bulk_atoms
 from ...utils import unfreeze_dict, read_rc
 from ...mongo import make_atoms_from_doc
 from ...tasks import get_task_output, evaluate_luigi_task
@@ -68,51 +63,7 @@ def test__GetMpids():
         clean_up_task(task)
 
 
-def test__EnumerateDistinctFacets():
-    '''
-    We take all the facets that the task are distinct/unique, then actually
-    make slabs out of them and compare all the slabs to see if they are
-    identical. Note that this tests only if we get repeats. It does not
-    test if we missed anything.
-
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
-    actually submitting a FireWork to production. To avoid this, you must try
-    to make sure that you have all of the gas calculations in the unit testing
-    atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
-    '''
-    mpid = 'mp-2'
-    max_miller = 2
-    task = _EnumerateDistinctFacets(mpid=mpid, max_miller=max_miller)
-
-    # Run the task to get the facets, and also get the bulk structure so we can
-    # actually make slabs to check
-    try:
-        evaluate_luigi_task(task)
-        distinct_millers = get_task_output(task)
-        with open(task.input().path, 'rb') as file_handle:
-            bulk_doc = pickle.load(file_handle)
-        bulk_atoms = make_atoms_from_doc(bulk_doc)
-
-        # Make all the slabs that the task said are distinct
-        all_slabs = []
-        for miller in distinct_millers:
-            slabs = make_slabs_from_bulk_atoms(bulk_atoms,
-                                               miller,
-                                               SLAB_SETTINGS['slab_generator_settings'],
-                                               SLAB_SETTINGS['get_slab_settings'],)
-            all_slabs.extend(slabs)
-
-        # Check that the slabs are actually different
-        matcher = StructureMatcher()
-        for slabs_to_compare in combinations(all_slabs, 2):
-            assert not matcher.fit(*slabs_to_compare)
-
-    finally:
-        clean_up_task(task)
-
-
-def test__InsertFacetIntoCatalog():
+def test__InsertAllSitesFromBulkToCatalog():
     '''
     WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
@@ -122,7 +73,7 @@ def test__InsertFacetIntoCatalog():
     '''
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    catalog_inserter = _InsertFacetIntoCatalog(mpid=mpid, miller_indices=miller_indices)
+    catalog_inserter = _InsertSitesToCatalog(mpid=mpid, miller_indices=miller_indices)
     site_generator = catalog_inserter.requires()
 
     try:
