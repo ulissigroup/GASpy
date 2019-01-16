@@ -10,7 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.calculation_finders import (FindCalculation,
-                                          _remove_old_docs,
+                                          CalculationNotFoundError,
                                           FindGas,
                                           FindBulk,
                                           FindAdslab)
@@ -33,7 +33,7 @@ from ...tasks.make_fireworks import (MakeGasFW,
 def test_FindCalculation():
     '''
     We do a very light test of this parent class, because we will rely more
-    heavily on the testing on the child classes.
+    heavily on the testing on the child classes and methods.
     '''
     finder = FindCalculation()
     assert isinstance(finder, luigi.Task)
@@ -41,13 +41,19 @@ def test_FindCalculation():
     assert hasattr(finder, 'output')
 
 
+def test_CalculationNotFoundError():
+    assert isinstance(CalculationNotFoundError(), ValueError)
+
+
 def test__remove_old_docs():
     '''
     This could be three tests, but I bunched them into one.
     '''
+    remove_old_docs = FindCalculation()._remove_old_docs
+
     # If there's only one document, we should return it
     docs = ['foo']
-    doc = _remove_old_docs(docs)
+    doc = remove_old_docs(docs)
     assert doc == 'foo'
 
     # If there's two, make sure we get the new ond and get an error
@@ -55,15 +61,15 @@ def test__remove_old_docs():
             {'fwid': 1, 'should stay': False}]
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
-        doc = _remove_old_docs(docs)
+        doc = remove_old_docs(docs)
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We will be using the latest one, 3' in str(warning_manager[-1].message)
 
     # If there's nothing, make sure we get an error
     docs = []
-    with pytest.raises(SyntaxError, message='Expected a SyntaxError') as exc_info:
-        doc = _remove_old_docs(docs)
+    with pytest.raises(CalculationNotFoundError) as exc_info:
+        doc = remove_old_docs(docs)
         assert ('You tried to parse out old documents, but did not pass any'
                 in str(exc_info.value))
 
@@ -112,7 +118,7 @@ def test_FindGas_successfully():
     task = FindGas(gas, vasp_settings)
 
     try:
-        task.run(_testing=True)
+        _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
         assert doc['type'] == 'gas'
         assert doc['fwname']['gasname'] == gas
@@ -125,6 +131,19 @@ def test_FindGas_successfully():
         clean_up_task(task)
 
 
+def _run_task_with_dynamic_dependencies(task):
+    '''
+    If a task has dynamic dependencies, then it will return a generator. This
+    function will run the task for you, iterate through the generator, and
+    return the results.
+    '''
+    try:
+        output = next(task.run(_testing=True))
+        return output
+    except StopIteration:
+        pass
+
+
 def test_FindGas_unsuccessfully():
     '''
     If we ask this task to find something that is not there, it should return
@@ -134,7 +153,7 @@ def test_FindGas_unsuccessfully():
     task = FindGas(gas, defaults.GAS_SETTINGS['vasp'])
 
     try:
-        dependency = task.run(_testing=True)
+        dependency = _run_task_with_dynamic_dependencies(task)
         assert isinstance(dependency, MakeGasFW)
         assert dependency.gas_name == gas
 
@@ -155,10 +174,10 @@ def test_FindBulk_successfully():
         # Some weird testing interactions mean that this task might already be
         # done. If that happens, then just delete the output and try again
         try:
-            task.run(_testing=True)
+            _run_task_with_dynamic_dependencies(task)
         except luigi.target.FileAlreadyExists:
             clean_up_task(task)
-            task.run(_testing=True)
+            _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
 
         assert doc['type'] == 'bulk'
@@ -181,7 +200,7 @@ def test_FindBulk_unsuccessfully():
     task = FindBulk(mpid, defaults.BULK_SETTINGS['vasp'])
 
     try:
-        dependency = task.run(_testing=True)
+        dependency = _run_task_with_dynamic_dependencies(task)
         assert isinstance(dependency, MakeBulkFW)
         assert dependency.mpid == mpid
 
@@ -212,7 +231,7 @@ def test_FindAdslab_successfully():
                       vasp_settings=vasp_settings)
 
     try:
-        task.run(_testing=True)
+        _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
         assert doc['type'] == 'slab+adsorbate'
         assert doc['fwname']['adsorption_site'] == turn_site_into_str(adsorption_site)
@@ -254,7 +273,7 @@ def test_FindAdslab_unsuccessfully():
                       vasp_settings=vasp_settings)
 
     try:
-        dependency = task.run(_testing=True)
+        dependency = _run_task_with_dynamic_dependencies(task)
         assert isinstance(dependency, MakeAdslabFW)
         assert dependency.mpid == mpid
         assert dependency.adsorption_site == adsorption_site

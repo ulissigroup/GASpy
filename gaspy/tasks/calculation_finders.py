@@ -63,61 +63,100 @@ class FindCalculation(luigi.Task):
             _testing    Boolean indicating whether or not you are doing a unit
                         test. You probably shouldn't touch this.
         '''
-        self._load_attributes()
-
-        # Find and save the calculations (if they're in our `atoms` collection)
-        with get_mongo_collection('atoms') as collection:
-            docs = list(collection.find(self.gasdb_query))
         try:
-            doc = _remove_old_docs(docs)
-            save_task_output(self, doc)
+            self._find_and_save_calculation()
 
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
-        except SyntaxError:
-
-            # If we're not running, then submit the job
+        except CalculationNotFoundError:
+            # If we are running, then just wait
             if is_rocket_running(self.fw_query,
                                  self.vasp_settings,
-                                 _testing=_testing) is False:
+                                 _testing=_testing) is True:
+                pass
+            # If we're not running, then submit the job
+            else:
                 yield self.dependency
 
-            # If we are running, then just wait
-            else:
-                raise RuntimeError('Waiting on a FireWork to finish running')
+
+    def _find_and_save_calculation(self):
+        '''
+        Find and save the calculations (if they're in our `atoms` collection)
+        '''
+        # Find the document in our `atoms` Mongo collection
+        try:
+            with get_mongo_collection('atoms') as collection:
+                docs = list(collection.find(self.gasdb_query))
+
+        # If we have not yet created the query yet, then load it. We try/except
+        # this so that we only load it once.
+        except AttributeError:
+            self._load_attributes()
+            with get_mongo_collection('atoms') as collection:
+                docs = list(collection.find(self.gasdb_query))
+
+        # Save the match
+        doc = self._remove_old_docs(docs)
+        save_task_output(self, doc)
+
+
+    @staticmethod
+    def _remove_old_docs(docs):
+        '''
+        This method will parse out Mongo documents that have older FireWork ID
+        numbers and warn the user if it happens.
+
+        Arg:
+            docs    A list of dictionaries that should have the 'fw_id' key
+        Returns:
+            doc     The one document/dictionary in the input that has the
+                    highest 'fw_id' value
+        '''
+        if len(docs) == 1:
+            return docs[0]
+
+        # Warn the user if they have more than one match, then pass the newest one
+        elif len(docs) > 1:
+            docs = sorted(docs, key=lambda doc: doc['fwid'], reverse=True)
+            doc_latest = docs[0]
+            fwids = [str(doc['fwid']) for doc in docs]
+            message = ('These completed FireWorks rockets look identical:  %s. '
+                       'We will be using the latest one, %s'
+                       % (', '.join(fwids), doc_latest['fwid']))
+            warnings.warn(message, RuntimeWarning)
+            return doc_latest
+
+        elif len(docs) == 0:
+            raise CalculationNotFoundError('You tried to parse out old documents, '
+                                           'but did not pass any documents at '
+                                           'all.')
+
+
+    def complete(self):
+        '''
+        This task is done when we can find a calculation. We make a custom
+        `complete` method because we don't throw an error when we can't find
+        something, and if we don't throw any errors, then Luigi will think that
+        we're actually done.
+        '''
+        try:
+            self._find_and_save_calculation()
+            return True
+
+        except CalculationNotFoundError:
+            return False
+
 
     def output(self):
         return make_task_output_object(self)
 
 
-def _remove_old_docs(docs):
+class CalculationNotFoundError(ValueError):
     '''
-    This function will parse out Mongo documents that have older FireWork ID
-    numbers and warn the user if it happens.
-
-    Arg:
-        docs    A list of dictionaries that should have the key 'fw_id' in them
-    Returns:
-        doc     The one document/dictionary in the input that has the highest
-                'fw_id' value
+    This custom exception is meant to signify that we failed to find a
+    calculation in our `atoms` Mongo collection.
     '''
-    if len(docs) == 1:
-        return docs[0]
-
-    # Warn the user if they have more than one match, then pass the newest one
-    elif len(docs) > 1:
-        docs = sorted(docs, key=lambda doc: doc['fwid'], reverse=True)
-        doc_latest = docs[0]
-        fwids = [str(doc['fwid']) for doc in docs]
-        message = ('These completed FireWorks rockets look identical:  %s. '
-                   'We will be using the latest one, %s'
-                   % (', '.join(fwids), doc_latest['fwid']))
-        warnings.warn(message, RuntimeWarning)
-        return doc_latest
-
-    elif len(docs) == 0:
-        raise SyntaxError('You tried to parse out old documents, but did not '
-                          'pass any documents at all.')
+    pass
 
 
 class FindGas(FindCalculation):
