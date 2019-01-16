@@ -62,7 +62,7 @@ class UpdateCatalogCollection(luigi.Task):
         insertion_tasks = []
         for mpid in mpids:
             task = _InsertSitesToCatalog(mpid=mpid,
-                                         max_miller=self.miller,
+                                         max_miller=self.max_miller,
                                          min_xy=self.min_xy,
                                          slab_generator_settings=self.slab_generator_settings,
                                          get_slab_settings=self.get_slab_settings,
