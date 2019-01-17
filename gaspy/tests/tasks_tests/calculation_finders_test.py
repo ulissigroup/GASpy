@@ -29,6 +29,10 @@ from ...tasks.make_fireworks import (MakeGasFW,
                                      MakeBulkFW,
                                      MakeAdslabFW)
 
+GAS_SETTINGS = defaults.gas_settings()
+BULK_SETTINGS = defaults.bulk_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
+
 
 def test_FindCalculation():
     '''
@@ -114,7 +118,7 @@ def test_FindGas_successfully():
     the correct Mongo document/dictionary
     '''
     gas = 'H2'
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = GAS_SETTINGS['vasp']
     task = FindGas(gas, vasp_settings)
 
     try:
@@ -150,7 +154,7 @@ def test_FindGas_unsuccessfully():
     the correct dependency
     '''
     gas = 'CHO'
-    task = FindGas(gas, defaults.GAS_SETTINGS['vasp'])
+    task = FindGas(gas, GAS_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -167,7 +171,7 @@ def test_FindBulk_successfully():
     the correct Mongo document/dictionary
     '''
     mpid = 'mp-2'
-    vasp_settings = defaults.BULK_SETTINGS['vasp']
+    vasp_settings = BULK_SETTINGS['vasp']
     task = FindBulk(mpid, vasp_settings)
 
     try:
@@ -191,7 +195,7 @@ def test_FindBulk_unsuccessfully():
     the correct dependency
     '''
     mpid = 'mp-120'
-    task = FindBulk(mpid, defaults.BULK_SETTINGS['vasp'])
+    task = FindBulk(mpid, BULK_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -214,7 +218,7 @@ def test_FindAdslab_successfully():
     rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    vasp_settings = defaults.ADSLAB_SETTINGS['vasp']
+    vasp_settings = ADSLAB_SETTINGS['vasp']
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
@@ -256,7 +260,7 @@ def test_FindAdslab_unsuccessfully():
     rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    vasp_settings = defaults.ADSLAB_SETTINGS['vasp']
+    vasp_settings = ADSLAB_SETTINGS['vasp']
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,

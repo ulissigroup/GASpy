@@ -122,7 +122,7 @@ def test_make_firework():
     # Make the firework and pull out the operations so we can inspect them
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = defaults.gas_settings()['vasp']
     fwork = make_firework(atoms, fw_name, vasp_settings)
     pass_vasp_functions, read_atoms_file, relax = fwork.tasks
 
@@ -226,7 +226,7 @@ def test_decode_trajhex_to_atoms(adslab_atoms_name):
 def test_submit_fwork():
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = defaults.gas_settings()['vasp']
     fwork = make_firework(atoms, fw_name, vasp_settings)
     wflow = submit_fwork(fwork, _testing=True)
     assert len(wflow.fws) == 1

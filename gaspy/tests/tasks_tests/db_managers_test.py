@@ -22,7 +22,7 @@ from ...utils import unfreeze_dict, read_rc
 from ...mongo import make_atoms_from_doc
 from ...tasks import get_task_output
 
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
+SLAB_SETTINGS = defaults.slab_settings()
 
 
 def test_UpdateCatalogCollection():

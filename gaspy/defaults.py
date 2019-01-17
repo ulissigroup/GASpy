@@ -1,6 +1,8 @@
 '''
-This modules contains default settings for various function and queries used in GASpy and its
-submodules.
+This modules contains functions that return default settings for various
+function and queries used in GASpy and its submodules. We keep everything
+functions so that you don't modify some settings in one location and have it
+accidentally affect the setting in a different location.
 '''
 
 import warnings
@@ -9,166 +11,194 @@ from ase import Atoms
 import ase.constraints
 
 
-# Vasp pseudopotential version
-PP_VERSION = '5.4'
+def pp_version():
+    ''' Vasp pseudopotential version '''
+    return '5.4'
 
 
-# A dictionary whose keys are some typical sets of exchange correlationals and
-# whose values are dictionaries with the corresponding pseudopotential (pp),
-# generalized gradient approximations (ggas), and other pertinent information.
-# Credit goes to John Kitchin who wrote vasp.Vasp.xc_defaults, which we copied
-# and put here.
-XC_SETTINGS = OrderedDict(lda=OrderedDict(pp='LDA'),
-                          gga=OrderedDict(pp='GGA'),    # GGAs
-                          pbe=OrderedDict(pp='PBE'),
-                          revpbe=OrderedDict(pp='LDA', gga='RE'),
-                          rpbe=OrderedDict(gga='RP', pp='PBE'),
-                          am05=OrderedDict(pp='LDA', gga='AM'),
-                          pbesol=OrderedDict(gga='PS', pp='PBE'),
-                          # Meta-GGAs
-                          tpss=OrderedDict(pp='PBE', metagga='TPSS'),
-                          revtpss=OrderedDict(pp='PBE', metagga='RTPSS'),
-                          m06l=OrderedDict(pp='PBE', metagga='M06L'),
-                          # vdW-DFs
-                          optpbe_vdw=OrderedDict(pp='LDA', gga='OR',
-                                                 luse_vdw=True, aggac=0.0),
-                          optb88_vdw=OrderedDict(pp='LDA', gga='BO',
-                                                 luse_vdw=True, aggac=0.0,
-                                                 param1=1.1 / 6.0, param2=0.22),
-                          optb86b_vdw=OrderedDict(pp='LDA', gga='MK',
-                                                  luse_vdw=True, aggac=0.0,
-                                                  param1=0.1234, param2=1.0),
-                          vdw_df2=OrderedDict(pp='LDA', gga='ML', luse_vdw=True,
-                                              aggac=0.0, zab_vdw=-1.8867),
-                          beef_vdw=OrderedDict(pp='PBE', gga='BF', luse_vdw=True,
-                                               zab_vdw=-1.8867, lbeefens=True),
-                          # hybrids
-                          pbe0=OrderedDict(pp='LDA', gga='PE', lhfcalc=True),
-                          hse03=OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
-                                            hfscreen=0.3),
-                          hse06=OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
-                                            hfscreen=0.2),
-                          b3lyp=OrderedDict(pp='LDA', gga='B3', lhfcalc=True,
-                                            aexx=0.2, aggax=0.72, aggac=0.81, aldac=0.19),
-                          hf=OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
-                                         aldac=0.0, aggac=0.0))
+def xc_settings(xc='rpbe'):
+    '''
+    A dictionary whose keys are some typical sets of exchange correlationals
+    and whose values are dictionaries with the corresponding pseudopotential
+    (pp), generalized gradient approximations (ggas), and other pertinent
+    information.  Credit goes to John Kitchin who wrote vasp.Vasp.xc_defaults,
+    which we copied and put here.
+    '''
+    xc_settings = {'lda': OrderedDict(pp='LDA'),
+                    # GGAs
+                   'gga': OrderedDict(pp='GGA'),
+                   'pbe': OrderedDict(pp='PBE'),
+                   'revpbe': OrderedDict(pp='LDA', gga='RE'),
+                   'rpbe': OrderedDict(gga='RP', pp='PBE'),
+                   'am05': OrderedDict(pp='LDA', gga='AM'),
+                   'pbesol': OrderedDict(gga='PS', pp='PBE'),
+                   # Meta-GGAs
+                   'tpss': OrderedDict(pp='PBE', metagga='TPSS'),
+                   'revtpss': OrderedDict(pp='PBE', metagga='RTPSS'),
+                   'm06l': OrderedDict(pp='PBE', metagga='M06L'),
+                   # vdW-DFs
+                   'optpbe_vdw': OrderedDict(pp='LDA', gga='OR', luse_vdw=True,
+                                             aggac=0.0),
+                   'optb88_vdw': OrderedDict(pp='LDA', gga='BO', luse_vdw=True,
+                                             aggac=0.0, param1=1.1 / 6.0,
+                                             param2=0.22),
+                   'optb86b_vdw': OrderedDict(pp='LDA', gga='MK',
+                                              luse_vdw=True, aggac=0.0,
+                                              param1=0.1234, param2=1.0),
+                   'vdw_df2': OrderedDict(pp='LDA', gga='ML', luse_vdw=True,
+                                          aggac=0.0, zab_vdw=-1.8867),
+                   'beef_vdw': OrderedDict(pp='PBE', gga='BF', luse_vdw=True,
+                                           zab_vdw=-1.8867, lbeefens=True),
+                   # hybrids
+                   'pbe0': OrderedDict(pp='LDA', gga='PE', lhfcalc=True),
+                   'hse03': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                        hfscreen=0.3),
+                   'hse06': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                        hfscreen=0.2),
+                   'b3lyp': OrderedDict(pp='LDA', gga='B3', lhfcalc=True,
+                                        aexx=0.2, aggax=0.72, aggac=0.81,
+                                        aldac=0.19),
+                   'hf': OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
+                                     aldac=0.0, aggac=0.0)}
+    return xc_settings[xc]
 
 
-# Our default exchange correlational
-XC = 'rpbe'
+def gas_settings():
+    ''' The default settings we use to do DFT calculations of gases '''
+    gas_settings = OrderedDict(vasp=OrderedDict(ibrion=2,
+                                                nsw=100,
+                                                isif=0,
+                                                kpts=(1, 1, 1),
+                                                ediffg=-0.03,
+                                                encut=350.,
+                                                pp_version=pp_version(),
+                                                **xc_settings()))
+    return gas_settings
 
 
-# The default settings we use to do DFT calculations of gases
-GAS_SETTINGS = OrderedDict(vasp=OrderedDict(ibrion=2,
-                                            nsw=100,
-                                            isif=0,
-                                            kpts=(1, 1, 1),
-                                            ediffg=-0.03,
-                                            encut=350.,
-                                            pp_version=PP_VERSION,
-                                            **XC_SETTINGS[XC]))
+def bulk_settings():
+    ''' The default settings we use to do DFT calculations of bulks '''
+    bulk_settings = OrderedDict(max_atoms=80,
+                                vasp=OrderedDict(ibrion=1,
+                                                 nsw=100,
+                                                 isif=7,
+                                                 isym=0,
+                                                 ediff=1e-8,
+                                                 kpts=(10, 10, 10),
+                                                 prec='Accurate',
+                                                 encut=500.,
+                                                 pp_version=pp_version(),
+                                                 **xc_settings()))
+    return bulk_settings
 
 
-# The default settings we use to do DFT calculations of bulks
-BULK_SETTINGS = OrderedDict(max_atoms=80,
-                            vasp=OrderedDict(ibrion=1,
-                                             nsw=100,
-                                             isif=7,
-                                             isym=0,
-                                             ediff=1e-8,
-                                             kpts=(10, 10, 10),
-                                             prec='Accurate',
-                                             encut=500.,
-                                             pp_version=PP_VERSION,
-                                             **XC_SETTINGS[XC]))
+def slab_settings():
+    '''
+    The default settings we use to enumerate slabs, along with the subsequent
+    DFT settings. The 'slab_generator_settings' are passed to the
+    `SlabGenerator` class in pymatgen, and the `get_slab_settings` are passed
+    to the `get_slab` method of that class.
+    '''
+    slab_settings = OrderedDict(max_miller=2,
+                                vasp=OrderedDict(ibrion=2,
+                                                 nsw=100,
+                                                 isif=0,
+                                                 isym=0,
+                                                 kpts=(4, 4, 1),
+                                                 lreal='Auto',
+                                                 ediffg=-0.03,
+                                                 encut=350.,
+                                                 pp_version=pp_version(),
+                                                 **xc_settings()),
+                                slab_generator_settings=OrderedDict(min_slab_size=7.,
+                                                                    min_vacuum_size=20.,
+                                                                    lll_reduce=False,
+                                                                    center_slab=True,
+                                                                    primitive=True,
+                                                                    max_normal_search=1),
+                                get_slab_settings=OrderedDict(tol=0.3,
+                                                              bonds=None,
+                                                              max_broken_bonds=0,
+                                                              symmetrize=False))
+    return slab_settings
 
 
-# The default settings we use to enumerate slabs, along with the subsequent DFT
-# settings. The 'slab_generator_settings' are passed to the `SlabGenerator`
-# class in pymatgen, and the `get_slab_settings` are passed to the `get_slab`
-# method of that class.
-SLAB_SETTINGS = OrderedDict(max_miller=2,
-                            vasp=OrderedDict(ibrion=2,
-                                             nsw=100,
-                                             isif=0,
-                                             isym=0,
-                                             kpts=(4, 4, 1),
-                                             lreal='Auto',
-                                             ediffg=-0.03,
-                                             encut=350.,
-                                             pp_version=PP_VERSION,
-                                             **XC_SETTINGS[XC]),
-                            slab_generator_settings=OrderedDict(min_slab_size=7.,
-                                                                min_vacuum_size=20.,
-                                                                lll_reduce=False,
-                                                                center_slab=True,
-                                                                primitive=True,
-                                                                max_normal_search=1),
-                            get_slab_settings=OrderedDict(tol=0.3,
-                                                          bonds=None,
-                                                          max_broken_bonds=0,
-                                                          symmetrize=False))
+def adslab_settings():
+    '''
+    The default settings we use to enumerate adslab structures, along with the
+    subsequent DFT settings. `mix_xy` is the minimum with of the slab
+    (Angstroms) before we enumerate adsorption sites on it.
+    '''
+    adslab_settings = OrderedDict(min_xy=4.5,
+                                  rotation=OrderedDict(phi=0., theta=0., psi=0.),
+                                  vasp=OrderedDict(ibrion=2,
+                                                   nsw=200,
+                                                   isif=0,
+                                                   isym=0,
+                                                   kpts=(4, 4, 1),
+                                                   lreal='Auto',
+                                                   ediffg=-0.03,
+                                                   symprec=1e-10,
+                                                   encut=350.,
+                                                   pp_version=pp_version(),
+                                                   **xc_settings()))
+    return adslab_settings
 
 
-# The default settings we use to enumerate adslab structures, along with the
-# subsequent DFT settings. `mix_xy` is the minimum with of the slab (Angstroms)
-# before we enumerate adsorption sites on it.
-ADSLAB_SETTINGS = OrderedDict(min_xy=4.5,
-                              rotation=OrderedDict(phi=0., theta=0., psi=0.),
-                              vasp=OrderedDict(ibrion=2,
-                                               nsw=200,
-                                               isif=0,
-                                               isym=0,
-                                               kpts=(4, 4, 1),
-                                               lreal='Auto',
-                                               ediffg=-0.03,
-                                               symprec=1e-10,
-                                               encut=350.,
-                                               pp_version=PP_VERSION,
-                                               **XC_SETTINGS[XC]))
+def adsorbates():
+    '''
+    A dictionary whose keys are the simple string names of adsorbates and whos
+    values are their corresponding `ase.Atoms` objects. When making new entries
+    for this dictionary, we recommend "pointing" the adsorbate upwards in the
+    z-direction.
+    '''
+    adsorbates = {}
+    adsorbates[''] = Atoms()
+
+    # Uranium is a place-holder for an adsorbate
+    adsorbates['U'] = Atoms('U')
+
+    # Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
+    adsorbates['H'] = Atoms('H', positions=[[0., 0., -0.5]])
+    adsorbates['O'] = Atoms('O')
+    adsorbates['C'] = Atoms('C')
+    adsorbates['N'] = Atoms('N')
+
+    # For diatomics (and above), it's a good practice to manually relax the gases
+    # and then see how far apart they are. Then put first atom at the origin, and
+    # put the second atom directly above it.
+    adsorbates['CO'] = Atoms('CO', positions=[[0., 0., 0.],
+                                              [0., 0., 1.2]])
+    adsorbates['OH'] = Atoms('OH', positions=[[0., 0., 0.],
+                                              [0.92, 0., 0.32]])
+
+    # For OOH, we've found that most of our relaxations resulted in dissociation of
+    # at least the hydrogen. As such, we put some Hookean springs between the atoms
+    # to keep the adsorbate together.
+    adsorbates['OOH'] = Atoms('OOH', positions=[[0., 0., 0.],
+                                                [1.28, 0., 0.67],
+                                                [1.44, -0.96, 0.81]])
+    adsorbates['OOH'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
+                                      ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
+
+    # For CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
+    # Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure
+    # is H-C-O
+    adsorbates['CHO'] = Atoms('CHO', positions=[[0., 0., 1.],
+                                                [-0.94, 0.2, 1.7],      # position of H
+                                                [0.986, 0.6, 1.8]])     # position of O
+    adsorbates['CHO'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),   # Bind CH, initially used k=7, lowered to 5
+                                      ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
+
+    return adsorbates
 
 
-# ADSORBATES is a dictionary whose keys are the simple string names of
-# adsorbates and whos values are their corresponding `ase.Atoms` objects. When
-# making new entries for this dictionary, we recommend "pointing" the adsorbate
-# upwards in the z-direction.
-ADSORBATES = {}
-ADSORBATES[''] = Atoms()
-# Uranium is a place-holder for an adsorbate
-ADSORBATES['U'] = Atoms('U')
-# Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
-ADSORBATES['H'] = Atoms('H', positions=[[0., 0., -0.5]])
-ADSORBATES['O'] = Atoms('O')
-ADSORBATES['C'] = Atoms('C')
-ADSORBATES['N'] = Atoms('N')
-# For diatomics (and above), it's a good practice to manually relax the gases
-# and then see how far apart they are. Then put first atom at the origin, and
-# put the second atom directly above it.
-ADSORBATES['CO'] = Atoms('CO', positions=[[0., 0., 0.],
-                                          [0., 0., 1.2]])
-ADSORBATES['OH'] = Atoms('OH', positions=[[0., 0., 0.],
-                                          [0.92, 0., 0.32]])
-# For OOH, we've found that most of our relaxations resulted in dissociation of
-# at least the hydrogen. As such, we put some Hookean springs between the atoms
-# to keep the adsorbate together.
-ADSORBATES['OOH'] = Atoms('OOH', positions=[[0., 0., 0.],
-                                            [1.28, 0., 0.67],
-                                            [1.44, -0.96, 0.81]])
-ADSORBATES['OOH'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.6, k=10.),   # Bind OO
-                                  ase.constraints.Hookean(a1=1, a2=2, rt=1.37, k=5.)])  # Bind OH
-# For CHO, assumed C binds to surface (index 0), O (index 1), and H(index 2).
-# Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure
-# is H-C-O
-ADSORBATES['CHO'] = Atoms('CHO', positions=[[0., 0., 1.],
-                                            [-0.94, 0.2, 1.7],      # position of H
-                                            [0.986, 0.6, 1.8]])     # position of O
-ADSORBATES['CHO'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),   # Bind CH, initially used k=7, lowered to 5
-                                  ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
-
-
-# We use surrogate models to make predictions of DFT information. This is the
-# tag associated with our default model.
-MODEL = 'model0'
+def model():
+    '''
+    We use surrogate models to make predictions of DFT information. This is the
+    tag associated with our default model.
+    '''
+    return 'model0'
 
 
 def adsorption_fingerprints():
@@ -247,7 +277,7 @@ def adsorption_filters(adsorbates):
     filters['processed_data.movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
     filters['processed_data.movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': slab_move_max}
-    filters['processed_data.vasp_settings.gga'] = XC_SETTINGS[XC]['gga']
+    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
 
     return filters
 
@@ -314,6 +344,6 @@ def surface_filters():
     # Distribute filters into mongo-readable form
     filters['results.fmax'] = {'$lt': f_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    filters['processed_data.vasp_settings.gga'] = XC_SETTINGS[XC]['gga']
+    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
 
     return filters

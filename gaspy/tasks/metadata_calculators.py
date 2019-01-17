@@ -16,11 +16,11 @@ from .. import utils
 from .. import defaults
 
 GASDB_PATH = utils.read_rc('gasdb_path')
-GAS_SETTINGS = defaults.GAS_SETTINGS
-BULK_SETTINGS = defaults.BULK_SETTINGS
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
-ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
-ADSORBATES = defaults.ADSORBATES
+GAS_SETTINGS = defaults.gas_settings()
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
+ADSORBATES = defaults.adsorbates()
 
 
 class CalculateAdsorptionEnergy(luigi.Task):

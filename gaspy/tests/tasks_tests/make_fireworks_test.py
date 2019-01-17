@@ -27,10 +27,15 @@ from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateAdslabs)
 
+GAS_SETTINGS = defaults.gas_settings()
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
+
 
 def test_MakeGasFW():
     gas_name = 'CO'
-    task = MakeGasFW(gas_name, defaults.GAS_SETTINGS['vasp'])
+    task = MakeGasFW(gas_name, GAS_SETTINGS['vasp'])
 
     # Check that our requirment is correct
     req = task.requires()
@@ -46,7 +51,7 @@ def test_MakeGasFW():
         fwork = task.run(_testing=True)
         assert fwork.name['calculation_type'] == 'gas phase optimization'
         assert fwork.name['gasname'] == gas_name
-        assert fwork.name['vasp_settings'] == defaults.GAS_SETTINGS['vasp']
+        assert fwork.name['vasp_settings'] == GAS_SETTINGS['vasp']
 
     finally:
         clean_up_tasks()
@@ -54,7 +59,7 @@ def test_MakeGasFW():
 
 def test_MakeBulkFW():
     mpid = 'mp-30'
-    task = MakeBulkFW(mpid, defaults.BULK_SETTINGS['vasp'])
+    task = MakeBulkFW(mpid, BULK_SETTINGS['vasp'])
 
     # Check that our requirment is correct
     req = task.requires()
@@ -70,7 +75,7 @@ def test_MakeBulkFW():
         fwork = task.run(_testing=True)
         assert fwork.name['calculation_type'] == 'unit cell optimization'
         assert fwork.name['mpid'] == mpid
-        assert fwork.name['vasp_settings'] == defaults.BULK_SETTINGS['vasp']
+        assert fwork.name['vasp_settings'] == BULK_SETTINGS['vasp']
 
     finally:
         clean_up_tasks()
@@ -87,15 +92,15 @@ def test_MakeAdslabFW():
     adsorption_site = (1.48564485e-23, 1.40646118e+00, 2.08958465e+01)
     shift = 0.25
     top = False
-    vasp_settings = defaults.ADSLAB_SETTINGS['vasp']
+    vasp_settings = ADSLAB_SETTINGS['vasp']
     adsorbate_name = 'OH'
-    rotation = defaults.ADSLAB_SETTINGS['rotation']
+    rotation = ADSLAB_SETTINGS['rotation']
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
-    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
-    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
+    min_xy = ADSLAB_SETTINGS['min_xy']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = SLAB_SETTINGS['get_slab_settings']
+    bulk_vasp_settings = BULK_SETTINGS['vasp']
     task = MakeAdslabFW(adsorption_site=adsorption_site,
                         shift=shift,
                         top=top,
@@ -140,7 +145,7 @@ def test_MakeAdslabFW():
         assert fwork.name['shift'] == shift
         assert fwork.name['top'] == top
         assert isinstance(fwork.name['slabrepeat'], tuple)
-        assert fwork.name['vasp_settings'] == defaults.ADSLAB_SETTINGS['vasp']
+        assert fwork.name['vasp_settings'] == ADSLAB_SETTINGS['vasp']
 
     finally:
         clean_up_tasks()

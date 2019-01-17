@@ -37,7 +37,10 @@ from ...mongo import make_atoms_from_doc
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
 REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
                                  '/tasks/atoms_generators/')
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
+ADSORBATES = defaults.adsorbates()
 
 
 @pytest.mark.parametrize('gas_name', ['CO', 'H'])
@@ -92,9 +95,9 @@ def test_GenerateSlabs():
     '''
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
-    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = SLAB_SETTINGS['get_slab_settings']
+    bulk_vasp_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateSlabs(mpid=mpid,
@@ -131,8 +134,8 @@ def test_to_create_slab_docs_from_structs():
     for file_name in os.listdir(bulks_folder):
         bulk = ase.io.read(bulks_folder + file_name)
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
-                                             defaults.SLAB_SETTINGS['slab_generator_settings'],
-                                             defaults.SLAB_SETTINGS['get_slab_settings'])
+                                             SLAB_SETTINGS['slab_generator_settings'],
+                                             SLAB_SETTINGS['get_slab_settings'])
         docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
 
         # Save them
@@ -152,8 +155,8 @@ def test__make_slab_docs_from_structs():
     for file_name in os.listdir(bulks_folder):
         bulk = ase.io.read(bulks_folder + file_name)
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
-                                             defaults.SLAB_SETTINGS['slab_generator_settings'],
-                                             defaults.SLAB_SETTINGS['get_slab_settings'])
+                                             SLAB_SETTINGS['slab_generator_settings'],
+                                             SLAB_SETTINGS['get_slab_settings'])
         docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
 
     # Get the regression baseline
@@ -179,10 +182,10 @@ def test_GenerateAdsorptionSites():
     '''
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
-    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
-    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
+    min_xy = ADSLAB_SETTINGS['min_xy']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = SLAB_SETTINGS['get_slab_settings']
+    bulk_vasp_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdsorptionSites(mpid=mpid,
@@ -229,13 +232,13 @@ def test_GenerateAdslabs():
     the `add_adsorbate_onto_slab` function to make sure things go right.
     '''
     adsorbate_name = 'OH'
-    rotation = defaults.ADSLAB_SETTINGS['rotation']
+    rotation = ADSLAB_SETTINGS['rotation']
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    min_xy = defaults.ADSLAB_SETTINGS['min_xy']
-    slab_generator_settings = defaults.SLAB_SETTINGS['slab_generator_settings']
-    get_slab_settings = defaults.SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = defaults.BULK_SETTINGS['vasp']
+    min_xy = ADSLAB_SETTINGS['min_xy']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = SLAB_SETTINGS['get_slab_settings']
+    bulk_vasp_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdslabs(adsorbate_name=adsorbate_name,
@@ -270,7 +273,7 @@ def test_GenerateAdslabs():
 
             # Make sure that the adsorbate was rotated correctly by checking
             # the positions of the adsorbate
-            adsorbate = defaults.ADSORBATES[adsorbate_name].copy()
+            adsorbate = ADSORBATES[adsorbate_name].copy()
             adsorbate.euler_rotate(**rotation)
             npt.assert_allclose(adslab[0:len(adsorbate)].get_positions() - doc['adsorption_site'],
                                 adsorbate.positions)

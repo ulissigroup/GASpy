@@ -6,23 +6,23 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import pickle
-#import datetime
-#import multiprocess
-#import tqdm
+import datetime
+import multiprocess
+import tqdm
 import luigi
 from pymatgen.ext.matproj import MPRester
 from .core import save_task_output, make_task_output_object
 from .atoms_generators import GenerateAllSitesFromBulk
 from .. import defaults
 from ..utils import read_rc, unfreeze_dict
-from ..mongo import make_atoms_from_doc  # , make_doc_from_atoms
+from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
-#from ..fireworks_helper_scripts import get_launchpad
+from ..fireworks_helper_scripts import get_launchpad
 from ..atoms_operators import fingerprint_adslab
 
-BULK_SETTINGS = defaults.BULK_SETTINGS
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
-ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
 #class DumpToAuxDB(luigi.Task):

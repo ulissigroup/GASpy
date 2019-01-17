@@ -379,7 +379,7 @@ def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list=None):
         docs    A list of dictionaries for various fingerprints.
     '''
     if adsorbate_rotation_list is None:
-        adsorbate_rotation_list = [copy.deepcopy(defaults.ADSLAB_SETTINGS['rotation'])]
+        adsorbate_rotation_list = [copy.deepcopy(defaults.adslab_settings()['rotation'])]
 
     docs_catalog = get_catalog_docs()
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
@@ -433,7 +433,7 @@ def _get_attempted_adsorption_docs(adsorbates=None, calc_settings=None):
                         cutoff, VASP pseudo-potential version number (pp_version),
                         and exchange-correlational settings. This should be obtained
                         (and modified, if necessary) from
-                        `gaspy.defaults.ADSLAB_SETTINGS['vasp']`. If `None`,
+                        `gaspy.defaults.adslab_settings()['vasp']`. If `None`,
                         then pulls default settings.
 
     Returns:
@@ -445,7 +445,7 @@ def _get_attempted_adsorption_docs(adsorbates=None, calc_settings=None):
     # Get only the documents that have the right calculation settings and adsorbates
     filters = {}
     if calc_settings is None:
-        calc_settings = defaults.ADSLAB_SETTINGS['vasp']
+        calc_settings = defaults.adslab_settings()['vasp']
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
     match = {'$match': filters}
@@ -571,7 +571,7 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
         return serialized_doc
 
 
-def get_low_coverage_docs(adsorbates, model_tag=defaults.MODEL):
+def get_low_coverage_docs(adsorbates, model_tag=defaults.model()):
     '''
     Each surface has many possible adsorption sites. The site with the most
     negative adsorption energy (i.e., the strongest-binding site) will tend to
@@ -744,7 +744,7 @@ def _get_surface_from_doc(doc):
     return surface
 
 
-def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.MODEL):
+def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.model()):
     '''
     This function is analogous to the `get_catalog_docs` function, except
     it only returns documents that represent the low-coverage sites for

@@ -22,6 +22,8 @@ from ...utils import unfreeze_dict
 from ...mongo import make_atoms_from_doc
 from ...tasks import get_task_output, evaluate_luigi_task
 
+GAS_SETTINGS = defaults.gas_settings()
+
 
 def test_CalculateAdsorptionEnergy():
     '''
@@ -71,7 +73,7 @@ def test_CalculateAdsorbateEnergy():
     sure that you use `run_task_locally` appropriately.
     '''
     adsorbate_name = 'OOH'
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateEnergy(adsorbate_name=adsorbate_name,
                                     vasp_settings=vasp_settings)
     assert task.adsorbate_name == adsorbate_name
@@ -98,7 +100,7 @@ def test_CalculateAdsorbateEnergy_Error():
     defined, then this task should yell at us.
     '''
     adsorbate_name = 'U'
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateEnergy(adsorbate_name=adsorbate_name,
                                     vasp_settings=vasp_settings)
     assert task.adsorbate_name == adsorbate_name
@@ -122,7 +124,7 @@ def test_CalculateAdsorbateBasisEnergies():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
-    vasp_settings = defaults.GAS_SETTINGS['vasp']
+    vasp_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateBasisEnergies(vasp_settings)
     assert unfreeze_dict(task.vasp_settings) == vasp_settings
 

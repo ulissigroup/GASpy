@@ -17,10 +17,10 @@ from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
                              MakeAdslabFW)
 
-GAS_SETTINGS = defaults.GAS_SETTINGS
-BULK_SETTINGS = defaults.BULK_SETTINGS
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
-ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+GAS_SETTINGS = defaults.gas_settings()
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
 class FindCalculation(luigi.Task):

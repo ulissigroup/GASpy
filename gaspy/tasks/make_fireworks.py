@@ -13,12 +13,12 @@ from .atoms_generators import GenerateGas, GenerateBulk, GenerateAdslabs
 from .. import defaults
 from ..mongo import make_atoms_from_doc
 from ..utils import unfreeze_dict, turn_site_into_str
-from ..fireworks_helper_scripts import make_firework, submit_fwork
+from ..fireworks_helper_scripts import make_firework, submit_fwork, get_launchpad
 
-GAS_SETTINGS = defaults.GAS_SETTINGS
-BULK_SETTINGS = defaults.BULK_SETTINGS
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
-ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+GAS_SETTINGS = defaults.gas_settings()
+BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
+ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
 class MakeGasFW(luigi.Task):
@@ -87,6 +87,10 @@ class MakeBulkFW(luigi.Task):
                               fw_name=fw_name,
                               vasp_settings=vasp_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
+
+        # Increase the priority because it's a bulk
+        lpad = get_launchpad()
+        lpad.set_priority(fwork.fw_id, 100)
 
         # Pass out the firework for testing, if necessary
         if _testing is True:

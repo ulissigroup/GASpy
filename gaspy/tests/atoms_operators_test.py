@@ -39,7 +39,7 @@ from ..tasks.atoms_generators import GenerateBulk
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/atoms_operators/'
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
-SLAB_SETTINGS = defaults.SLAB_SETTINGS
+SLAB_SETTINGS = defaults.slab_settings()
 
 
 @pytest.mark.baseline
@@ -284,7 +284,7 @@ def test_add_adsorbate_onto_slab():
         slab = test_cases.get_slab_atoms(slab_atoms_name)
 
         for ads_name in ['H', 'CO', 'OH', 'OOH']:
-            adsorbate = defaults.ADSORBATES[ads_name].copy()
+            adsorbate = defaults.adsorbates()[ads_name].copy()
 
             for site in [np.array([0., 0., 0.]), np.array([1., 1., 1.])]:
                 adslab = add_adsorbate_onto_slab(adsorbate, slab, site)
