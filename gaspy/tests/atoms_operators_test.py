@@ -104,7 +104,7 @@ def test_make_slabs_from_bulk_atoms_warning():
     ignoring it.
     '''
     # Prepare to call the function (incorrectly)
-    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings'].copy()
     slab_generator_settings['miller_index'] = (2, 1, 1)
     bulk_generator = GenerateBulk('mp-30')
     try:
