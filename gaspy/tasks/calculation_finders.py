@@ -57,6 +57,10 @@ class FindCalculation(luigi.Task):
                             attributes to the class. This method will be
                             called automatically at the start of `run`.
     '''
+    # Increase the priority because finding (and therefore submitting)
+    # calculations is usually the bottle neck, so let's do that first
+    priority = 100
+
     def run(self, _testing=False):
         '''
         Arg:
