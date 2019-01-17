@@ -6,19 +6,129 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import pickle
+#import datetime
+#import multiprocess
+#import tqdm
 import luigi
 from pymatgen.ext.matproj import MPRester
 from .core import save_task_output, make_task_output_object
 from .atoms_generators import GenerateAllSitesFromBulk
 from .. import defaults
 from ..utils import read_rc, unfreeze_dict
-from ..mongo import make_atoms_from_doc
+from ..mongo import make_atoms_from_doc  # , make_doc_from_atoms
 from ..gasdb import get_mongo_collection
+#from ..fireworks_helper_scripts import get_launchpad
 from ..atoms_operators import fingerprint_adslab
 
 BULK_SETTINGS = defaults.BULK_SETTINGS
 SLAB_SETTINGS = defaults.SLAB_SETTINGS
 ADSLAB_SETTINGS = defaults.ADSLAB_SETTINGS
+
+
+#class DumpToAuxDB(luigi.Task):
+#    '''
+#    '''
+#    n_processes = luigi.IntParameter(4)
+#    lpad = get_launchpad()
+#
+#    def run(self):
+#        fwids_missing = self.find_missing_fwids()
+#
+#        with multiprocess.Pool(self.n_processes) as pool:
+#            docs = list(tqdm.tqdm(pool.imap(self.process_fwid, fwids_missing, chunksize=100), total=len(fwids_missing)))
+#
+#        docs_not_none = [doc for doc in docs if doc is not None]
+#        if len(docs_not_none) > 0:
+#            with get_mongo_collection('atoms') as collection:
+#                collection.insert_many(docs_not_none)
+#
+#    def find_missing_fwids(self):
+#        '''
+#        This method will get the FireWork IDs that are marked as 'COMPLETED' in
+#        our LaunchPad, but have not yet been added to our `atoms` Mongo
+#        collection.
+#
+#        Returns:
+#            fwids_missing   A set of integers containing the FireWork IDs of
+#                            the calculations we have not yet added to our
+#                            `atoms` Mongo collection.
+#        '''
+#        with get_mongo_collection('atoms') as collection:
+#            docs = list(collection.find({}, {'fwid': 'fwid', '_id': 0}))
+#        fwids_in_atoms = set(doc['fwid'] for doc in docs)
+#        fwids_completed = set(self.lpad.get_fw_ids({'state': 'COMPLETED'}))
+#        fwids_missing = fwids_completed - fwids_in_atoms
+#        return fwids_missing
+#
+#    def output(self):
+#        return make_task_output_object(self)
+#
+#    def process_fwid(self, fwid):
+#        '''
+#        For each fireworks object, turn the results into a mongo doc so that we
+#        can dump the mongo doc into the Aux DB.
+#        '''
+#        # Get the information from the class we just pulled from the launchpad.
+#        # Move on if we fail to get the info.
+#        fw = self.lpad.get_fw_by_id(fwid)
+#        try:
+#            atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
+#        except RuntimeError:
+#            return
+#
+#        # In an older version of GASpy, we did not use tags to identify
+#        # whether an atom was part of the slab or an adsorbate. Here, we
+#        # add the tags back in.
+#        if (fw.created_on < datetime(2017, 7, 20) and
+#                fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+#            # In this old version, the adsorbates were added onto the slab.
+#            # Thus, the slab atoms came before the adsorbate atoms in
+#            # the indexing. We use this information to create the tags list.
+#            n_ads_atoms = len(fw.name['adsorbate'])
+#            n_slab_atoms = len(atoms) - n_ads_atoms
+#            tags = [0]*n_slab_atoms
+#            tags.extend([1]*n_ads_atoms)
+#            # Now set the tags for the atoms
+#            atoms.set_tags(tags)
+#            starting_atoms.set_tags(tags)
+#
+#        # The VASP calculator, when used with ASE optimization, was
+#        # incorrectly recording the internal forces in atoms objects
+#        # with the stored forces including constraints. If such
+#        # incompatible constraints exist and the calculations occured
+#        # before the switch to the Vasp2 calculator, we should get the
+#        # correct (VASP) forces from a backup of the directory which
+#        # includes the INCAR, ase-sort.dat, etc files
+#        allowable_constraints = ['FixAtoms']
+#        constraint_not_allowable = [constraint.todict()['name'] not in allowable_constraints
+#                                    for constraint in atoms.constraints]
+#        vasp_incompatible_constraints = np.any(constraint_not_allowable)
+#        if (fw.created_on < datetime(2018, 12, 1) and vasp_incompatible_constraints):
+#            atoms = utils.get_final_atoms_object_with_vasp_forces(fw.launches[-1].launch_id)
+#
+#        # Initialize the mongo document, doc, and the populate it with the fw info
+#        doc = make_doc_from_atoms(atoms)
+#        doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
+#        doc['fwname'] = fw.name
+#        doc['fwid'] = fwid
+#        doc['directory'] = fw.launches[-1].launch_dir
+#        if fw.name['calculation_type'] == 'unit cell optimization':
+#            doc['type'] = 'bulk'
+#        elif fw.name['calculation_type'] == 'gas phase optimization':
+#            doc['type'] = 'gas'
+#        elif fw.name['calculation_type'] == 'slab optimization':
+#            doc['type'] = 'slab'
+#        elif fw.name['calculation_type'] == 'slab_surface_energy optimization':
+#            doc['type'] = 'slab_surface_energy'
+#        elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
+#            doc['type'] = 'slab+adsorbate'
+#
+#        # Convert the miller indices from strings to integers
+#        if 'miller' in fw.name:
+#            if isinstance(fw.name['miller'], str):
+#                doc['fwname']['miller'] = eval(doc['fwname']['miller'])
+#
+#        return doc
 
 
 class UpdateCatalogCollection(luigi.Task):
@@ -193,7 +303,7 @@ class _InsertSitesToCatalog(luigi.Task):
             inserted_docs = []
             for site_doc in site_docs:
                 query = {'mpid': self.mpid,
-                         'miller': self.miller_indices,
+                         'miller': site_doc['miller'],
                          'min_xy': self.min_xy,
                          'slab_generator_settings': unfreeze_dict(self.slab_generator_settings),
                          'get_slab_settings': unfreeze_dict(self.get_slab_settings),
@@ -212,7 +322,6 @@ class _InsertSitesToCatalog(luigi.Task):
                 elif len(docs_in_catalog) == 0:
                     doc = site_doc.copy()
                     doc['mpid'] = self.mpid
-                    doc['miller'] = self.miller_indices
                     doc['min_xy'] = self.min_xy
                     doc['slab_generator_settings'] = unfreeze_dict(self.slab_generator_settings)
                     doc['get_slab_settings'] = unfreeze_dict(self.get_slab_settings)
@@ -372,116 +481,6 @@ class _InsertSitesToCatalog(luigi.Task):
 #                    self.ads_docs.append(doc)
 #
 #                    yield DumpToAdsorptionDB(parameters)
-
-
-#class DumpToAuxDB(luigi.Task):
-#    '''
-#    This class will load the results for the relaxations from the Primary FireWorks
-#    database into the Auxiliary vasp.mongo database.
-#    '''
-#    num_procs = luigi.IntParameter(4)
-#
-#    def run(self):
-#        lpad = fwhs.get_launchpad()
-#
-#        # Get all of the FW numbers that have been loaded into the atoms collection already.
-#        # We turn the list into a dictionary so that we can parse through it more quickly.
-#        with gasdb.get_mongo_collection('atoms') as collection:
-#            atoms_fws = [a['fwid'] for a in collection.find({'fwid': {'$exists': True}})]
-#        atoms_fws = dict.fromkeys(atoms_fws)
-#
-#        # Get all of the completed fireworks from the Primary DB
-#        fws_cmpltd = lpad.get_fw_ids({'state': 'COMPLETED',
-#                                      'name.calculation_type': 'unit cell optimization'}) + \
-#            lpad.get_fw_ids({'state': 'COMPLETED',
-#                             'name.calculation_type': 'gas phase optimization'}) + \
-#            lpad.get_fw_ids({'state': 'COMPLETED',
-#                             'name.calculation_type': 'slab optimization',
-#                             'name.shift': {'$exists': True}}) + \
-#            lpad.get_fw_ids({'state': 'COMPLETED',
-#                             'name.calculation_type': 'slab+adsorbate optimization',
-#                             'name.shift': {'$exists': True}}) + \
-#            lpad.get_fw_ids({'state': 'COMPLETED',
-#                             'name.calculation_type': 'slab_surface_energy optimization',
-#                             'name.shift': {'$exists': True}})
-#
-#        # For each fireworks object, turn the results into a mongo doc so that we can
-#        # dump the mongo doc into the Aux DB.
-#        def process_fwid(fwid):
-#            if fwid not in atoms_fws:
-#                # Get the information from the class we just pulled from the launchpad.
-#                # Move on if we fail to get the info.
-#                fw = lpad.get_fw_by_id(fwid)
-#                try:
-#                    atoms, starting_atoms, trajectory, vasp_settings = fwhs.get_firework_info(fw)
-#                except RuntimeError:
-#                    return
-#
-#                # In an older version of GASpy, we did not use tags to identify
-#                # whether an atom was part of the slab or an adsorbate. Here, we
-#                # add the tags back in.
-#                if (fw.created_on < datetime(2017, 7, 20) and
-#                        fw.name['calculation_type'] == 'slab+adsorbate optimization'):
-#                    # In this old version, the adsorbates were added onto the slab.
-#                    # Thus, the slab atoms came before the adsorbate atoms in
-#                    # the indexing. We use this information to create the tags list.
-#                    n_ads_atoms = len(fw.name['adsorbate'])
-#                    n_slab_atoms = len(atoms) - n_ads_atoms
-#                    tags = [0]*n_slab_atoms
-#                    tags.extend([1]*n_ads_atoms)
-#                    # Now set the tags for the atoms
-#                    atoms.set_tags(tags)
-#                    starting_atoms.set_tags(tags)
-#
-#                # The VASP calculator, when used with ASE optimization, was
-#                # incorrectly recording the internal forces in atoms objects
-#                # with the stored forces including constraints. If such
-#                # incompatible constraints exist and the calculations occured
-#                # before the switch to the Vasp2 calculator, we should get the
-#                # correct (VASP) forces from a backup of the directory which
-#                # includes the INCAR, ase-sort.dat, etc files
-#                allowable_constraints = ['FixAtoms']
-#                constraint_not_allowable = [constraint.todict()['name'] not in allowable_constraints
-#                                            for constraint in atoms.constraints]
-#                vasp_incompatible_constraints = np.any(constraint_not_allowable)
-#                if (fw.created_on < datetime(2018, 12, 1) and vasp_incompatible_constraints):
-#                    atoms = utils.get_final_atoms_object_with_vasp_forces(fw.launches[-1].launch_id)
-#
-#                # Initialize the mongo document, doc, and the populate it with the fw info
-#                doc = make_doc_from_atoms(atoms)
-#                doc['initial_configuration'] = make_doc_from_atoms(starting_atoms)
-#                doc['fwname'] = fw.name
-#                doc['fwid'] = fwid
-#                doc['directory'] = fw.launches[-1].launch_dir
-#                if fw.name['calculation_type'] == 'unit cell optimization':
-#                    doc['type'] = 'bulk'
-#                elif fw.name['calculation_type'] == 'gas phase optimization':
-#                    doc['type'] = 'gas'
-#                elif fw.name['calculation_type'] == 'slab optimization':
-#                    doc['type'] = 'slab'
-#                elif fw.name['calculation_type'] == 'slab_surface_energy optimization':
-#                    doc['type'] = 'slab_surface_energy'
-#                elif fw.name['calculation_type'] == 'slab+adsorbate optimization':
-#                    doc['type'] = 'slab+adsorbate'
-#
-#                # Convert the miller indices from strings to integers
-#                if 'miller' in fw.name:
-#                    if isinstance(fw.name['miller'], str):
-#                        doc['fwname']['miller'] = eval(doc['fwname']['miller'])
-#
-#                return doc
-#
-#        with mp.Pool(self.num_procs) as pool:
-#            fwids_to_process = [fwid for fwid in fws_cmpltd if fwid not in atoms_fws]
-#            docs = list(tqdm.tqdm(pool.imap(process_fwid, fwids_to_process, chunksize=100), total=len(fwids_to_process)))
-#
-#        docs_not_none = [doc for doc in docs if doc is not None]
-#        if len(docs_not_none) > 0:
-#            with gasdb.get_mongo_collection('atoms') as collection:
-#                collection.insert_many(docs_not_none)
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/DumpToAuxDB.token')
 
 
 #class DumpToAdsorptionDB(luigi.Task):

@@ -16,11 +16,11 @@ from ...tasks.db_managers import (UpdateCatalogCollection,
 # Things we need to do the tests
 import numpy.testing as npt
 from pymatgen.ext.matproj import MPRester
-from .utils import clean_up_task
+from .utils import clean_up_task, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict, read_rc
 from ...mongo import make_atoms_from_doc
-from ...tasks import get_task_output, evaluate_luigi_task
+from ...tasks import get_task_output
 
 SLAB_SETTINGS = defaults.SLAB_SETTINGS
 
@@ -65,19 +65,19 @@ def test__GetMpids():
 
 def test__InsertAllSitesFromBulkToCatalog():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make sure that you have all of the bulk calculations in the unit testing
     atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    sure that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
-    miller_indices = (1, 0, 0)
-    catalog_inserter = _InsertSitesToCatalog(mpid=mpid, miller_indices=miller_indices)
+    max_miller = 2
+    catalog_inserter = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller)
     site_generator = catalog_inserter.requires()
 
     try:
-        evaluate_luigi_task(site_generator)
+        run_task_locally(site_generator)
         site_docs = get_task_output(site_generator)
 
         catalog_inserter.run(_testing=True)
@@ -85,7 +85,7 @@ def test__InsertAllSitesFromBulkToCatalog():
 
         for site_doc, catalog_doc in zip(site_docs, catalog_docs):
             assert catalog_doc['mpid'] == mpid
-            assert catalog_doc['miller'] == miller_indices
+            assert max(catalog_doc['miller']) <= max_miller
             assert catalog_doc['min_xy'] == site_generator.min_xy
             assert catalog_doc['slab_generator_settings'] == unfreeze_dict(site_generator.slab_generator_settings)
             assert catalog_doc['get_slab_settings'] == unfreeze_dict(site_generator.get_slab_settings)
