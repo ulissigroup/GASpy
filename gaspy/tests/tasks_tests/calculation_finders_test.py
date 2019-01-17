@@ -20,7 +20,7 @@ import pytest
 import warnings
 import math
 import luigi
-from .utils import clean_up_task
+from .utils import clean_up_tasks
 from ... import defaults
 from ...utils import turn_site_into_str, unfreeze_dict
 from ...mongo import make_atoms_from_doc
@@ -128,7 +128,7 @@ def test_FindGas_successfully():
         _ = make_atoms_from_doc(doc)    # noqa: F841
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def _run_task_with_dynamic_dependencies(task):
@@ -158,7 +158,7 @@ def test_FindGas_unsuccessfully():
         assert dependency.gas_name == gas
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_FindBulk_successfully():
@@ -171,13 +171,7 @@ def test_FindBulk_successfully():
     task = FindBulk(mpid, vasp_settings)
 
     try:
-        # Some weird testing interactions mean that this task might already be
-        # done. If that happens, then just delete the output and try again
-        try:
-            _run_task_with_dynamic_dependencies(task)
-        except luigi.target.FileAlreadyExists:
-            clean_up_task(task)
-            _run_task_with_dynamic_dependencies(task)
+        _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
 
         assert doc['type'] == 'bulk'
@@ -188,7 +182,7 @@ def test_FindBulk_successfully():
         _ = make_atoms_from_doc(doc)    # noqa: F841
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_FindBulk_unsuccessfully():
@@ -205,7 +199,7 @@ def test_FindBulk_unsuccessfully():
         assert dependency.mpid == mpid
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_FindAdslab_successfully():
@@ -247,7 +241,7 @@ def test_FindAdslab_successfully():
         _ = make_atoms_from_doc(doc)    # noqa: F841
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_FindAdslab_unsuccessfully():
@@ -285,4 +279,4 @@ def test_FindAdslab_unsuccessfully():
         assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()

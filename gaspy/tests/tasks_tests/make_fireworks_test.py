@@ -19,7 +19,7 @@ from ...tasks.make_fireworks import (MakeGasFW,
 
 # Things we need to do the tests
 import pytest
-from .utils import clean_up_task, run_task_locally
+from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict, turn_site_into_str
 from ...tasks.core import get_task_output
@@ -49,7 +49,7 @@ def test_MakeGasFW():
         assert fwork.name['vasp_settings'] == defaults.GAS_SETTINGS['vasp']
 
     finally:
-        clean_up_task(req)
+        clean_up_tasks()
 
 
 def test_MakeBulkFW():
@@ -73,7 +73,7 @@ def test_MakeBulkFW():
         assert fwork.name['vasp_settings'] == defaults.BULK_SETTINGS['vasp']
 
     finally:
-        clean_up_task(req)
+        clean_up_tasks()
 
 
 def test_MakeAdslabFW():
@@ -143,7 +143,7 @@ def test_MakeAdslabFW():
         assert fwork.name['vasp_settings'] == defaults.ADSLAB_SETTINGS['vasp']
 
     finally:
-        clean_up_task(req)
+        clean_up_tasks()
 
 
 def test__find_matching_adslab_doc():

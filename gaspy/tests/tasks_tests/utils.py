@@ -8,23 +8,24 @@ tests for the tasks_test submodule
 import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
+import shutil
 import warnings
 import luigi
 
 
-def clean_up_task(task):
+def clean_up_tasks():
     '''
     As a general practice, we have decided to clear out our task output caches.
-    This function does this.
-
-    Arg:
-        task    Instance of a luigi.Task whose output you want to delete/clean up
+    This function does this. Credit to Nick Stinemates and Michael Scott
+    Cuthbert on Stack Exchange.
     '''
-    output_file = task.output().path
-    try:
-        os.remove(output_file)
-    except OSError:
-        pass
+    folder = '/home/GASpy/gaspy/tests/test_caches/pickles'
+    for the_file in os.listdir(folder):
+        file_path = os.path.join(folder, the_file)
+        if os.path.isfile(file_path):
+            os.unlink(file_path)
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
 
 
 def run_task_locally(task):

@@ -27,7 +27,7 @@ from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from .utils import clean_up_task, run_task_locally
+from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...atoms_operators import make_slabs_from_bulk_atoms
 from ...tasks import get_task_output
@@ -59,7 +59,7 @@ def test_GenerateGas(gas_name):
 
     # Clean up
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 @pytest.mark.parametrize('mpid', ['mp-30', 'mp-867306'])
@@ -80,7 +80,7 @@ def test_GenerateBulk(mpid):
 
     # Clean up
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_GenerateSlabs():
@@ -118,7 +118,7 @@ def test_GenerateSlabs():
             _ = make_atoms_from_doc(doc)    # noqa: F841
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 @pytest.mark.baseline
@@ -214,7 +214,7 @@ def test_GenerateAdsorptionSites():
                     assert atom.symbol == 'U'
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_GenerateAdslabs():
@@ -276,7 +276,7 @@ def test_GenerateAdslabs():
                                 adsorbate.positions)
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_GenerateAllSitesFromBulk():
@@ -305,7 +305,7 @@ def test_GenerateAllSitesFromBulk():
         assert distinct_millers == expected_distinct_millers
 
     finally:
-        clean_up_task(site_generator)
+        clean_up_tasks()
 
 
 def test__EnumerateDistinctFacets():
@@ -349,4 +349,4 @@ def test__EnumerateDistinctFacets():
             assert not matcher.fit(*slabs_to_compare)
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()

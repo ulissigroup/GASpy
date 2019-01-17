@@ -16,7 +16,7 @@ from ...tasks.db_managers import (UpdateCatalogCollection,
 # Things we need to do the tests
 import numpy.testing as npt
 from pymatgen.ext.matproj import MPRester
-from .utils import clean_up_task, run_task_locally
+from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict, read_rc
 from ...mongo import make_atoms_from_doc
@@ -60,7 +60,7 @@ def test__GetMpids():
                     assert element in elements
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test__InsertAllSitesFromBulkToCatalog():
@@ -97,5 +97,4 @@ def test__InsertAllSitesFromBulkToCatalog():
             npt.assert_allclose(catalog_doc['adsorption_site'], site_doc['adsorption_site'])
 
     finally:
-        clean_up_task(site_generator)
-        clean_up_task(catalog_inserter)
+        clean_up_tasks()

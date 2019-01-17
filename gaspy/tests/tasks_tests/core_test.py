@@ -18,7 +18,7 @@ from ...tasks.core import (make_task_output_object,
 # Things we need to do the tests
 import pickle
 import luigi
-from .utils import clean_up_task
+from .utils import clean_up_tasks
 from ...utils import read_rc
 
 # Get the path for the GASdb folder location from the gaspy config file
@@ -93,7 +93,7 @@ def test_get_task_output():
         assert output == expected_output
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_evaluate_luigi_task():
@@ -136,4 +136,4 @@ def test_evaluate_luigi_task():
 
     # Clean up
     finally:
-        clean_up_task(task)
+        clean_up_tasks()

@@ -7,4 +7,4 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 # flake8: noqa
 
-from .utils import clean_up_task, run_task_locally
+from .utils import clean_up_tasks, run_task_locally

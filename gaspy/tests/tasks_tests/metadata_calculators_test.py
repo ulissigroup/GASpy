@@ -16,7 +16,7 @@ from ...tasks.metadata_calculators import (CalculateAdsorptionEnergy,
 # Things we need to do the tests
 import pytest
 import math
-from .utils import clean_up_task, run_task_locally
+from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict
 from ...mongo import make_atoms_from_doc
@@ -59,7 +59,7 @@ def test_CalculateAdsorptionEnergy():
         _ = make_atoms_from_doc(doc['adslab'])  # noqa: F841
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_CalculateAdsorbateEnergy():
@@ -83,7 +83,7 @@ def test_CalculateAdsorbateEnergy():
         assert energy == 2*(-7.19957549) + (-3.480310465)
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_CalculateAdsorbateEnergy_Error():
@@ -111,7 +111,7 @@ def test_CalculateAdsorbateEnergy_Error():
                     'undefined adsorbate, U' in str(exc_info.value))
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
 
 
 def test_CalculateAdsorbateBasisEnergies():
@@ -135,4 +135,4 @@ def test_CalculateAdsorbateBasisEnergies():
                                   'N': -8.08570028}
 
     finally:
-        clean_up_task(task)
+        clean_up_tasks()
