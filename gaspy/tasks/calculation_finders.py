@@ -12,7 +12,7 @@ from .. import defaults
 from ..utils import turn_site_into_str
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import is_rocket_running
-from .core import save_task_output, make_task_output_object
+from .core import save_task_output, make_task_output_object, get_task_output
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
                              MakeAdslabFW)
@@ -65,7 +65,6 @@ class FindCalculation(luigi.Task):
         '''
         try:
             self._find_and_save_calculation()
-
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
         except CalculationNotFoundError:
@@ -78,7 +77,6 @@ class FindCalculation(luigi.Task):
             else:
                 yield self.dependency
 
-
     def _find_and_save_calculation(self):
         '''
         Find and save the calculations (if they're in our `atoms` collection)
@@ -87,23 +85,19 @@ class FindCalculation(luigi.Task):
         try:
             with get_mongo_collection('atoms') as collection:
                 docs = list(collection.find(self.gasdb_query))
-
         # If we have not yet created the query yet, then load it. We try/except
         # this so that we only load it once.
         except AttributeError:
             self._load_attributes()
             with get_mongo_collection('atoms') as collection:
                 docs = list(collection.find(self.gasdb_query))
-
         # Save the match
         doc = self._remove_old_docs(docs)
         try:
             save_task_output(self, doc)
-
         # If we've already saved the output, then move on
         except luigi.target.FileAlreadyExists:
             pass
-
 
     @staticmethod
     def _remove_old_docs(docs):
@@ -117,9 +111,9 @@ class FindCalculation(luigi.Task):
             doc     The one document/dictionary in the input that has the
                     highest 'fw_id' value
         '''
+        # If there's only 1 document, then just return it
         if len(docs) == 1:
             return docs[0]
-
         # Warn the user if they have more than one match, then pass the newest one
         elif len(docs) > 1:
             docs = sorted(docs, key=lambda doc: doc['fwid'], reverse=True)
@@ -130,12 +124,11 @@ class FindCalculation(luigi.Task):
                        % (', '.join(fwids), doc_latest['fwid']))
             warnings.warn(message, RuntimeWarning)
             return doc_latest
-
+        # If there's nothing, then assume that we did not find any calculation
         elif len(docs) == 0:
             raise CalculationNotFoundError('You tried to parse out old documents, '
                                            'but did not pass any documents at '
                                            'all.')
-
 
     def complete(self):
         '''
@@ -144,13 +137,18 @@ class FindCalculation(luigi.Task):
         something, and if we don't throw any errors, then Luigi will think that
         we're actually done.
         '''
+        # First, check the pickles for the output
         try:
-            self._find_and_save_calculation()
+            _ = get_task_output(self)   # noqa: F841
             return True
-
-        except CalculationNotFoundError:
-            return False
-
+        # If it's not pickled, then check Mongo
+        except FileNotFoundError:
+            try:
+                self._find_and_save_calculation()
+                return True
+            # If it's not pickled and not in Mongo, then this task is not done
+            except CalculationNotFoundError:
+                return False
 
     def output(self):
         return make_task_output_object(self)
