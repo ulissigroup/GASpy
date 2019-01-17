@@ -18,8 +18,7 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                find_adsorption_sites,
                                add_adsorbate_onto_slab,
                                fingerprint_adslab,
-                               remove_adsorbate,
-                               __get_coordination_string)
+                               remove_adsorbate)
 
 # Things we need to do the tests
 import pytest
@@ -31,9 +30,8 @@ import numpy.testing as npt
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.analysis.local_env import VoronoiNN
 from . import test_cases
-from .tasks_tests.utils import clean_up_task
+from .tasks_tests.utils import clean_up_tasks
 from .. import defaults
 from ..tasks import get_task_output, evaluate_luigi_task
 from ..mongo import make_atoms_from_doc
@@ -60,7 +58,7 @@ def test_to_create_slabs_from_bulk_atoms(mpid, miller_indices):
                                            SLAB_SETTINGS['slab_generator_settings'],
                                            SLAB_SETTINGS['get_slab_settings'])
     finally:
-        clean_up_task(bulk_generator)
+        clean_up_tasks()
 
     file_name = (REGRESSION_BASELINES_LOCATION + 'slabs_of_' + mpid + '_' +
                  ''.join(str(index) for index in miller_indices) + '.pkl')
@@ -85,7 +83,7 @@ def test_make_slabs_from_bulk_atoms(mpid, miller_indices):
                                            SLAB_SETTINGS['slab_generator_settings'],
                                            SLAB_SETTINGS['get_slab_settings'])
     finally:
-        clean_up_task(bulk_generator)
+        clean_up_tasks()
 
     file_name = (REGRESSION_BASELINES_LOCATION + 'slabs_of_' + mpid + '_' +
                  ''.join(str(index) for index in miller_indices) + '.pkl')
@@ -128,7 +126,7 @@ def test_make_slabs_from_bulk_atoms_warning():
                     in str(warning_manager[-1].message))
 
     finally:
-        clean_up_task(bulk_generator)
+        clean_up_tasks()
 
 
 def test_orient_atoms_upwards():

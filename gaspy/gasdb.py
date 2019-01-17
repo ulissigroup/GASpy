@@ -171,7 +171,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
 def get_catalog_docs():
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
-    collection that's tagged `relaxed_bulk_catalog`.
+    collection that's tagged `catalog`.
 
     Args:
 
@@ -205,7 +205,7 @@ def _pull_catalog_from_mongo(pipeline):
         docs    A list of dictionaries containing the catalog documents as per
                 your pipeline.
     '''
-    with get_mongo_collection(collection_tag='relaxed_bulk_catalog_readonly') as collection:
+    with get_mongo_collection(collection_tag='catalog_readonly') as collection:
         print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]
@@ -260,7 +260,7 @@ def _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_pred
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('relaxed_bulk_catalog') as collection:
+    with get_mongo_collection('catalog') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['adsorption_energy']
@@ -295,7 +295,7 @@ def _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions):
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('relaxed_bulk_catalog') as collection:
+    with get_mongo_collection('catalog') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['orr_onset_potential_4e']
@@ -379,7 +379,7 @@ def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list=None):
         docs    A list of dictionaries for various fingerprints.
     '''
     if adsorbate_rotation_list is None:
-        adsorbate_rotation_list = [copy.deepcopy(defaults.ROTATION)]
+        adsorbate_rotation_list = [copy.deepcopy(defaults.ADSLAB_SETTINGS['rotation'])]
 
     docs_catalog = get_catalog_docs()
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
@@ -428,12 +428,14 @@ def _get_attempted_adsorption_docs(adsorbates=None, calc_settings=None):
                         of those adsorbates; you will *not* get structures
                         with only one of the adsorbates. If you pass nothing, then we
                         get all documents regardless of adsorbates.
+
         calc_settings   [optional] An OrderedDict containing the default energy
                         cutoff, VASP pseudo-potential version number (pp_version),
                         and exchange-correlational settings. This should be obtained
-                        (and modified, if necessary) from the
-                        `gaspy.default.calc_settings` function. If `None`, then
-                        pulls default settings.
+                        (and modified, if necessary) from
+                        `gaspy.defaults.ADSLAB_SETTINGS['vasp']`. If `None`,
+                        then pulls default settings.
+
     Returns:
         cleaned_docs    A list of dictionaries whose key/value pairings are the
                         ones given by `gaspy.defaults.adsorption_fingerprints`
@@ -442,9 +444,8 @@ def _get_attempted_adsorption_docs(adsorbates=None, calc_settings=None):
     '''
     # Get only the documents that have the right calculation settings and adsorbates
     filters = {}
-    if not calc_settings:
-        calc_settings = defaults.calc_settings(defaults.ADSLAB_ENCUT)
-        filters['processed_data.vasp_settings.gga'] = calc_settings['gga']
+    if calc_settings is None:
+        calc_settings = defaults.ADSLAB_SETTINGS['vasp']
     if adsorbates:
         filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
     match = {'$match': filters}
@@ -791,7 +792,7 @@ def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.MODEL):
 
     # Get the documents
     pipeline = [project, sort, group]
-    with get_mongo_collection(collection_tag='relaxed_bulk_catalog') as collection:
+    with get_mongo_collection(collection_tag='catalog') as collection:
         print('Now pulling low coverage catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm.tqdm(cursor)]

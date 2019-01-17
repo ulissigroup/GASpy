@@ -155,7 +155,7 @@ def test_make_firework():
 @pytest.mark.parametrize('adslab_atoms_name',
                          ['CO_dissociate_Pt12Si5_110.traj',
                           'CO_top_Cu_211.traj',
-                          'C_hollow_AlAu2Cu_210.traj',
+                          'O_hollow_AlAu2Cu_210.traj',
                           'OH_desorb_CoSb2_110.traj',
                           'OOH_dissociate_Ni4W_001.traj',
                           'OOH_hollow_FeNi_001.traj'])
@@ -179,7 +179,7 @@ def test_encode_atoms_to_trajhex(adslab_atoms_name):
 @pytest.mark.parametrize('adslab_atoms_name',
                          ['CO_dissociate_Pt12Si5_110.traj',
                           'CO_top_Cu_211.traj',
-                          'C_hollow_AlAu2Cu_210.traj',
+                          'O_hollow_AlAu2Cu_210.traj',
                           'OH_desorb_CoSb2_110.traj',
                           'OOH_dissociate_Ni4W_001.traj',
                           'OOH_hollow_FeNi_001.traj'])
@@ -201,7 +201,7 @@ def test_to_create_atoms_trajhex_encoding(adslab_atoms_name):
 @pytest.mark.parametrize('adslab_atoms_name',
                          ['CO_dissociate_Pt12Si5_110.traj',
                           'CO_top_Cu_211.traj',
-                          'C_hollow_AlAu2Cu_210.traj',
+                          'O_hollow_AlAu2Cu_210.traj',
                           'OH_desorb_CoSb2_110.traj',
                           'OOH_dissociate_Ni4W_001.traj',
                           'OOH_hollow_FeNi_001.traj'])
