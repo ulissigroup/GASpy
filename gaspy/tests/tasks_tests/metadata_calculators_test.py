@@ -16,7 +16,7 @@ from ...tasks.metadata_calculators import (CalculateAdsorptionEnergy,
 # Things we need to do the tests
 import pytest
 import math
-from .utils import clean_up_task
+from .utils import clean_up_task, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict
 from ...mongo import make_atoms_from_doc
@@ -25,11 +25,11 @@ from ...tasks import get_task_output, evaluate_luigi_task
 
 def test_CalculateAdsorptionEnergy():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make sure that you have all of the gas calculations in the unit testing
     atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    sure that you use `run_task_locally` appropriately.
     '''
     adsorption_site = (0., 1.41, 20.52)
     shift = 0.25
@@ -45,7 +45,7 @@ def test_CalculateAdsorptionEnergy():
                                      miller_indices=miller_indices,)
 
     try:
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         doc = get_task_output(task)
 
         # I just checked this one calculation by hand and found some
@@ -64,11 +64,11 @@ def test_CalculateAdsorptionEnergy():
 
 def test_CalculateAdsorbateEnergy():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make sure that you have all of the gas calculations in the unit testing
     atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    sure that you use `run_task_locally` appropriately.
     '''
     adsorbate_name = 'OOH'
     vasp_settings = defaults.GAS_SETTINGS['vasp']
@@ -78,7 +78,7 @@ def test_CalculateAdsorbateEnergy():
     assert unfreeze_dict(task.vasp_settings) == vasp_settings
 
     try:
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         energy = get_task_output(task)
         assert energy == 2*(-7.19957549) + (-3.480310465)
 
@@ -116,18 +116,18 @@ def test_CalculateAdsorbateEnergy_Error():
 
 def test_CalculateAdsorbateBasisEnergies():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make sure that you have all of the gas calculations in the unit testing
     atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    sure that you use `run_task_locally` appropriately.
     '''
     vasp_settings = defaults.GAS_SETTINGS['vasp']
     task = CalculateAdsorbateBasisEnergies(vasp_settings)
     assert unfreeze_dict(task.vasp_settings) == vasp_settings
 
     try:
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         basis_energies = get_task_output(task)
         assert basis_energies == {'H': -3.480310465,
                                   'O': -7.19957549,

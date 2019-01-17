@@ -27,10 +27,10 @@ from ase.collections import g2
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from .utils import clean_up_task
+from .utils import clean_up_task, run_task_locally
 from ... import defaults
 from ...atoms_operators import make_slabs_from_bulk_atoms
-from ...tasks import get_task_output, evaluate_luigi_task
+from ...tasks import get_task_output
 from ...utils import read_rc, unfreeze_dict
 from ...mongo import make_atoms_from_doc
 
@@ -46,7 +46,7 @@ def test_GenerateGas(gas_name):
 
     try:
         # Create, fetch, and parse the output of the task
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         doc = get_task_output(task)
         atoms = make_atoms_from_doc(doc)
 
@@ -68,7 +68,7 @@ def test_GenerateBulk(mpid):
 
     try:
         # Create, fetch, and parse the output of the task
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         doc = get_task_output(task)
         atoms = make_atoms_from_doc(doc)
 
@@ -110,7 +110,7 @@ def test_GenerateSlabs():
 
     try:
         # Run the task and make sure the task output has the correct format/fields
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         docs = get_task_output(task)
         for doc in docs:
             assert isinstance(doc['shift'], float)
@@ -171,11 +171,11 @@ def test__make_slab_docs_from_structs():
 
 def test_GenerateAdsorptionSites():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
     collection. If you copy/paste this test into somewhere else, make sure
-    that you use `evaluate_luigi_task` appropriately.
+    that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
@@ -199,7 +199,7 @@ def test_GenerateAdsorptionSites():
     assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
 
     try:
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         docs = get_task_output(task)
 
         for doc in docs:
@@ -219,11 +219,11 @@ def test_GenerateAdsorptionSites():
 
 def test_GenerateAdslabs():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
     collection. If you copy/paste this test into somewhere else, make sure
-    that you use `evaluate_luigi_task` appropriately.
+    that you use `run_task_locally` appropriately.
 
     We only test some superficial things here. We rely heavily on the test for
     the `add_adsorbate_onto_slab` function to make sure things go right.
@@ -257,7 +257,7 @@ def test_GenerateAdslabs():
 
     try:
         # Run the task and fetch the outputs
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         docs = get_task_output(task)
         for doc in docs:
             adslab = make_atoms_from_doc(doc)
@@ -281,32 +281,27 @@ def test_GenerateAdslabs():
 
 def test_GenerateAllSitesFromBulk():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
     collection. If you copy/paste this test into somewhere else, make sure
-    that you use `evaluate_luigi_task` appropriately.
+    that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
     max_miller = 2
     site_generator = GenerateAllSitesFromBulk(mpid=mpid, max_miller=max_miller)
 
     try:
-        # This task has dynamic dependencies, which need to be tested
-        # differently.  Let's start by running the requirements.
+        # Run the task and get all of the documents for the sites
+        run_task_locally(site_generator)
+        site_docs = get_task_output(site_generator)
+
+        # Figure out what Miller indices we were supposed to get
         enumerator = site_generator.requires()
-        evaluate_luigi_task(enumerator)
-
-        # Get the dynamic dependencies, then find the distinct miller indices
-        # from them
-        dynamic_dependencies = site_generator.run().send(None)
-        distinct_millers = set()
-        for dep in dynamic_dependencies:
-            distinct_millers.add(dep.miller_indices)
-
-        # Get all the unique Miller indices that we were supoosed to get, and
-        # compare
         expected_distinct_millers = set(get_task_output(enumerator))
+
+        # Compare the Miller indices we found with the ones we expected
+        distinct_millers = set(doc['miller'] for doc in site_docs)
         assert distinct_millers == expected_distinct_millers
 
     finally:
@@ -320,11 +315,11 @@ def test__EnumerateDistinctFacets():
     identical. Note that this tests only if we get repeats. It does not
     test if we missed anything.
 
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make sure that you have all of the gas calculations in the unit testing
     atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    sure that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
     max_miller = 2
@@ -333,7 +328,7 @@ def test__EnumerateDistinctFacets():
     # Run the task to get the facets, and also get the bulk structure so we can
     # actually make slabs to check
     try:
-        evaluate_luigi_task(task)
+        run_task_locally(task)
         distinct_millers = get_task_output(task)
         with open(task.input().path, 'rb') as file_handle:
             bulk_doc = pickle.load(file_handle)

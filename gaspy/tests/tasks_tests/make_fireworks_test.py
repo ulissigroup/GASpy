@@ -19,10 +19,10 @@ from ...tasks.make_fireworks import (MakeGasFW,
 
 # Things we need to do the tests
 import pytest
-from .utils import clean_up_task
+from .utils import clean_up_task, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict, turn_site_into_str
-from ...tasks.core import evaluate_luigi_task, get_task_output
+from ...tasks.core import get_task_output
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateAdslabs)
@@ -78,11 +78,11 @@ def test_MakeBulkFW():
 
 def test_MakeAdslabFW():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
     collection. If you copy/paste this test into somewhere else, make sure
-    that you use `evaluate_luigi_task` appropriately.
+    that you use `run_task_locally` appropriately.
     '''
     adsorption_site = (1.48564485e-23, 1.40646118e+00, 2.08958465e+01)
     shift = 0.25
@@ -126,7 +126,7 @@ def test_MakeAdslabFW():
         # Make sure you are asking for something that does not need a FireWork
         # submission, i.e., make sure the requirements are already in the
         # unit testing Mongo collections.
-        evaluate_luigi_task(req)
+        run_task_locally(req)
 
         # Manually call the `run` method with the unit testing flag to get the
         # firework instead of actually submitting it
@@ -148,15 +148,15 @@ def test_MakeAdslabFW():
 
 def test__find_matching_adslab_doc():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
+    WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
     to make an Adslab from a bulk that shows up in the unit_testing_atoms Mongo
     collection. If you copy/paste this test into somewhere else, make sure
-    that you use `evaluate_luigi_task` appropriately.
+    that you use `run_task_locally` appropriately.
     '''
     # Make a case where this function should find something successfully
     task = GenerateAdslabs(adsorbate_name='CO', mpid='mp-2', miller_indices=(1, 0, 0))
-    evaluate_luigi_task(task)
+    run_task_locally(task)
     docs = get_task_output(task)
     doc = _find_matching_adslab_doc(docs,
                                     adsorption_site=(1.48564485e-23,
