@@ -14,8 +14,7 @@ warnings.filterwarnings('ignore', category=ImportWarning)
 # Things we're testing
 from ...tasks.make_fireworks import (MakeGasFW,
                                      MakeBulkFW,
-                                     MakeAdslabFW,
-                                     _find_matching_adslab_doc)
+                                     MakeAdslabFW)
 
 # Things we need to do the tests
 import pytest
@@ -163,21 +162,18 @@ def test__find_matching_adslab_doc():
     task = GenerateAdslabs(adsorbate_name='CO', mpid='mp-2', miller_indices=(1, 0, 0))
     run_task_locally(task)
     docs = get_task_output(task)
-    doc = _find_matching_adslab_doc(docs,
-                                    adsorption_site=(1.48564485e-23,
-                                                     1.40646118e+00,
-                                                     2.08958465e+01),
-                                    shift=0.25,
-                                    top=False)
+    doc = MakeAdslabFW._find_matching_adslab_doc(docs,
+                                                 adsorption_site=(1.48564485e-23,
+                                                                  1.40646118e+00,
+                                                                  2.08958465e+01),
+                                                 shift=0.25, top=False)
     # I know what it should have found because I did this by hand
     expected_doc = docs[3]
     assert doc == expected_doc
 
     # Try a fail-to-find
     with pytest.raises(RuntimeError, message='Expected a RuntimeError') as exc_info:
-        doc = _find_matching_adslab_doc(docs,
-                                        adsorption_site=(0., 0., 0.),
-                                        shift=0.25,
-                                        top=False)
+        doc = MakeAdslabFW._find_matching_adslab_doc(docs, adsorption_site=(0., 0., 0.),
+                                                     shift=0.25, top=False)
         assert ('You just tried to make an adslab FireWork rocket that we could not enumerate.'
                 in str(exc_info.value))

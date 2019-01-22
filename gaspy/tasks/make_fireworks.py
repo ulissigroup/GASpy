@@ -163,16 +163,16 @@ class MakeAdslabFW(luigi.Task):
                                get_slab_settings=self.get_slab_settings,
                                bulk_vasp_settings=self.bulk_vasp_settings)
 
+
     def run(self, _testing=False):
-        ''' Do not use `_test=True` unless you are unit testing '''
+        ''' Do not use `_testing=True` unless you are unit testing '''
         # Parse the possible adslab structures and find the one that matches
         # the site, shift, and top values we're looking for
         with open(self.input().path, 'rb') as file_handle:
             adslab_docs = pickle.load(file_handle)
-        doc = _find_matching_adslab_doc(adslab_docs=adslab_docs,
-                                        adsorption_site=self.adsorption_site,
-                                        shift=self.shift,
-                                        top=self.top)
+        doc = self._find_matching_adslab_doc(adslab_docs=adslab_docs,
+                                             adsorption_site=self.adsorption_site,
+                                             shift=self.shift, top=self.top)
         atoms = make_atoms_from_doc(doc)
 
         # Create, package, and submit the FireWork
@@ -197,31 +197,36 @@ class MakeAdslabFW(luigi.Task):
             return fwork
 
 
-def _find_matching_adslab_doc(adslab_docs, adsorption_site, shift, top):
-    '''
-    This helper function is used to parse through a list of documents created
-    by the `GenerateAdslabs` task, and then find one that has matching values
-    for site, shift, and top. If it doesn't find one, then it'll throw an
-    error.  If there's more than one match, then it will just return the first
-    one without any notification
+    @staticmethod
+    def _find_matching_adslab_doc(adslab_docs, adsorption_site, shift, top):
+        '''
+        This helper function is used to parse through a list of documents
+        created by the `GenerateAdslabs` task, and then find one that has
+        matching values for site, shift, and top. If it doesn't find one, then
+        it'll throw an error.  If there's more than one match, then it will
+        just return the first one without any notification
 
-    Args:
-        adslab_docs     A list of dictionaryies created by `GenerateAdslabs`
-        adsorption_site A 3-long sequence of floats indicating the Cartesian
-                        coordinates of the adsorption site
-        shift           A float indicating the shift (i.e., slab termination)
-        top             A Boolean indicating whether or not the site is on
-                        the top or the bottom of the slab
-    Returns:
-        doc     The first dictionary within the `adslab_docs` list that
-                has matching site, shift, and top values
-    '''
-    for doc in adslab_docs:
-        if np.allclose(doc['adsorption_site'], adsorption_site):
-            if math.isclose(doc['shift'], shift):
-                if doc['top'] == top:
-                    return doc
+        Args:
 
-    raise RuntimeError('You just tried to make an adslab FireWork rocket '
-                       'that we could not enumerate. Try changing the '
-                       'adsorption site, shift, top, or miller.')
+            adslab_docs     A list of dictionaryies created by
+                            `GenerateAdslabs`
+            adsorption_site A 3-long sequence of floats indicating the
+                            Cartesian coordinates of the adsorption site
+            shift           A float indicating the shift (i.e., slab
+                            termination)
+            top             A Boolean indicating whether or not the site is on
+                            the top or the bottom of the slab
+
+        Returns:
+            doc     The first dictionary within the `adslab_docs` list that has
+            matching site, shift, and top values
+        '''
+        for doc in adslab_docs:
+            if np.allclose(doc['adsorption_site'], adsorption_site):
+                if math.isclose(doc['shift'], shift):
+                    if doc['top'] == top:
+                        return doc
+
+        raise RuntimeError('You just tried to make an adslab FireWork rocket '
+                           'that we could not enumerate. Try changing the '
+                           'adsorption site, shift, top, or miller.')
