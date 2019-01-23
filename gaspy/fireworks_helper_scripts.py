@@ -9,12 +9,13 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import os
 import warnings
 import uuid
+from datetime import datetime
 import getpass
 import pandas as pd
 import ase.io
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask, Workflow
-from .utils import vasp_settings_to_str, print_dict, read_rc
-from . import vasp_functions, defaults
+from .utils import print_dict, read_rc
+from . import vasp_functions
 
 
 def get_launchpad():
@@ -234,54 +235,102 @@ def submit_fwork(fwork, _testing=False):
     return wflow
 
 
-def get_firework_info(fw):
+def get_atoms_from_fwid(fwid, index=-1):
     '''
-    Given a Fireworks ID, this function will return the "atoms" [class] and
-    "vasp_settings" [str] used to perform the relaxation
+    Given a Fireworks ID, this function will give you the initial `ase.Atoms`
+    object and the final (post-relaxation) `ase.Atoms` object.
+
+    Arg:
+        fwid    Integer indicating the FireWorks ID that you're trying to get
+                the atoms object for
+        index   Integer referring to the index of the trajectory file that
+                you want to pull the `ase.Atoms` object from. `0` will be
+                the starting image; `-1` will be the final image; etc.
+    Returns:
+        atoms           The relaxed `ase.Atoms` object of the FireWork
+        starting_atoms  The unrelaxed `ase.Atoms` object of the FireWork
     '''
-    # Pull the atoms objects from the firework. They are encoded, though
+    lpad = get_launchpad()
+    fw = lpad.get_fw_by_id(fwid)
+    atoms = get_atoms_from_fw(fw, index=index)
+    return atoms
+
+
+def get_atoms_from_fw(fw, index=-1):
+    '''
+    This function will return an `ase.Atoms` object given a Firework from our
+    LaunchPad.
+
+    Note:  The relaxation often mangles the tags and constraints due to
+    limitations in in vasp() calculators. We fix this by getting the original
+    `ase.Atoms` object that we gave to the Firework, and the putting the tags
+    and constraints from the original object onto the decoded one.
+
+    Args:
+        fw      Instance of a `fireworks.core.firework.Firework` class that
+                should probably get obtained from our Launchpad
+        index   Integer referring to the index of the trajectory file that
+                you want to pull the `ase.Atoms` object from. `0` will be
+                the starting image; `-1` will be the final image; etc.
+    Returns
+        atoms   `ase.Atoms` instance from the Firework you provided
+    '''
+    # Get the `ase.Atoms` object from FireWork's results
     atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
-    # find the vasp_functions.hex_to_file task atoms object
-    vasp_settings = fw.name['vasp_settings']
+    atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
 
-    atoms = decode_trajhex_to_atoms(atoms_trajhex)
-    starting_atoms = decode_trajhex_to_atoms(atoms_trajhex, index=0)
+    # Get the Firework task that was meant to convert the original hexstring to
+    # a trajectory file. We'll get the original atoms from this task (in
+    # hexstring format). Note that over the course of our use, we have had
+    # different names for these FireWorks tasks, so we check for them all.
+    function_names_of_hex_encoders = set(['vasp_functions.hex_to_file',
+                                          'fireworks_helper_scripts.atoms_hex_to_file',
+                                          'fireworks_helper_scripts.atomsHexToFile'])
+    trajhexes = [task['args'][1] for task in fw.spec['_tasks']
+                 if task.get('func', '') in function_names_of_hex_encoders]
 
-    hex_to_file_tasks = [a for a in fw.spec['_tasks']
-                         if a['_fw_name'] == 'PyTask' and
-                         a['func'] == 'vasp_functions.hex_to_file']
+    # If there was not one task, then we're screwed
+    if len(trajhexes) != 1:
+        raise RuntimeError('We tried to get the atoms object\'s trajhex from a '
+                           'FireWork, but could not find the FireWork task that '
+                           'contains the trajhex (FWID %i)' % fw.fw_id)
 
-    if len(hex_to_file_tasks) > 0:
-        spec_atoms_hex = hex_to_file_tasks[0]['args'][1]
-        # To decode the atoms objects, we need to write them into files and then load
-        # them again. To prevent multiple tasks from writing/reading to the same file,
-        # we use uuid to create unique file names to write to/read from.
-        spec_atoms = decode_trajhex_to_atoms(spec_atoms_hex)
+    # We can grab the original trajhex and then transfer its tags & constraints
+    # to the newly decoded atoms
+    original_atoms = decode_trajhex_to_atoms(trajhexes[0])
+    atoms.set_tags(original_atoms.get_tags())
+    atoms.set_constraint(original_atoms.constraints)
 
-        if len(spec_atoms) != len(starting_atoms):
-            raise RuntimeError('Spec atoms does not match starting atoms, investigate FW %d' % fw.fw_id)
+    # Patch some old, kinda-broken atoms
+    patched_atoms = __patch_old_atoms_tags(fw, atoms)
 
-        # The relaxation often mangles the tags and constraints due to limitations in
-        # in vasp() calculators.  We fix this by using the spec constraints/tags
-        atoms.set_tags(spec_atoms.get_tags())
-        atoms.set_constraint(spec_atoms.constraints)
-        starting_atoms.set_tags(spec_atoms.get_tags())
-        starting_atoms.set_constraint(spec_atoms.constraints)
+    return patched_atoms
 
-    # Guess the pseudotential version if it's not present
-    if 'pp_version' not in vasp_settings:
-        if 'arjuna' in fw.launches[-1].fworker.name:
-            vasp_settings['pp_version'] = '5.4'
-        else:
-            vasp_settings['pp_version'] = '5.3.5'
-        vasp_settings['pp_guessed'] = True
-    if 'gga' not in vasp_settings:
-        settings = defaults.exchange_correlational_settings()[vasp_settings['xc']]
-        for key in settings:
-            vasp_settings[key] = settings[key]
-    vasp_settings = vasp_settings_to_str(vasp_settings)
 
-    return atoms, starting_atoms, atoms_trajhex, vasp_settings
+def __patch_old_atoms_tags(fw, atoms):
+    '''
+    In an older version of GASpy, we did not use tags to identify whether an
+    atom was part of the slab or an adsorbate. We fix that by setting the tags
+    correctly here.
+
+    Args:
+        fw      Instance of a `fireworks.core.firework.Firework` class that
+                should probably get obtained from our Launchpad
+        atoms   Instance of the `ase.Atoms` object
+    '''
+    if (fw.created_on < datetime(2017, 7, 20) and
+            fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+
+        # In this old version, the adsorbates were added onto the slab. Thus
+        # the slab atoms came before the adsorbate atoms in the indexing. We
+        # use this information to figure out what the tags are supposed to be.
+        n_ads_atoms = len(fw.name['adsorbate'])
+        n_slab_atoms = len(atoms) - n_ads_atoms
+        tags = [0]*n_slab_atoms
+        tags.extend([1]*n_ads_atoms)
+
+        atoms.set_tags(tags)
+    return atoms
 
 
 def defuse_lost_runs():
@@ -365,36 +414,3 @@ def check_jobs_status(user_ID, num_jobs):
     dataframe = pd.DataFrame(fireworks_info, columns=data_labels)
 
     return dataframe
-
-
-#def running_fireworks(name_dict, launchpad):
-#    '''
-#    Return the running, ready, or completed fireworks on the launchpad with a given name
-#    name_dict   name dictionary to search for
-#    launchpad   launchpad to use
-#    '''
-#    # Make a mongo query
-#    name = {}
-#    # Turn a nested dictionary into a series of mongo queries
-#    for key in name_dict:
-#        if isinstance(name_dict[key], dict) or isinstance(name_dict[key], OrderedDict):
-#            for key2 in name_dict[key]:
-#                name['name.%s.%s' % (key, key2)] = name_dict[key][key2]
-#        else:
-#            if key == 'shift':
-#                # Search for a range of shift parameters up to 4 decimal place
-#                shift = float(np.round(name_dict[key], 4))
-#                name['name.%s' % key] = {'$gte': shift-1e-4, '$lte': shift+1e-4}
-#            else:
-#                name['name.%s' % key] = name_dict[key]
-#
-#    # Get all of the fireworks that are completed, running, or ready (i.e., not fizzled
-#    # or defused.)
-#    fw_ids = launchpad.get_fw_ids(name)
-#    fw_list = []
-#    for fwid in fw_ids:
-#        fw = launchpad.get_fw_by_id(fwid)
-#        if fw.state in ['RUNNING', 'COMPLETED', 'READY']:
-#            fw_list.append(fwid)
-#    # Return the matching fireworks
-#    return fw_list

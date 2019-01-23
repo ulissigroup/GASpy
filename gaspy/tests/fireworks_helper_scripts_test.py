@@ -19,7 +19,10 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
                                         submit_fwork,
-                                        check_jobs_status)
+                                        check_jobs_status,
+                                        get_atoms_from_fwid,
+                                        get_atoms_from_fw,
+                                        __patch_old_atoms_tags)
 
 # Things we need to do the tests
 import pytest
@@ -35,6 +38,9 @@ from .. import defaults
 
 REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
                                  '/fireworks_helper_scripts/')
+TEST_CASES_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
+FIREWORKS_FOLDER = TEST_CASES_LOCATION + 'fireworks/'
+FIREWORKS_FILES = [FIREWORKS_FOLDER + file_name for file_name in os.listdir(FIREWORKS_FOLDER)]
 
 
 def test_get_launchpad():
@@ -208,7 +214,9 @@ def test_to_create_atoms_trajhex_encoding(adslab_atoms_name):
 def test_decode_trajhex_to_atoms(adslab_atoms_name):
     '''
     This is a regression test to make sure that we can keep reading old hex
-    strings and turning them into the appropriate atoms objects.
+    strings and turning them into the appropriate atoms objects. We should
+    probably start testing whether we can find the different indexes, but
+    that's for future us to worry about.
 
     This is hard-coded for adslabs. It should be able to work on bulks and
     slabs, too.  Feel free to update it.
@@ -232,6 +240,38 @@ def test_submit_fwork():
     assert len(wflow.fws) == 1
     assert isinstance(wflow, Workflow)
     assert wflow.name == 'vasp optimization'
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test_get_atoms_from_fwid(fw_file):
+    fwid = int(fw_file.split('.')[0].split('/')[-1])
+    atoms = get_atoms_from_fwid(fwid)
+    assert isinstance(atoms, ase.Atoms)
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test__get_atoms_from_fw(fw_file):
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    atoms = get_atoms_from_fw(fw)
+    assert isinstance(atoms, ase.Atoms)
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test___patch_old_atoms(fw_file):
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    atoms = get_atoms_from_fw(fw)
+    patched_atoms = __patch_old_atoms_tags(fw, atoms)
+
+    # Make sure things are tagged correctly
+    adsorbate_name = fw.name['adsorbate']
+    for atom in patched_atoms:
+        tag = atom.tag
+        if tag == 0:
+            assert atom.symbol not in adsorbate_name
+        elif tag == 1:
+            assert atom.symbol in adsorbate_name
 
 
 @pytest.mark.parametrize('user, n_jobs',

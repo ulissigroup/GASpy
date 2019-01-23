@@ -5,17 +5,13 @@ __emails__ = ['ktran@andrew.cmu.edu', 'zulissi@andrew.cmu.edu']
 
 import os
 import pickle
-import uuid
 import json
-import subprocess
 from collections import OrderedDict, Iterable, Mapping
 from multiprocess import Pool
 import numpy as np
 import gc
 import tqdm
-import ase.io
 from ase import Atoms
-from ase.calculators.vasp import Vasp2
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -543,60 +539,6 @@ def decode_hex_to_atoms(atoms_hex):
     atoms_bytes = bytes.fromhex(atoms_hex)
     atoms = pickle.loads(atoms_bytes, encoding='latin-1')
     return atoms
-
-
-def get_final_atoms_object_with_vasp_forces(launch_id):
-    '''
-    This function will return an ase.Atoms object from a particular FireWorks
-    launch ID. It will also make sure that the ase.Atoms object will have
-    VASP-calculated forces attache to it.
-
-    Arg:
-        launch_id   An integer representing the FireWorks launch ID of the
-                    atoms object you want to get
-    Returns:
-        atoms   ase.Atoms object with the VASP-calculated forces
-    '''
-    # We will be opening a temporary directory where we will unzip the
-    # FireWorks launch directory
-    fw_launch_file = (read_rc('fireworks_info.backup_directory') +
-                      '/%d.tar.gz' % launch_id)
-    temp_loc = _dump_file_to_tmp(fw_launch_file)
-
-    # Load the atoms object and then load the correct (DFT) forces from the
-    # OUTCAR/etc info
-    try:
-        atoms = ase.io.read('%s/slab_relaxed.traj' % temp_loc)
-        vasp2 = Vasp2(atoms, restart=True, directory=temp_loc)
-        vasp2.read_results()
-
-    # Clean up behind us
-    finally:
-        subprocess.call('rm -r %s' % temp_loc, shell=True)
-
-    return atoms
-
-
-def _dump_file_to_tmp(file_name):
-    '''
-    Take the contents of a directory and then dump it into a temporary
-    directory while simultaneously unzipping it. This makes reading from
-    FireWorks directories faster.
-
-    Arg:
-        file_name   String indicating what directory you want to dump
-    Returns:
-        temp_loc    A string indicating where we just dumped the directory
-    '''
-    # Make the temporary directory
-    temp_loc = '/tmp/%s/' % uuid.uuid4()
-    subprocess.call('mkdir %s' % temp_loc, shell=True)
-
-    # Move to the temporary folder and unzip everything
-    subprocess.call('tar -C %s -xf %s' % (temp_loc, file_name), shell=True)
-    subprocess.call('gunzip -q %s/* > /dev/null' % temp_loc, shell=True)
-
-    return temp_loc
 
 
 def turn_site_into_str(site):
