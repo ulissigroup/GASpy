@@ -50,10 +50,11 @@ def is_rocket_running(query, vasp_settings, _testing=False):
         FireWorks rockets that match the query and VASP settings
     '''
     # Parse the VASP settings into the FireWorks query, then grab the docs
-    # and warn the user if there are a bunch of fizzles
     for key, value in vasp_settings.items():
         query['name.vasp_settings.%s' % key] = value
     docs = _get_firework_docs(query=query, _testing=_testing)
+
+    # Warn the user if there are a bunch of fizzles
     __warn_about_fizzles(docs)
 
     # Check if we are running currently. 'COMPLETED' is considered running
@@ -62,12 +63,6 @@ def is_rocket_running(query, vasp_settings, _testing=False):
     running_states = set(['COMPLETED', 'READY', 'RESERVED', 'RUNNING', 'PAUSED'])
     docs_running = [doc for doc in docs if doc['state'] in running_states]
     if len(docs_running) > 0:
-        print('You just asked if the following FireWork rocket is running. '
-              'We have %i of those running. The FWID[s] is/are (%s) in (%s) '
-              'states.' % (len(docs_running),
-                           ', '.join(str(doc['fw_id']) for doc in docs_running),
-                           ', '.join(doc['state'] for doc in docs_running)))
-        print_dict(query, indent=1)
         return True
     else:
         return False
@@ -107,6 +102,9 @@ def __warn_about_fizzles(docs):
     '''
     If we've tried a bunch of times before and kept failing, then let the user
     know.
+
+    Arg:
+        docs    A list of dictionaries that we got from our FireWorks database
     '''
     docs_fizzled = [doc for doc in docs if doc['state'] == 'FIZZLED']
     fwids_fizzled = [str(doc['fw_id']) for doc in docs_fizzled]
