@@ -11,6 +11,7 @@ import datetime
 import uuid
 import subprocess
 import multiprocess
+from tqdm import tqdm
 import luigi
 import ase
 import ase.io
@@ -50,8 +51,14 @@ class UpdateAtomsCollection(luigi.Task):
                         specific call to the task has been done. As long as
                         you pass a new seed to this argument, the update will
                         happen.
+        progress_bar    A Booliean indicating whether or not you want to show
+                        a progress bar when converting FireWorks into Mongo
+                        documents. Useful when re-populating an empty
+                        `atoms` collection with a big FireWorks database,
+                        but not useful for small, periodic updates.
     '''
     n_processes = luigi.IntParameter(1)
+    progress_bar = luigi.BoolParameter(False)
     seed = luigi.Parameter()
 
     # We use the FireWorks lauchpad a lot. Make one instance to save time.
@@ -62,10 +69,14 @@ class UpdateAtomsCollection(luigi.Task):
 
         # Multithread in case we have a lot of things to update
         with multiprocess.Pool(self.n_processes) as pool:
-            docs = list(pool.imap(self.make_doc_from_fwid,
-                                  fwids_missing,
-                                  chunksize=100),
-                        total=len(fwids_missing))
+            processing_pool = pool.imap(func=self.make_doc_from_fwid,
+                                        iterable=fwids_missing,
+                                        chunksize=100)
+            # Show a progress bar only if you asked for it
+            if self.progress_bar is False:
+                docs = list(processing_pool)
+            else:
+                docs = list(tqdm(processing_pool))
 
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
