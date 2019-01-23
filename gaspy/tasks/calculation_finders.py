@@ -57,9 +57,6 @@ class FindCalculation(luigi.Task):
                             attributes to the class. This method will be
                             called automatically at the start of `run`.
     '''
-    # Increase the priority because finding (and therefore submitting)
-    # calculations is usually the bottle neck, so let's do that first
-    priority = 100
 
     def run(self, _testing=False):
         '''
@@ -244,11 +241,11 @@ class FindBulk(FindCalculation):
 
 class FindAdslab(FindCalculation):
     '''
-    This task will try to find a bulk calculation in either our auxiliary Mongo
-    database or our FireWorks database. If the calculation is complete, then it
-    will return the results. If the calculation is pending, it will wait. If
-    the calculation has not yet been submitted, then it will start the
-    calculation.
+    This task will try to find an adsorption calculation in either our
+    auxiliary Mongo database or our FireWorks database. If the calculation is
+    complete, then it will return the results. If the calculation is pending,
+    it will wait. If the calculation has not yet been submitted, then it will
+    start the calculation.
 
     Args:
         adsorption_site         A 3-tuple of floats containing the Cartesian
