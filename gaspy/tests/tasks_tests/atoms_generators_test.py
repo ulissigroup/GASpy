@@ -136,7 +136,7 @@ def test_to_create_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              SLAB_SETTINGS['slab_generator_settings'],
                                              SLAB_SETTINGS['get_slab_settings'])
-        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
+        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs, 'mp-foo')
 
         # Save them
         bulk_name = file_name.split('.')[0]
@@ -157,7 +157,7 @@ def test__make_slab_docs_from_structs():
         structs = make_slabs_from_bulk_atoms(bulk, (1, 1, 1,),
                                              SLAB_SETTINGS['slab_generator_settings'],
                                              SLAB_SETTINGS['get_slab_settings'])
-        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs)
+        docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs, 'mp-foo')
 
     # Get the regression baseline
     bulk_name = file_name.split('.')[0]

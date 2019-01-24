@@ -44,7 +44,7 @@ class GenerateGas(luigi.Task):
     Arg:
         gas_name    A string that can be fed to ase.collection.g2 to create an
                     atoms object (e.g., 'CO', 'OH')
-    saved output:
+    Returns:
         doc     The atoms object in the format of a dictionary/document. This
                 document can be turned into an `ase.Atoms` object with the
                 `gaspy.mongo.make_atoms_from_doc` function.
@@ -72,7 +72,7 @@ class GenerateBulk(luigi.Task):
     Arg:
         mpid    A string indicating what the Materials Project ID (mpid) to
                 base this bulk on
-    saved output:
+    Returns:
         doc     The atoms object in the format of a dictionary/document. This
                 document can be turned into an `ase.Atoms` object with the
                 `gaspy.mongo.make_atoms_from_doc` function.
@@ -109,13 +109,15 @@ class GenerateSlabs(luigi.Task):
                                 as a dictionary.
         bulk_vasp_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
-    saved output:
+    Returns:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
                 information about slabs. These documents can be fed to the
                 `gaspy.mongo.make_atoms_from_docs` function to be turned
                 into `ase.Atoms` objects. These documents also contain
                 the following fields:
+                    fwids   A subdictionary containing the FWIDs of the
+                            prerequisite calculations
                     shift   Float indicating the shift/termination of the slab
                     top     Boolean indicating whether or not the slab is
                             oriented upwards with respect to the way it was
@@ -139,11 +141,11 @@ class GenerateSlabs(luigi.Task):
                                                   miller_indices=self.miller_indices,
                                                   slab_generator_settings=self.slab_generator_settings,
                                                   get_slab_settings=self.get_slab_settings)
-        slab_docs = self._make_slab_docs_from_structs(slab_structs)
+        slab_docs = self._make_slab_docs_from_structs(slab_structs, bulk_doc['fwid'])
         save_task_output(self, slab_docs)
 
     @staticmethod
-    def _make_slab_docs_from_structs(slab_structures):
+    def _make_slab_docs_from_structs(slab_structures, fwid):
         '''
         This function will take a list of pymatgen.Structure slabs, convert them
         into `ase.Atoms` objects, orient the slabs upwards, fix the subsurface
@@ -157,6 +159,9 @@ class GenerateSlabs(luigi.Task):
                                 probably be created by the
                                 `make_slabs_from_bulk_atoms` function, but you do
                                 you.
+            fwid                An integer for the FireWorks ID of the calculation
+                                used to relax the bulk from which we are
+                                enumerating the slab.
         Returns:
             docs    A list of dictionaries (also known as "documents", because
                     they'll eventually be put into Mongo as documents) that contain
@@ -178,6 +183,7 @@ class GenerateSlabs(luigi.Task):
             doc = make_doc_from_atoms(atoms_constrained)
             doc['shift'] = struct.shift
             doc['top'] = True
+            doc['fwids'] = {'bulk': fwid}
             docs.append(doc)
 
             # If slabs are invertible (i.e., are not symmetric about the x-y
@@ -188,6 +194,7 @@ class GenerateSlabs(luigi.Task):
                 doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
                 doc_flipped['shift'] = struct.shift
                 doc_flipped['top'] = False
+                doc_flipped['fwids'] = {'bulk': fwid}
                 docs.append(doc_flipped)
 
         return docs
@@ -219,7 +226,7 @@ class GenerateAdsorptionSites(luigi.Task):
                                 as a dictionary.
         bulk_vasp_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
-    saved output:
+    Returns:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
                 information about the sites. These documents can be fed to the
@@ -227,6 +234,8 @@ class GenerateAdsorptionSites(luigi.Task):
                 into `ase.Atoms` objects. These objects have a uranium atom
                 placed at the adsorption site, and the uranium is tagged with
                 a `1`. These documents also contain the following fields:
+                    fwids           A subdictionary containing the FWIDs of the
+                                    prerequisite calculations
                     shift           Float indicating the shift/termination of
                                     the slab
                     top             Boolean indicating whether or not the slab
@@ -276,6 +285,7 @@ class GenerateAdsorptionSites(luigi.Task):
 
                 # Turn the atoms into a document, then save it
                 doc = make_doc_from_atoms(adslab_atoms)
+                doc['fwids'] = slab_doc['fwids']
                 doc['shift'] = slab_doc['shift']
                 doc['top'] = slab_doc['top']
                 doc['slab_repeat'] = slab_repeat
@@ -321,7 +331,7 @@ class GenerateAdslabs(luigi.Task):
                                 as a dictionary.
         bulk_vasp_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
-    saved output:
+    Returns:
         docs    A list of dictionaries (also known as "documents", because
                 they'll eventually be put into Mongo as documents) that contain
                 information about the sites. These documents can be fed to the
@@ -329,6 +339,8 @@ class GenerateAdslabs(luigi.Task):
                 into `ase.Atoms` objects. These objects have a the adsorbate
                 tagged with a `1`. These documents also contain the following
                 fields:
+                    fwids           A subdictionary containing the FWIDs of the
+                                    prerequisite calculations
                     shift           Float indicating the shift/termination of
                                     the slab
                     top             Boolean indicating whether or not the slab
@@ -378,6 +390,7 @@ class GenerateAdslabs(luigi.Task):
 
             # Turn the adslab into a document, add the correct fields, and save
             doc = make_doc_from_atoms(adslab)
+            doc['fwids'] = site_doc['fwids']
             doc['shift'] = site_doc['shift']
             doc['top'] = site_doc['top']
             doc['slab_repeat'] = site_doc['slab_repeat']
@@ -482,6 +495,9 @@ class _EnumerateDistinctFacets(luigi.Task):
                             be enumerated
         bulk_vasp_settings  A dictionary containing the VASP settings of the
                             relaxed bulk to enumerate slabs from
+    Returns:
+        distinct_millers    A list of the distinct Miller indices, where the
+                            Miller indices are 3-long sequences of integers.
     '''
     mpid = luigi.Parameter()
     max_miller = luigi.IntParameter()
