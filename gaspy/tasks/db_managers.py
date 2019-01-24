@@ -56,6 +56,25 @@ class UpdateAtomsCollection(luigi.Task):
                         documents. Useful when re-populating an empty
                         `atoms` collection with a big FireWorks database,
                         but not useful for small, periodic updates.
+    Output:
+        docs    This task will save various dictionaries to our `atoms`
+                colection. These dictionaries will have the following keys:
+                    atoms                   A subdictionary created by our
+                                            `gaspy.mongo.make_doc_from_atoms`
+                                            function.
+                    initial_configuration   The same as the `atoms` key,
+                                            but for the initial, pre-relaxed
+                                            configuration of the atoms
+                    fwname                  A subdictionary containing
+                                            various information, e.g.,
+                                            mpid, miller, etc. This is taken
+                                            directly from the `name` field
+                                            of the `fireworks` collection of
+                                            our FireWorks database.
+                    fwid                    The FireWorks ID of the
+                                            calculation.
+                    directory               The directory in which we stored
+                                            the FireWorks.
     '''
     n_processes = luigi.IntParameter(1)
     progress_bar = luigi.BoolParameter(False)
