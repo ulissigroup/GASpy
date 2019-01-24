@@ -15,7 +15,8 @@ from ..utils import (read_rc,
                      unfreeze_dict,
                      encode_atoms_to_hex,
                      decode_hex_to_atoms,
-                     turn_site_into_str)
+                     turn_site_into_str,
+                     turn_string_site_into_tuple)
 
 # Things we need to do the tests
 import pytest
@@ -205,3 +206,11 @@ def test_turn_site_into_str():
     assert turn_site_into_str([1.23, 4.56, -7.89]) == '[  1.23   4.56  -7.89]'
     assert turn_site_into_str([10.23, -40.56, 70.89]) == '[ 10.23 -40.56  70.89]'
     assert turn_site_into_str([-10.23, -40.56, 70.89]) == '[-10.23 -40.56  70.89]'
+
+
+def test_turn_string_site_into_tuple():
+    assert turn_string_site_into_tuple('[  0.     0.     0.  ]') == (0., 0., 0.)
+    assert turn_string_site_into_tuple('[ -0.     0.     0.  ]') == (-0., 0., 0.)
+    assert turn_string_site_into_tuple('[  1.23   4.56  -7.89]') == (1.23, 4.56, -7.89)
+    assert turn_string_site_into_tuple('[ 10.23 -40.56  70.89]') == (10.23, -40.56, 70.89)
+    assert turn_string_site_into_tuple('[-10.23 -40.56  70.89]') == (-10.23, -40.56, 70.89)

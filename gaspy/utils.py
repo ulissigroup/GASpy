@@ -563,3 +563,22 @@ def turn_site_into_str(site):
     # to make this function in the first place.
     site_str = '[' + ' '.join('{:6.2f}'.format(coord).rstrip('0').ljust(6, ' ') for coord in site) + ']'
     return site_str
+
+
+def turn_string_site_into_tuple(site_str):
+    '''
+    This function is the inverse of the `turn_site_into_str` function.
+
+    Arg:
+        site_str    The `site` argument, but formatted with brackets, spaces,
+                    and as a string. For example:
+                        [0, 0, 0]               --> '[  0.     0.     0.  ]'
+                        [1.23, 4.56, -7.89]     --> '[  1.23   4.56  -7.89]'
+                        [10.23, -40.56, 70.89]  --> '[ 10.23 -40.56  70.89]'
+                        [-10.23, -40.56, 70.89] --> '[-10.23 -40.56  70.89]'
+
+    Returns:
+        site    A 3-long sequence of floats, probably Cartesian coordinates
+    '''
+    site = tuple(float(coord) for coord in site_str.replace('[', '').replace(']', '').split())
+    return site
