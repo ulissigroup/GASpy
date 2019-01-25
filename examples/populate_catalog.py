@@ -7,7 +7,7 @@ higher than the specified `max_miller`.
 __authors__ = ['Kevin Tran']
 __email__ = 'ktran@andrew.cmu.edu'
 
-from gaspy.tasks.db_managers import update_catalog_collection
+from gaspy.tasks.db_managers.catalog import update_catalog_collection
 
 
 elements = ['Ag', 'Al', 'As', 'Au', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs', 'Cu',
