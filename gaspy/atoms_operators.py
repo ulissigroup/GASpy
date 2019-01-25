@@ -13,6 +13,7 @@ from scipy.spatial.qhull import QhullError
 from ase import Atoms
 from ase.build import rotate
 from ase.constraints import FixAtoms
+from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
@@ -331,13 +332,8 @@ def fingerprint_adslab(atoms):
         return {'coordination': coordination,
                 'neighborcoord': neighborcoord,
                 'nextnearestcoordination': nextnearestcoordination}
-    # If we get some QHull error, then just assume that the adsorbate desorbed
-    except QhullError:
-        return {'coordination': '',
-                'neighborcoord': '',
-                'nextnearestcoordination': ''}
-    # If we get some ValueError, then just assume that the adsorbate desorbed
-    except ValueError:
+    # If we get some QHull or ValueError, then just assume that the adsorbate desorbed
+    except (QhullError, ValueError):
         return {'coordination': '',
                 'neighborcoord': '',
                 'nextnearestcoordination': ''}
@@ -395,3 +391,26 @@ def __get_coordination_string(nn_info):
                          if neighbor_info['site'].species_string != 'U']
     coordination = '-'.join(sorted(coordinated_atoms))
     return coordination
+
+
+def find_max_movement(atoms_initial, atoms_final):
+    '''
+    Given ase.Atoms objects, find the furthest distance that any single atom in
+    a set of atoms traveled (in Angstroms)
+
+    Args:
+        initial_atoms   `ase.Atoms` of the structure in its initial state
+        final_atoms     `ase.Atoms` of the structure in its final state
+    Returns:
+        max_movement    A float indicating the further movement of any single atom
+                        before and after relaxation (in Angstroms)
+    '''
+    # Calculate the distances for each atom
+    distances = atoms_final.positions - atoms_initial.positions
+
+    # Reduce the distances in case atoms wrapped around (the minimum image
+    # convention)
+    _, movements = find_mic(distances, atoms_final.cell, atoms_final.pbc)
+    max_movement = max(movements)
+
+    return max_movement

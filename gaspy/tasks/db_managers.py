@@ -22,12 +22,13 @@ from .core import (run_tasks,
                    save_task_output,
                    make_task_output_object)
 from .atoms_generators import GenerateAllSitesFromBulk
+from .metadata_calculators import CalculateAdsorptionEnergy
 from .. import defaults
-from ..utils import read_rc, unfreeze_dict
+from ..utils import read_rc, unfreeze_dict, turn_string_site_into_tuple
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import get_launchpad, get_atoms_from_fw
-from ..atoms_operators import fingerprint_adslab
+from ..atoms_operators import fingerprint_adslab, find_max_movement
 
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
@@ -39,9 +40,9 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     This function will dump all of the completed FireWorks into our `atoms` Mongo
     collection. It will not dump anything that is already there.
 
-    You may notice some methods with the term "patched" in them. If you are
+    You may notice some functions with the term "patched" in them. If you are
     using GASpy and not in the Ulissigroup, then you can probably skip all the
-    patching by not calling the `__patch_old_document` method at all.
+    patching by not calling the `__patch_old_document` function at all.
 
     Args:
         n_processes     An integer indicating how many threads you want to use
@@ -61,7 +62,7 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     # Multithread in case we have a lot of things to update
     if n_processes > 1:
         with multiprocess.Pool(n_processes) as pool:
-            doc_generator = pool.imap(func=_make_doc_from_fwid,
+            doc_generator = pool.imap(func=_make_atoms_doc_from_fwid,
                                       iterable=fwids_missing,
                                       chunksize=100)
             # Show a progress bar only if you asked for it
@@ -73,10 +74,10 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     # Keep it simple if we're not multithreading
     else:
         if progress_bar is True:
-            doc_generator = (_make_doc_from_fwid(fwid) for fwid in fwids_missing)
+            doc_generator = (_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing)
             docs = list(tqdm(doc_generator, total=len(fwids_missing)))
         else:
-            docs = [_make_doc_from_fwid(fwid) for fwid in fwids_missing]
+            docs = [_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing]
 
     with get_mongo_collection('atoms') as collection:
         collection.insert_many(docs)
@@ -104,7 +105,7 @@ def _find_fwids_missing_from_atoms_collection():
     return fwids_missing
 
 
-def _make_doc_from_fwid(fwid):
+def _make_atoms_doc_from_fwid(fwid):
     '''
     For each fireworks object, turn the results into a mongo doc so that we
     can dump the mongo doc into the Aux DB.
@@ -303,6 +304,170 @@ def __get_patched_miller(miller):
         return patched_miller
     else:
         return miller
+
+
+def update_adsorption_collection(workers=1, local_scheduler=False):
+    '''
+    This function will parse and dump all of the completed adsorption
+    calculations in our `atoms` Mongo collection into our `adsorption`
+    collection. It will not dump anything that is already there.
+
+    Args:
+        workers         An integer indicating how many processes/workers you
+                        want executing the prerequisite Luigi tasks.
+        local_scheduler A Boolean indicating whether or not you want to
+                        use a local scheduler. You should use a local
+                        scheduler only when you want something done
+                        quickly but dirtily. If you do not use local
+                        scheduling, then we will use our Luigi daemon
+                        to manage things, which should be the status
+                        quo.
+    '''
+    # Calculate the adsorption energies for adsorption calculations that show
+    # up in our `atoms` Mongo collection
+    missing_docs = _find_atoms_documents_not_in_adsorption_collection()
+    calc_energy_docs = __get_luigi_adsorption_energies(missing_docs, workers, local_scheduler)
+
+    # Turn the adsorption energies into `adsorption` documents, then save them
+    adsorption_docs = [__create_adsorption_doc(doc) for doc in calc_energy_docs]
+    with get_mongo_collection('adsorption') as collection:
+        collection.insert_many(adsorption_docs)
+
+
+def _find_atoms_documents_not_in_adsorption_collection():
+    '''
+    This function will get the Mongo documents of adsorption calculations that
+    are inside our `atoms` collection, but not inside our `adsorption`
+    collection.
+
+    Returns:
+        missing_ads_docs    A list of adsorption documents from the `atoms`
+                            collection that have not yet been added to the
+                            `adsorption` collection.
+    '''
+    # Find the FWIDs of the documents inside our adsorption collection
+    with get_mongo_collection('adsorption') as collection:
+        docs_adsorption = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
+    fwids_in_adsorption = set(doc['fwids']['adsorption'] for doc in docs_adsorption)
+
+    # Find the FWIDs of the documents inside our atoms collection
+    with get_mongo_collection('atoms') as collection:
+        query = {'fwname.calculation_type': 'slab+adsorbate optimization'}
+        projection = {'fwid': 'fwid', '_id': 0}
+        docs_atoms = list(collection.find(query, projection))
+        fwids_in_atoms = set(doc['fwid'] for doc in docs_atoms)
+
+        # Pull the atoms documents of everything that's missing from our
+        # adsorption collection. Although we use `find` a second time, this
+        # time we are getting the whole document (not just the FWID), so we
+        # only want to do this for the things we need.
+        fwids_missing = fwids_in_atoms - fwids_in_adsorption
+        missing_ads_docs = list(collection.find({'fw_id': {'$in': list(fwids_missing)}}))
+    return missing_ads_docs
+
+
+def __get_luigi_adsorption_energies(atoms_docs, workers=1, local_scheduler=False):
+    '''
+    This function will parse adsorption documents from our `atoms` collection,
+    create Luigi tasks to calculate adsorption energies for each document, run
+    the tasks, and then give you the results.
+
+    Args:
+        atoms_docs      A list of dictionaries taken from our `atoms` Mongo
+                        collection
+        workers         An integer indicating how many processes/workers you
+                        want executing the prerequisite Luigi tasks.
+        local_scheduler A Boolean indicating whether or not you want to
+                        use a local scheduler. You should use a local
+                        scheduler only when you want something done
+                        quickly but dirtily. If you do not use local
+                        scheduling, then we will use our Luigi daemon
+                        to manage things, which should be the status
+                        quo.
+    Returns:
+        energy_docs     A list of dictionaries obtained from the output of the
+                        `CalculateAdsorptionEnergy` task
+    '''
+    # Make and execute the Luigi tasks to calculate the adsorption energies
+    calc_energy_tasks = []
+    for doc in atoms_docs:
+        adsorption_site = turn_string_site_into_tuple(doc['fwname']['adsorption_site'])
+        task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,
+                                         shift=doc['fwname']['shift'],
+                                         top=doc['fwname']['top'],
+                                         adsorbate_name=doc['fwname']['adsorbate'],
+                                         rotation=doc['fwname']['adsorbate_rotation'],
+                                         mpid=doc['fwname']['mpid'],
+                                         miller_indices=doc['fwname']['miller'],
+                                         adslab_vasp_settings=doc['fwname']['vasp_settings'])
+        calc_energy_tasks.append(task)
+    run_tasks(calc_energy_tasks, workers=workers, local_scheduler=local_scheduler)
+
+    # Get all of the results from each task
+    energy_docs = []
+    for task in calc_energy_tasks:
+        try:
+            energy_docs.append(get_task_output(task))
+
+        # If a task has failed and not produced an output, we don't want that
+        # to stop us from updating the successful runs
+        except FileNotFoundError:
+            continue
+
+    return energy_docs
+
+
+def __create_adsorption_doc(energy_doc):
+    '''
+    This function will create a Mongo document for the `adsorption` collection
+    given the output of the `CalculateAdsorptionEnergy` task.
+
+    Arg:
+        energy_doc  A dictionary created by the `CalculateAdsorptionEnergy`
+                    task
+    '''
+    # Get some pertinent `ase.Atoms` objects
+    bare_slab_init = make_atoms_from_doc(energy_doc['slab']['initial_configuration'])
+    bare_slab_final = make_atoms_from_doc(energy_doc['slab'])
+    adslab_init = make_atoms_from_doc(energy_doc['adslab']['initial_configuration'])
+    adslab_final = make_atoms_from_doc(energy_doc['adslab'])
+    # In GASpy, atoms tagged with 0's are slab atoms. Atoms tagged with
+    # integers > 0 are adsorbates. We use that information to pull our the slab
+    # and adsorbate portions of the adslab.
+    adsorbate_init = adslab_init[adslab_init.get_tags > 0]
+    adsorbate_final = adslab_final[adslab_final.get_tags > 0]
+    slab_init = adslab_init[adslab_init.get_tags == 0]
+    slab_final = adslab_final[adslab_final.get_tags == 0]
+
+    # Fingerprint the adslab before and after relaxation
+    fp_init = fingerprint_adslab(adslab_init)
+    fp_final = fingerprint_adslab(adslab_final)
+
+    # Figure out how far the bare slab moved during relaxation. Then do the
+    # same for the slab and the adsorbate.
+    max_bare_slab_movement = find_max_movement(bare_slab_init, bare_slab_final)
+    max_slab_movement = find_max_movement(slab_init, slab_final)
+    max_ads_movement = find_max_movement(adsorbate_init, adsorbate_final)
+
+    # Parse the data into a Mongo document
+    adsorption_doc = make_doc_from_atoms(adslab_final)
+    adsorption_doc['initial_configuration'] = make_doc_from_atoms(adslab_init)
+    adsorption_doc['adsorbate'] = energy_doc['adslab']['fwname']['adsorbate']
+    adsorption_doc['adsorbate_rotation'] = energy_doc['adslab']['fwname']['adsorbate_rotation']
+    adsorption_doc['mpid'] = energy_doc['adslab']['fwname']['mpid']
+    adsorption_doc['miller'] = energy_doc['adslab']['fwname']['miller']
+    adsorption_doc['shift'] = energy_doc['adslab']['fwname']['shift']
+    adsorption_doc['top'] = energy_doc['adslab']['fwname']['top']
+    adsorption_doc['slabrepeat'] = energy_doc['adslab']['fwname']['slabrepeat']
+    adsorption_doc['vasp_settings'] = energy_doc['adslab']['fwname']['vasp_settings']
+    adsorption_doc['fwids'] = {'slab+adsorbate': energy_doc['adslab']['fwid'],
+                               'slab': energy_doc['slab']['fwid']}
+    adsorption_doc['fp_final'] = fp_final
+    adsorption_doc['fp_init'] = fp_init
+    adsorption_doc['movement_data'] = {'max_bare_slab_movement': max_bare_slab_movement,
+                                       'max_slab_movement': max_slab_movement,
+                                       'max_adsorbate_movement': max_ads_movement}
+    return adsorption_doc
 
 
 def update_catalog_collection(elements, max_miller, workers=1, local_scheduler=True):
@@ -637,130 +802,6 @@ class _InsertSitesToCatalog(luigi.Task):
 #                    self.ads_docs.append(doc)
 #
 #                    yield DumpToAdsorptionDB(parameters)
-
-
-#class DumpToAdsorptionDB(luigi.Task):
-#    ''' This class dumps the adsorption energies from our pickles to our tertiary databases '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#        '''
-#        We want the lowest energy structure (with adsorption energy), the fingerprinted structure,
-#        and the bulk structure
-#        '''
-#        return [CalculateEnergy(self.parameters),
-#                FingerprintRelaxedAdslab(self.parameters),
-#                SubmitToFW(calctype='bulk',
-#                           parameters={'bulk': self.parameters['bulk']})]
-#
-#    def run(self):
-#        # Load the structure
-#        best_sys_pkl = pickle.load(open(self.input()[0].fn, 'rb'))
-#        # Extract the atoms object
-#        best_sys = best_sys_pkl['atoms']
-#        # Get the lowest energy bulk structure
-#        bulk = pickle.load(open(self.input()[2].fn, 'rb'))
-#        bulkmin = np.argmin([x['results']['energy'] for x in bulk])
-#        # Load the fingerprints of the initial and final state
-#        fingerprints = pickle.load(open(self.input()[1].fn, 'rb'))
-#        fp_final = fingerprints[0]
-#        fp_init = fingerprints[1]
-#
-#        # Create and use tools to calculate the angle between the bond length of the diatomic
-#        # adsorbate and the z-direction of the bulk. We are not currently calculating triatomics
-#        # or larger.
-#        def unit_vector(vector):
-#            ''' Returns the unit vector of the vector.  '''
-#            return vector / np.linalg.norm(vector)
-#
-#        def angle_between(v1, v2):
-#            ''' Returns the angle in radians between vectors 'v1' and 'v2'::  '''
-#            v1_u = unit_vector(v1)
-#            v2_u = unit_vector(v2)
-#            return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-#        if self.parameters['adsorption']['adsorbates'][0]['name'] in ['CO', 'OH']:
-#            angle = angle_between(best_sys[-1].position-best_sys[-2].position, best_sys.cell[2])
-#            if self.parameters['slab']['top'] is False:
-#                angle = np.abs(angle - math.pi)
-#        else:
-#            angle = 0.
-#        angle = angle/2./np.pi*360
-#
-#        '''
-#        Calculate the maximum movement of surface atoms during the relaxation. then we do it again,
-#        but for adsorbate atoms.
-#        '''
-#        # First, calculate the number of adsorbate atoms
-#        num_adsorbate_atoms = len(utils.decode_hex_to_atoms(self.parameters['adsorption']['adsorbates'][0]['atoms']))
-#
-#        # An earlier version of GASpy added the adsorbate to the slab instead of the slab to the
-#        # adsorbate. Thus, the indexing for the slabs change. Here, we deal with that.
-#        lpad = fwhs.get_launchpad()
-#        fw = lpad.get_fw_by_id(best_sys_pkl['slab+ads']['fwid'])
-#        # *_start and *_end are the list indices to use when trying to pull out the * from
-#        # the adslab atoms.
-#        if fw.created_on < datetime(2017, 7, 20):
-#            slab_start = None
-#            slab_end = -num_adsorbate_atoms
-#            ads_start = -num_adsorbate_atoms
-#            ads_end = None
-#        else:
-#            slab_start = num_adsorbate_atoms
-#            slab_end = None
-#            ads_start = None
-#            ads_end = num_adsorbate_atoms
-#
-#        # Get just the adslab's slab atoms in their initial and final state
-#        slab_initial = make_atoms_from_doc(best_sys_pkl['slab+ads']['initial_configuration'])[slab_start:slab_end]
-#        slab_final = best_sys[slab_start:slab_end]
-#        max_surface_movement = utils.find_max_movement(slab_initial, slab_final)
-#        # Repeat the procedure, but for adsorbates
-#        adsorbate_initial = make_atoms_from_doc(best_sys_pkl['slab+ads']['initial_configuration'])[ads_start:ads_end]
-#        adsorbate_final = best_sys[ads_start:ads_end]
-#        max_adsorbate_movement = utils.find_max_movement(adsorbate_initial, adsorbate_final)
-#        # Repeat the procedure, but for the relaxed bare slab
-#        bare_slab_initial = make_atoms_from_doc(best_sys_pkl['slab']['initial_configuration'])
-#        bare_slab_final = make_atoms_from_doc(best_sys_pkl['slab'])
-#        max_bare_slab_movement = utils.find_max_movement(bare_slab_initial, bare_slab_final)
-#
-#
-#        # Make a dictionary of tags to add to the database
-#        processed_data = {'fp_final': fp_final,
-#                          'fp_init': fp_init,
-#                          'vasp_settings': self.parameters['adsorption']['vasp_settings'],
-#                          'calculation_info': {'type': 'slab+adsorbate',
-#                                               'formula': best_sys.get_chemical_formula('hill'),
-#                                               'mpid': self.parameters['bulk']['mpid'],
-#                                               'miller': self.parameters['slab']['miller'],
-#                                               'num_slab_atoms': self.parameters['adsorption']['num_slab_atoms'],
-#                                               'top': self.parameters['slab']['top'],
-#                                               'slabrepeat': self.parameters['adsorption']['slabrepeat'],
-#                                               'relaxed': True,
-#                                               'adsorbates': self.parameters['adsorption']['adsorbates'],
-#                                               'adsorbate_names': [str(x['name']) for x in self.parameters['adsorption']['adsorbates']],
-#                                               'shift': best_sys_pkl['slab+ads']['fwname']['shift']},
-#                          'FW_info': {'slab+adsorbate': best_sys_pkl['slab+ads']['fwid'],
-#                                      'slab': best_sys_pkl['slab']['fwid'],
-#                                      'bulk': bulk[bulkmin]['fwid'],
-#                                      'adslab_calculation_date': fw.created_on},
-#                          'movement_data': {'max_surface_movement': max_surface_movement,
-#                                            'max_adsorbate_movement': max_adsorbate_movement,
-#                                            'max_bare_slab_movement': max_bare_slab_movement}}
-#        best_sys_pkl_slab_ads = make_doc_from_atoms(best_sys_pkl['atoms'])
-#        best_sys_pkl_slab_ads['initial_configuration'] = best_sys_pkl['slab+ads']['initial_configuration']
-#        best_sys_pkl_slab_ads['processed_data'] = processed_data
-#        # Write the entry into the database
-#
-#        with gasdb.get_mongo_collection('adsorption') as collection:
-#            collection.insert_one(best_sys_pkl_slab_ads)
-#
-#        # Write a blank token file to indicate this was done so that the entry is not written again
-#        with self.output().temporary_path() as self.temp_output_path:
-#            with open(self.temp_output_path, 'w') as fhandle:
-#                fhandle.write(' ')
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
 
 
 #class DumpToSurfaceEnergyDB(luigi.Task):
