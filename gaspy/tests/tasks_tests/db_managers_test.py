@@ -10,7 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.db_managers import (UpdateAtomsCollection,
-                                  UpdateCatalogCollection,
+                                  update_catalog_collection,
                                   _GetMpids,
                                   _InsertSitesToCatalog)
 
@@ -22,6 +22,7 @@ import numpy.testing as npt
 import ase
 from pymatgen.ext.matproj import MPRester
 from .utils import clean_up_tasks, run_task_locally
+from ..test_cases.mongo_test_collections.mongo_utils import populate_unit_testing_collection
 from ... import defaults
 from ...gasdb import get_mongo_collection
 from ...utils import unfreeze_dict, read_rc
@@ -185,19 +186,27 @@ class TestUpdateAtomsCollection:
         assert patched_miller == good_miller
 
 
-def test_UpdateCatalogCollection():
-    '''
-    We don't really test much of anything here. Rather, we rely on the unit
-    testing of the helper tasks that this task relies on. We should probably
-    test better than this, but I'm too lazy right now.
-    '''
-    elements = ['Cu', 'Al']
-    max_miller = 2
-    task = UpdateCatalogCollection(elements=elements, max_miller=max_miller)
+def test_update_collection_catalog():
+    elements = ['Pd']
+    max_miller = 1
 
-    req = task.requires()
-    assert isinstance(req, _GetMpids)
-    assert list(req.elements) == elements
+    try:
+        # Clear out the catalog so we know that anything new was added by this
+        # function
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+
+            # Add some sites and check that they're there
+            update_catalog_collection(elements=elements, max_miller=max_miller)
+            docs = list(collection.find({'mpid': 'mp-2'}))
+        assert len(docs) > 0
+
+    # Reset the unit testing catalog and clear any pickles we made
+    finally:
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+        populate_unit_testing_collection('catalog')
+        clean_up_tasks()
 
 
 def test__GetMpids():

@@ -7,8 +7,7 @@ higher than the specified `max_miller`.
 __authors__ = ['Kevin Tran']
 __email__ = 'ktran@andrew.cmu.edu'
 
-from gaspy.tasks import run_tasks
-from gaspy.tasks.db_managers import UpdateCatalogCollection
+from gaspy.tasks.db_managers import update_catalog_collection
 
 
 elements = ['Ag', 'Al', 'As', 'Au', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs', 'Cu',
@@ -17,6 +16,5 @@ elements = ['Ag', 'Al', 'As', 'Au', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs', 'Cu',
             'Sb', 'Sc', 'Se', 'Si', 'Sn', 'Sr', 'Ta', 'Tc', 'Te', 'Ti', 'V',
             'W', 'Y', 'Zn', 'Zr']
 max_miller = 2
-updater = UpdateCatalogCollection(elements=elements, max_miller=max_miller)
 
-run_tasks([updater], workers=4)
+update_catalog_collection(elements=elements, max_miller=max_miller, workers=4)

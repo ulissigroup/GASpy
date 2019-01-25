@@ -17,7 +17,10 @@ import ase
 import ase.io
 from ase.calculators.vasp import Vasp2
 from pymatgen.ext.matproj import MPRester
-from .core import save_task_output, make_task_output_object
+from .core import (run_tasks,
+                   get_task_output,
+                   save_task_output,
+                   make_task_output_object)
 from .atoms_generators import GenerateAllSitesFromBulk
 from .. import defaults
 from ..utils import read_rc, unfreeze_dict
@@ -322,59 +325,41 @@ class UpdateAtomsCollection(luigi.Task):
             return miller
 
 
-class UpdateCatalogCollection(luigi.Task):
+def update_catalog_collection(elements, max_miller, workers=1, local_scheduler=True):
     '''
-    This task will add enumerate and add adsorption sites to our `catalog`
+    This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
 
     Args:
-        elements                A list of strings indicating the elements you
-                                are looking for, e.g., ['Cu', 'Al']
-        max_miller              An integer indicating the maximum Miller index
-                                to be enumerated
-        min_xy                  A float indicating the minimum width (in both
-                                the x and y directions) of the slab (Angstroms)
-                                before we enumerate adsorption sites on it.
-        slab_generator_settings We use pymatgen's `SlabGenerator` class to
-                                enumerate surfaces. You can feed the arguments
-                                for that class here as a dictionary.
-        get_slab_settings       We use the `get_slabs` method of pymatgen's
-                                `SlabGenerator` class. You can feed the
-                                arguments for the `get_slabs` method here
-                                as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
-                                the relaxed bulk to enumerate slabs from
+        elements            A list of strings indicating the elements you
+                            are looking for, e.g., ['Cu', 'Al']
+        max_miller          An integer indicating the maximum Miller index
+                            to be enumerated
+        workers             An integer indicating how many processes/workers
+                            you want executing the tasks and prerequisite
+                            tasks.
+        local_scheduler     A Boolean indicating whether or not you want to
+                            use the local scheduler. Normally we want to
+                            use the Luigi daemon (i.e., not a local
+                            scheduler), but this function will spawn a
+                            heck ton of tasks that might bog down the
+                            daemon. And we use atomic writes for our Luigi
+                            pickles, so it's less of a risk... and we
+                            don't update the catalog often... so it's ok
+                            to use a local scheduler here.
     '''
-    elements = luigi.ListParameter()
-    max_miller = luigi.IntParameter()
-    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
-    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
-    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    # Figure out the MPIDs we need to enumerate
+    get_mpid_task = _GetMpids(elements=elements)
+    run_tasks([get_mpid_task])
+    mpids = get_task_output(get_mpid_task)
 
-    def requires(self):
-        return _GetMpids(elements=self.elements)
-
-    def run(self):
-        with open(self.input().path, 'rb') as file_handle:
-            mpids = pickle.load(file_handle)
-
-        # Add the sites of each bulk to the catalog
-        insertion_tasks = []
-        for mpid in mpids:
-            task = _InsertSitesToCatalog(mpid=mpid,
-                                         max_miller=self.max_miller,
-                                         min_xy=self.min_xy,
-                                         slab_generator_settings=self.slab_generator_settings,
-                                         get_slab_settings=self.get_slab_settings,
-                                         bulk_vasp_settings=self.bulk_vasp_settings)
-            insertion_tasks.append(task)
-        # Yield all the tasks at once so that Luigi performs them in parallel
-        # instead of sequentially
-        yield insertion_tasks
-
-    def output(self):
-        return make_task_output_object(self)
+    # For each MPID, enumerate and add all the sites and then add them to our
+    # `catalog` Mongo collection
+    insertion_tasks = []
+    for mpid in mpids:
+        task = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller)
+        insertion_tasks.append(task)
+    run_tasks(insertion_tasks, workers=workers, local_scheduler=local_scheduler)
 
 
 class _GetMpids(luigi.Task):
