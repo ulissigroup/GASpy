@@ -20,15 +20,23 @@ GASDB_PATH = utils.read_rc('gasdb_path')
 TASKS_CACHE_LOCATION = utils.read_rc('gasdb_path') + '/pickles/'
 
 
-def run_tasks(tasks, workers=1):
+def run_tasks(tasks, workers=1, local_scheduler=False):
     '''
     This light wrapping function will execute any tasks you want through the
     Luigi host that is listed in the `.gaspyrc.json` file.
 
     Arg:
-        tasks   An iterable of `luigi.Task` instances
-        workers An integer indicating how many processes/workers
-                you want executing the tasks and prerequisite tasks.
+        tasks               An iterable of `luigi.Task` instances
+        workers             An integer indicating how many processes/workers
+                            you want executing the tasks and prerequisite
+                            tasks.
+        local_scheduler     A Boolean indicating whether or not you want to
+                            use a local scheduler. You should use a local
+                            scheduler only when you want something done
+                            quickly but dirtily. If you do not use local
+                            scheduling, then we will use our Luigi daemon
+                            to manage things, which should be the status
+                            quo.
     '''
     luigi_host = utils.read_rc('luigi_host')
 
@@ -38,7 +46,10 @@ def run_tasks(tasks, workers=1):
                                 '"task_process_context" with value "None" is not '
                                 'of type string.')
 
-        luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
+        if local_scheduler is False:
+            luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
+        else:
+            luigi.build(tasks, workers=workers, local_scheduler=True)
 
 
 def make_task_output_object(task):
