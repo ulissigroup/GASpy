@@ -10,7 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.db_managers import (_find_fwids_missing_from_atoms_collection,
-                                  _make_doc_from_fwid,
+                                  _make_atoms_doc_from_fwid,
                                   __patch_old_document,
                                   __patch_atoms_from_old_vasp,
                                   __get_final_atoms_object_with_vasp_forces,
@@ -49,7 +49,7 @@ def test_update_atoms_collection():
     assert True
 
 
-def test_find_missing_fwids():
+def test__find_fwids_missing_from_atoms_collection():
     '''
     This test uses our unit testing `atoms` collection, but our production
     FireWorks. If you don't have at least ten missing Fireworks between the
@@ -72,7 +72,7 @@ def test_find_missing_fwids():
             assert len(docs) == 0
 
 
-def test_make_doc_from_fwid():
+def test__make_atoms_doc_from_fwid():
     '''
     This test will try to make a document from your real FireWorks
     database, not the unit testing one (because I'm too lazy). So if it
@@ -80,7 +80,7 @@ def test_make_doc_from_fwid():
     you have.
     '''
     fwid = 42
-    doc = _make_doc_from_fwid(fwid)
+    doc = _make_atoms_doc_from_fwid(fwid)
 
     # Verify that we can make atoms objects from the document
     atoms = make_atoms_from_doc(doc)
@@ -162,7 +162,7 @@ def test___dump_directory_to_tmp():
         subprocess.call('rm -r %s' % temp_loc, shell=True)
 
 
-def test__get_vasp_settings_from_fw():
+def test__get_patched_vasp_settings():
     '''
     This is a pretty bad test, but I'm too lazy to fix it. And it's only a
     patching method anyway that shouldn't even exist, so it's less of a big

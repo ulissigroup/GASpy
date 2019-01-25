@@ -74,7 +74,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                     You should be able to apply the
                                     `gaspy.mongo.make_atoms_from_doc` to
                                     this subdictionary to get the slab.
-                slab                A dictionary identical to the Mongo
+                adslab              A dictionary identical to the Mongo
                                     document of the adslab as found in
                                     the `atoms` collection of our MongoDB
                                     You should be able to apply the
