@@ -39,8 +39,11 @@ def update_adsorption_collection(workers=1, local_scheduler=False):
 
     # Turn the adsorption energies into `adsorption` documents, then save them
     adsorption_docs = [__create_adsorption_doc(doc) for doc in calc_energy_docs]
-    with get_mongo_collection('adsorption') as collection:
-        collection.insert_many(adsorption_docs)
+    if len(adsorption_docs) > 0:
+        with get_mongo_collection('adsorption') as collection:
+            collection.insert_many(adsorption_docs)
+        print('Just created %i new entries in the adsorption collection'
+              % len(adsorption_docs))
 
 
 def _find_atoms_docs_not_in_adsorption_collection():

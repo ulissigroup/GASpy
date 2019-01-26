@@ -7,7 +7,7 @@ in our FireWorks database.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
-import datetime
+from datetime import datetime
 import uuid
 import subprocess
 import multiprocess
@@ -66,8 +66,11 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
         else:
             docs = [_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing]
 
-    with get_mongo_collection('atoms') as collection:
-        collection.insert_many(docs)
+    if len(docs) > 0:
+        with get_mongo_collection('atoms') as collection:
+            collection.insert_many(docs)
+        print('Just created %i new entries in the atoms collection'
+              % len(docs))
 
 
 def _find_fwids_missing_from_atoms_collection():

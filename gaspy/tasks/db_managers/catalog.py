@@ -212,8 +212,12 @@ class _InsertSitesToCatalog(luigi.Task):
                     # It's faster to write in bulk instead of one-at-a-time, so
                     # save the document to one list that we'll write to
                     inserted_docs.append(doc)
-            if not _testing:
+
+            # Add the documents to the catalog
+            if not _testing and len(inserted_docs) > 0:
                 collection.insert_many(inserted_docs)
+                print('Just created %i new entries in the cataog collection'
+                      % len(inserted_docs))
         save_task_output(self, incumbent_docs + inserted_docs)
 
     def output(self):
