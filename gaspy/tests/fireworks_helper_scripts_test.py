@@ -157,6 +157,15 @@ def test_make_firework():
     assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', vasp_settings]
     assert relax['stored_data_varname'] == 'opt_results'
 
+    # Make sure GASpy gives us a warning about big jobs
+    with warnings.catch_warnings(record=True) as warning_manager:
+        warnings.simplefilter('always')
+        big_atoms = ase.Atoms('CO'*41)
+        fwork = make_firework(big_atoms, fw_name, vasp_settings)
+        assert len(warning_manager) == 1
+        assert issubclass(warning_manager[-1].category, RuntimeWarning)
+        assert 'You are making a firework with' in str(warning_manager[-1].message)
+
 
 @pytest.mark.parametrize('adslab_atoms_name',
                          ['CO_dissociate_Pt12Si5_110.traj',

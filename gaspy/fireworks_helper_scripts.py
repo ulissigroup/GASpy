@@ -127,6 +127,11 @@ def make_firework(atoms, fw_name, vasp_settings):
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
     '''
+    # Warn the user if they're submitting a big one
+    if len(atoms) > 80:
+        warnings.warn('You are making a firework with %i atoms in it. This may '
+                      'take awhile.' % len(atoms), RuntimeWarning)
+
     # Take the `vasp_functions` submodule in GASpy and then pass it out to each
     # FireWork rocket to use.
     vasp_filename = vasp_functions.__file__
