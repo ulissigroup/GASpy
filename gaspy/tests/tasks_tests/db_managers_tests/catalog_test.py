@@ -78,6 +78,11 @@ def test__InsertAllSitesFromBulkToCatalog():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
+    # Need to clear out the current catalog before checking that we can add
+    # more
+    with get_mongo_collection('catalog') as collection:
+        collection.delete_many({})
+
     mpid = 'mp-2'
     max_miller = 2
     catalog_inserter = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller)
@@ -96,12 +101,18 @@ def test__InsertAllSitesFromBulkToCatalog():
             assert catalog_doc['min_xy'] == site_generator.min_xy
             assert catalog_doc['slab_generator_settings'] == unfreeze_dict(site_generator.slab_generator_settings)
             assert catalog_doc['get_slab_settings'] == unfreeze_dict(site_generator.get_slab_settings)
-            assert catalog_doc['bulk_vasp_settings'] == unfreeze_dict(site_generator.bulk_vasp_settings)
+            # Mongo can't store tuples, so when we read it out, it turns into a list. Undo that here.
+            catalog_doc['bulk_vasp_settings']['kpts'] = tuple(catalog_doc['bulk_vasp_settings']['kpts'])
+            assert catalog_doc['bulk_vasp_settings'] == dict(unfreeze_dict(site_generator.bulk_vasp_settings))
             assert catalog_doc['shift'] == site_doc['shift']
             assert catalog_doc['top'] == site_doc['top']
             assert make_atoms_from_doc(catalog_doc) == make_atoms_from_doc(site_doc)
             npt.assert_allclose(catalog_doc['slab_repeat'], site_doc['slab_repeat'])
             npt.assert_allclose(catalog_doc['adsorption_site'], site_doc['adsorption_site'])
 
+    # Reset the pickles and the collection
     finally:
         clean_up_tasks()
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+        populate_unit_testing_collection('catalog')

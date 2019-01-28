@@ -17,4 +17,5 @@ elements = ['Ag', 'Al', 'As', 'Au', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs', 'Cu',
             'W', 'Y', 'Zn', 'Zr']
 max_miller = 2
 
-update_catalog_collection(elements=elements, max_miller=max_miller, workers=4)
+update_catalog_collection(elements=elements, max_miller=max_miller,
+                          n_processes=4, local_scheduler=True)

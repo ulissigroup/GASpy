@@ -67,7 +67,7 @@ def test__make_atoms_doc_from_fwid():
     fails, then change the ID to a FireWorks ID of a completed rocket that
     you have.
     '''
-    fwid = 42
+    fwid = 365912
     doc = _make_atoms_doc_from_fwid(fwid)
 
     # Verify that we can make atoms objects from the document

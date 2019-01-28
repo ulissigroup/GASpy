@@ -86,16 +86,19 @@ class FindCalculation(luigi.Task):
         try:
             with get_mongo_collection('atoms') as collection:
                 docs = list(collection.find(self.gasdb_query))
+
         # If we have not yet created the query yet, then load it. We try/except
         # this so that we only load it once.
         except AttributeError:
             self._load_attributes()
             with get_mongo_collection('atoms') as collection:
                 docs = list(collection.find(self.gasdb_query))
+
         # Save the match
         doc = self._remove_old_docs(docs)
         try:
             save_task_output(self, doc)
+
         # If we've already saved the output, then move on
         except luigi.target.FileAlreadyExists:
             pass
@@ -138,15 +141,17 @@ class FindCalculation(luigi.Task):
         something, and if we don't throw any errors, then Luigi will think that
         we're actually done.
         '''
-        # First, check the pickles for the output
+        # If we can get the output from the pickles, then we're done
         try:
             _ = get_task_output(self)   # noqa: F841
             return True
+
         # If it's not pickled, then check Mongo
         except FileNotFoundError:
             try:
                 self._find_and_save_calculation()
                 return True
+
             # If it's not pickled and not in Mongo, then this task is not done
             except CalculationNotFoundError:
                 return False
@@ -191,7 +196,7 @@ class FindGas(FindCalculation):
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
-        self.gasdb_query = {'type': 'gas',
+        self.gasdb_query = {'fwname.calculation_type': 'gas phase optimization',
                             'fwname.gasname': self.gas_name}
         self.fw_query = {'name.calculation_type': 'gas phase optimization',
                          'name.gasname': self.gas_name}
@@ -229,8 +234,8 @@ class FindBulk(FindCalculation):
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
-        self.gasdb_query = {'type': 'bulk',
-                            'fwname.mpid': self.mpid}
+        self.gasdb_query = {"fwname.calculation_type": "unit cell optimization",
+                            "fwname.mpid": self.mpid}
         self.fw_query = {'name.calculation_type': 'unit cell optimization',
                          'name.mpid': self.mpid}
         for key, value in self.vasp_settings.items():
@@ -312,7 +317,7 @@ class FindAdslab(FindCalculation):
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
-        self.gasdb_query = {'type': 'slab+adsorbate',
+        self.gasdb_query = {'fwname.calculation_type': 'slab+adsorbate optimization',
                             'fwname.adsorbate': self.adsorbate_name,
                             'fwname.adsorption_site': turn_site_into_str(self.adsorption_site),
                             'fwname.mpid': self.mpid,

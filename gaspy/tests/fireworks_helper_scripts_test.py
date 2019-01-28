@@ -265,7 +265,11 @@ def test___patch_old_atoms(fw_file):
     patched_atoms = __patch_old_atoms_tags(fw, atoms)
 
     # Make sure things are tagged correctly
-    adsorbate_name = fw.name['adsorbate']
+    try:
+        adsorbate_name = fw.name['adsorbate']
+    except KeyError:    # In case we're not looking at an adslab
+        adsorbate_name = ''
+
     for atom in patched_atoms:
         tag = atom.tag
         if tag == 0:

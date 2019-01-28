@@ -100,12 +100,12 @@ def _assert_vasp_settings(doc, vasp_settings):
         except KeyError:
             # If we're looking at an adslab, then we don't care about certain
             # vasp settings
-            if doc['type'] == 'slab+adsorbate' and key in set(['nsw', 'isym', 'symprec']):
+            if doc['fwname']['calculation_type'] == 'slab+adsorbate optimization' and key in set(['nsw', 'isym', 'symprec']):
                 pass
 
             # If we're looking at a slab, then we don't care about certain
             # vasp settings
-            elif doc['type'] == 'slab+adsorbate' and key in set(['isym']):
+            elif doc['fwname']['calculation_type'] == 'slab+adsorbat optimizatione' and key in set(['isym']):
                 pass
 
             else:
@@ -124,7 +124,7 @@ def test_FindGas_successfully():
     try:
         _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
-        assert doc['type'] == 'gas'
+        assert doc['fwname']['calculation_type'] == 'gas phase optimization'
         assert doc['fwname']['gasname'] == gas
         _assert_vasp_settings(doc, vasp_settings)
 
@@ -178,7 +178,7 @@ def test_FindBulk_successfully():
         _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
 
-        assert doc['type'] == 'bulk'
+        assert doc['fwname']['calculation_type'] == 'unit cell optimization'
         assert doc['fwname']['mpid'] == mpid
         _assert_vasp_settings(doc, vasp_settings)
 
@@ -231,7 +231,7 @@ def test_FindAdslab_successfully():
     try:
         _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
-        assert doc['type'] == 'slab+adsorbate'
+        assert doc['fwname']['calculation_type'] == 'slab+adsorbate optimization'
         assert doc['fwname']['adsorption_site'] == turn_site_into_str(adsorption_site)
         assert math.isclose(doc['fwname']['shift'], shift)
         assert doc['fwname']['top'] == top
