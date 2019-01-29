@@ -64,7 +64,8 @@ def _find_atoms_docs_not_in_adsorption_collection():
 
     # Find the FWIDs of the documents inside our atoms collection
     with get_mongo_collection('atoms') as collection:
-        query = {'fwname.calculation_type': 'slab+adsorbate optimization'}
+        query = {'fwname.calculation_type': 'slab+adsorbate optimization',
+                 'fwname.adsorbate': {'$ne': ''}}
         projection = {'fwid': 'fwid', '_id': 0}
         docs_atoms = list(collection.find(query, projection))
         fwids_in_atoms = set(doc['fwid'] for doc in docs_atoms)
@@ -74,7 +75,7 @@ def _find_atoms_docs_not_in_adsorption_collection():
         # time we are getting the whole document (not just the FWID), so we
         # only want to do this for the things we need.
         fwids_missing = fwids_in_atoms - fwids_in_adsorption
-        missing_ads_docs = list(collection.find({'fw_id': {'$in': list(fwids_missing)}}))
+        missing_ads_docs = list(collection.find({'fwid': {'$in': list(fwids_missing)}}))
     return missing_ads_docs
 
 
@@ -146,10 +147,10 @@ def __create_adsorption_doc(energy_doc):
     # In GASpy, atoms tagged with 0's are slab atoms. Atoms tagged with
     # integers > 0 are adsorbates. We use that information to pull our the slab
     # and adsorbate portions of the adslab.
-    adsorbate_init = adslab_init[adslab_init.get_tags > 0]
-    adsorbate_final = adslab_final[adslab_final.get_tags > 0]
-    slab_init = adslab_init[adslab_init.get_tags == 0]
-    slab_final = adslab_final[adslab_final.get_tags == 0]
+    adsorbate_init = adslab_init[adslab_init.get_tags() > 0]
+    adsorbate_final = adslab_final[adslab_final.get_tags() > 0]
+    slab_init = adslab_init[adslab_init.get_tags() == 0]
+    slab_final = adslab_final[adslab_final.get_tags() == 0]
 
     # Fingerprint the adslab before and after relaxation
     fp_init = fingerprint_adslab(adslab_init)
@@ -164,6 +165,7 @@ def __create_adsorption_doc(energy_doc):
     # Parse the data into a Mongo document
     adsorption_doc = make_doc_from_atoms(adslab_final)
     adsorption_doc['initial_configuration'] = make_doc_from_atoms(adslab_init)
+    adsorption_doc['adsorption_energy'] = energy_doc['adsorption_energy']
     adsorption_doc['adsorbate'] = energy_doc['adslab']['fwname']['adsorbate']
     adsorption_doc['adsorbate_rotation'] = energy_doc['adslab']['fwname']['adsorbate_rotation']
     adsorption_doc['mpid'] = energy_doc['adslab']['fwname']['mpid']
