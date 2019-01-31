@@ -9,4 +9,4 @@ __email__ = 'ktran@andrew.cmu.edu'
 from gaspy.tasks.db_managers.atoms import update_atoms_collection
 
 
-update_atoms_collection(n_processes=4, progress_bar=True)
+update_atoms_collection(n_processes=32, progress_bar=True)
