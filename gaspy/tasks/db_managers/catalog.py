@@ -150,7 +150,7 @@ def __run_insert_to_catalog_task(mpid, max_miller, local_scheduler):
                             to use a local scheduler here.
     '''
     task = _InsertSitesToCatalog(mpid, max_miller)
-    run_tasks([task], local_scheduler=local_scheduler)
+    run_tasks([task], workers=1, local_scheduler=local_scheduler)
 
 
 class _InsertSitesToCatalog(luigi.Task):
@@ -238,6 +238,7 @@ class _InsertSitesToCatalog(luigi.Task):
                     doc['get_slab_settings'] = unfreeze_dict(self.get_slab_settings)
                     doc['bulk_vasp_settings'] = unfreeze_dict(self.bulk_vasp_settings)
                     doc['adsorption_site'] = tuple(doc['adsorption_site'])
+                    doc['fwids'] = site_doc['fwids']
                     # Add fingerprint information to the document
                     atoms = make_atoms_from_doc(doc)
                     fingerprint = fingerprint_adslab(atoms)
