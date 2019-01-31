@@ -1,5 +1,11 @@
 '''
-This module houses the functions needed to make and submit FireWorks rockets
+This module houses the functions needed to make and submit FireWorks rockets.
+
+Note that all of the tasks in this submodule will always show up as incomplete,
+which means we will always allow users to make new FireWorks. It's on them to
+not make redundant ones. If you want to make a FireWork only if it's not
+already running or done, then you should use the
+`gaspy.tasks.calculation_finders` submodule instead.
 '''
 
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
@@ -21,7 +27,17 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-class MakeGasFW(luigi.Task):
+class FireworkMaker(luigi.Task):
+    def complete(self):
+        '''
+        This task is designed to make and submit you a FireWork every time you
+        call it. To get Luigi to do this for us, it must never be marked as
+        "complete".
+        '''
+        return False
+
+
+class MakeGasFW(FireworkMaker):
     '''
     This task will create and submit a gas relaxation for you.
 
@@ -57,7 +73,7 @@ class MakeGasFW(luigi.Task):
             return fwork
 
 
-class MakeBulkFW(luigi.Task):
+class MakeBulkFW(FireworkMaker):
     '''
     This task will create and submit a bulk relaxation for you.
 
@@ -97,7 +113,7 @@ class MakeBulkFW(luigi.Task):
             return fwork
 
 
-class MakeAdslabFW(luigi.Task):
+class MakeAdslabFW(FireworkMaker):
     '''
     This task will create and submit an adsorbate+slab (adslab) calculation
 
