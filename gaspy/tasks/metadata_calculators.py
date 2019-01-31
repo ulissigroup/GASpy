@@ -20,7 +20,6 @@ GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
-ADSORBATES = defaults.adsorbates()
 
 
 class CalculateAdsorptionEnergy(luigi.Task):
@@ -36,7 +35,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                 site is on the top or the bottom of the slab
         adsorbate_name          A string indicating which adsorbate to use. It
                                 should be one of the keys within the
-                                `gaspy.defaults.ADSORBATES` dictionary. If you
+                                `gaspy.defaults.adsorbates` dictionary. If you
                                 want an adsorbate that is not in the dictionary,
                                 then you will need to add the adsorbate to that
                                 dictionary.
@@ -163,11 +162,11 @@ class CalculateAdsorbateEnergy(luigi.Task):
 
         # Fetch the adsorbate from our dictionary. If it's not there, yell
         try:
-            adsorbate = ADSORBATES[self.adsorbate_name]
+            adsorbate = defaults.adsorbates()[self.adsorbate_name]
         except KeyError as error:
             raise type(error)('You are trying to calculate the adsorbate energy '
                               'of an undefined adsorbate, %s. Please define the '
-                              'adsorbate within `gaspy.defaults.ADSORBATES' %
+                              'adsorbate within `gaspy.defaults.adsorbates' %
                               self.adsorbate_name).with_traceback(sys.exc_info()[2])
 
         energy = sum(basis_energies[atom] for atom in adsorbate.get_chemical_symbols())
