@@ -68,18 +68,9 @@ class CalculateAdsorptionEnergy(luigi.Task):
     Returns:
         doc A dictionary with the following keys:
                 adsorption_energy   A float indicating the adsorption energy
-                slab                A dictionary identical to the Mongo
-                                    document of the bare slab as found in
-                                    the `atoms` collection of our MongoDB.
-                                    You should be able to apply the
-                                    `gaspy.mongo.make_atoms_from_doc` to
-                                    this subdictionary to get the slab.
-                adslab              A dictionary identical to the Mongo
-                                    document of the adslab as found in
-                                    the `atoms` collection of our MongoDB
-                                    You should be able to apply the
-                                    `gaspy.mongo.make_atoms_from_doc` to
-                                    this subdictionary to get the adslab.
+                fwids               A subdictionary whose keys are 'adslab' and
+                                    'slab', and whose values are the FireWork
+                                    IDs of the respective calculations.
     '''
     adsorption_site = luigi.TupleParameter()
     shift = luigi.FloatParameter()
@@ -139,8 +130,8 @@ class CalculateAdsorptionEnergy(luigi.Task):
 
         adsorption_energy = adslab_energy - slab_energy - ads_energy
         doc = {'adsorption_energy': adsorption_energy,
-               'slab': slab_doc,
-               'adslab': adslab_doc}
+               'fwids': {'adslab': adslab_doc['fwid'],
+                         'slab': slab_doc['fwid']}}
         save_task_output(self, doc)
 
     def output(self):
@@ -232,98 +223,6 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
 
     def output(self):
         return make_task_output_object(self)
-
-
-#class FingerprintRelaxedAdslab(luigi.Task):
-#    '''
-#    This class takes relaxed structures from our Pickles, fingerprints them, then adds the
-#    fingerprints back to our Pickles
-#    '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#        '''
-#        Our first requirement is CalculateEnergy, which relaxes the slab+ads system. Our second
-#        requirement is to relax the slab+ads system again, but without the adsorbates. We do
-#        this to ensure that the "blank slab" we are using in the adsorption calculations has
-#        the same number of slab atoms as the slab+ads system.
-#        '''
-#        # Here, we take the adsorbate off the slab+ads system
-#        param = utils.unfreeze_dict(copy.deepcopy(self.parameters))
-#        param['adsorption']['adsorbates'] = [OrderedDict(name='',
-#                                                         atoms=utils.encode_atoms_to_hex(Atoms('')))]
-#        return [CalculateEnergy(self.parameters),
-#                SubmitToFW(parameters=param,
-#                           calctype='slab+adsorbate')]
-#
-#    def run(self):
-#        ''' We fingerprint the slab+adsorbate system both before and after relaxation. '''
-#        # Load the atoms objects for the lowest-energy slab+adsorbate (adslab) system and the
-#        # blank slab (slab)
-#        calc_e_dict = pickle.load(open(self.input()[0].fn, 'rb'))
-#        slab = pickle.load(open(self.input()[1].fn, 'rb'))
-#
-#        # The atoms object for the adslab prior to relaxation
-#        adslab0 = make_atoms_from_doc(calc_e_dict['slab+ads']['initial_configuration'])
-#        # The number of atoms in the slab also happens to be the index for the first atom
-#        # of the adsorbate (in the adslab system)
-#        slab_natoms = slab[0]['atoms']['natoms']
-#
-#        # If our "adslab" system actually doesn't have an adsorbate, then do not fingerprint
-#        if slab_natoms == len(calc_e_dict['atoms']):
-#            fp_final = {}
-#            fp_init = {}
-#        else:
-#            # Calculate fingerprints for the initial and final state
-#            fp_final = utils.fingerprint_atoms(calc_e_dict['atoms'])
-#            fp_init = utils.fingerprint_atoms(adslab0)
-#
-#        # Save the the fingerprints of the final and initial state as a list in a pickle file
-#        with self.output().temporary_path() as self.temp_output_path:
-#            pickle.dump([fp_final, fp_init], open(self.temp_output_path, 'wb'))
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
-
-
-#class FingerprintUnrelaxedAdslabs(luigi.Task):
-#    '''
-#    This class takes unrelaxed slab+adsorbate (adslab) systems from our pickles, fingerprints
-#    the adslab, fingerprints the slab (without an adsorbate), and then adds fingerprints back
-#    to our Pickles. Note that we fingerprint the slab because we may have had to repeat the
-#    original slab to add the adsorbate onto it, and if so then we also need to fingerprint the
-#    repeated slab.
-#    '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#        '''
-#        We call the GenerateAdslabs class twice; once for the adslab, and once for the slab
-#        '''
-#        # Make a copy of `parameters` for our slab, but then we take off the adsorbate
-#        return [GenerateAdSlabs(self.parameters)]
-#
-#    def run(self):
-#        # Load the list of slab+adsorbate (adslab) systems, and the bare slab. Also find the
-#        # number of slab atoms
-#        adslabs = pickle.load(open(self.input()[0].fn, 'rb'))
-#
-#        # Fingerprint each adslab
-#        for adslab in adslabs:
-#            # Don't bother if the adslab happens to be bare
-#            if adslab['adsorbate'] == '':
-#                fp = {}
-#            else:
-#                fp = utils.fingerprint_atoms(adslab['atoms'])
-#            # Add the fingerprints to the dictionary
-#            adslab['fp'] = fp
-#
-#        # Write
-#        with self.output().temporary_path() as self.temp_output_path:
-#            pickle.dump(adslabs, open(self.temp_output_path, 'wb'))
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
 
 
 #class CalculateSlabSurfaceEnergy(luigi.Task):

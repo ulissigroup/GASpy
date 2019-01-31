@@ -139,11 +139,16 @@ def __create_adsorption_doc(energy_doc):
         energy_doc  A dictionary created by the `CalculateAdsorptionEnergy`
                     task
     '''
+    # Get the `atoms` documents for the slab and adslab
+    with get_mongo_collection('atoms') as collection:
+        adslab_doc = list(collection.find({'fwid': energy_doc['fwids']['adslab']}))[0]
+        slab_doc = list(collection.find({'fwid': energy_doc['fwids']['slab']}))[0]
+
     # Get some pertinent `ase.Atoms` objects
-    bare_slab_init = make_atoms_from_doc(energy_doc['slab']['initial_configuration'])
-    bare_slab_final = make_atoms_from_doc(energy_doc['slab'])
-    adslab_init = make_atoms_from_doc(energy_doc['adslab']['initial_configuration'])
-    adslab_final = make_atoms_from_doc(energy_doc['adslab'])
+    bare_slab_init = make_atoms_from_doc(slab_doc['initial_configuration'])
+    bare_slab_final = make_atoms_from_doc(slab_doc)
+    adslab_init = make_atoms_from_doc(adslab_doc['initial_configuration'])
+    adslab_final = make_atoms_from_doc(adslab_doc)
     # In GASpy, atoms tagged with 0's are slab atoms. Atoms tagged with
     # integers > 0 are adsorbates. We use that information to pull our the slab
     # and adsorbate portions of the adslab.
@@ -166,17 +171,17 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc = make_doc_from_atoms(adslab_final)
     adsorption_doc['initial_configuration'] = make_doc_from_atoms(adslab_init)
     adsorption_doc['adsorption_energy'] = energy_doc['adsorption_energy']
-    adsorption_doc['adsorbate'] = energy_doc['adslab']['fwname']['adsorbate']
-    adsorption_doc['adsorbate_rotation'] = energy_doc['adslab']['fwname']['adsorbate_rotation']
-    adsorption_doc['initial_adsorption_site'] = energy_doc['adslab']['fwname']['adsorption_site']
-    adsorption_doc['mpid'] = energy_doc['adslab']['fwname']['mpid']
-    adsorption_doc['miller'] = energy_doc['adslab']['fwname']['miller']
-    adsorption_doc['shift'] = energy_doc['adslab']['fwname']['shift']
-    adsorption_doc['top'] = energy_doc['adslab']['fwname']['top']
-    adsorption_doc['slabrepeat'] = energy_doc['adslab']['fwname']['slabrepeat']
-    adsorption_doc['vasp_settings'] = energy_doc['adslab']['fwname']['vasp_settings']
-    adsorption_doc['fwids'] = {'slab+adsorbate': energy_doc['adslab']['fwid'],
-                               'slab': energy_doc['slab']['fwid']}
+    adsorption_doc['adsorbate'] = adslab_doc['fwname']['adsorbate']
+    adsorption_doc['adsorbate_rotation'] = adslab_doc['fwname']['adsorbate_rotation']
+    adsorption_doc['initial_adsorption_site'] = adslab_doc['fwname']['adsorption_site']
+    adsorption_doc['mpid'] = adslab_doc['fwname']['mpid']
+    adsorption_doc['miller'] = adslab_doc['fwname']['miller']
+    adsorption_doc['shift'] = adslab_doc['fwname']['shift']
+    adsorption_doc['top'] = adslab_doc['fwname']['top']
+    adsorption_doc['slabrepeat'] = adslab_doc['fwname']['slabrepeat']
+    adsorption_doc['vasp_settings'] = adslab_doc['fwname']['vasp_settings']
+    adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
+                               'slab': slab_doc['fwid']}
     adsorption_doc['fp_final'] = fp_final
     adsorption_doc['fp_init'] = fp_init
     adsorption_doc['movement_data'] = {'max_bare_slab_movement': max_bare_slab_movement,
