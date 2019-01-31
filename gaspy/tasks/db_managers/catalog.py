@@ -1,6 +1,14 @@
 '''
 This module houses the function and helper tasks to enumerate and populate our
 `catalog` Mongo collection of adsorption sites.
+
+WARNING:  You may want to run these bash commands prior to running this
+`udpate_catalog_colection`:
+    export MKL_NUM_THREADS=1
+    export NUMEXPR_NUM_THREADS=1
+    export OMP_NUM_THREADS=1
+They will stop numpy/scipy from trying to parallelize over all the cores, which
+will slow us down since we are already parallelizing via multiprocess.
 '''
 
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
