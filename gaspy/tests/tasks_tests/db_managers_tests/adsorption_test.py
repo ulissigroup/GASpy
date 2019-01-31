@@ -99,6 +99,7 @@ def test___create_adsorption_doc():
     assert isinstance(doc['adsorbate'], str)
     assert set(doc['adsorbate_rotation'].keys()) == set(['phi', 'theta', 'psi'])
     assert all(isinstance(angle, float) for angle in doc['adsorbate_rotation'].values())
+    assert isinstance(doc['initial_adsorption_site'], str)
     assert isinstance(doc['mpid'], str)
     assert len(doc['miller']) == 3
     assert isinstance(doc['shift'], float) or isinstance(doc['shift'], int)

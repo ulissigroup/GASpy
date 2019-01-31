@@ -6,7 +6,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 import warnings
 import copy
 import json
-import tqdm
+from tqdm import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from . import defaults, utils
@@ -14,22 +14,23 @@ from . import defaults, utils
 
 def get_mongo_collection(collection_tag):
     '''
-    Get a mongo collection, but with `__enter__` and `__exit__` methods
-    that will allow you to establish and close connections with `with` statements.
+    Get a mongo collection, but with `__enter__` and `__exit__` methods that
+    will allow you to establish and close connections with `with` statements.
 
     Args:
         collection_tag  All of the information needed to access a specific
                         Mongo collection is stored in the .gaspyrc.json file.
                         This argument specifices which branch within that json
-                        to parse for the Mongo information needed to access
-                        the data. Examples may include (but may not be limited to):
+                        to parse for the Mongo information needed to access the
+                        data. Examples may include (but may not be limited to):
                             'catalog'
                             'atoms'
                             'adsorption'
                             'surface_energy'
     Returns:
         collection  A mongo collection object corresponding to the collection
-                    tag you specified, but with `__enter__` and `__exit__` methods.
+                    tag you specified, but with `__enter__` and `__exit__`
+                    methods.
     '''
     # Login info
     mongo_info = utils.read_rc('mongo_info')[collection_tag]
@@ -58,75 +59,72 @@ class ConnectableCollection(Collection):
         self.database.client.close()
 
 
-def get_adsorption_docs(adsorbates=None, extra_fingerprints=None, filters=None):
+def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
     '''
-    A wrapper for `collection.aggregate` that is tailored specifically for the
-    collection that's tagged `adsorption`.
+    A wrapper for the `aggregate` command that is tailored specifically for the
+    `adsorption` collection.
 
     Args:
-        adsorbates          [optional] A list of the adsorbates that you need to
-                            be present in each document's corresponding atomic
-                            structure. Note that if you pass a list with two adsorbates,
-                            then you will only get matches for structures with *both*
-                            of those adsorbates; you will *not* get structures
-                            with only one of the adsorbates. If you pass nothing, then we
-                            get all documents regardless of adsorbates.
-        extra_fingerprints  A dictionary with key/value pairings that correspond
-                            to a new fingerprint you want to fetch and its location in
-                            the Mongo docs, respectively. Refer to
-                            `gaspy.defaults.adsorption_fingerprints` for examples,
-                            or to the '$project' MongoDB aggregation command.
-        filters             A dictionary whose keys are the locations of elements
-                            in the Mongo collection and whose values are Mongo
-                            matching commands. For examples, look up Mongo `match`
-                            commands. If this argument is `None`, then it will
-                            fetch the default filters from
-                            `gaspy.defaults.adsorption_filters`. If you want to modify
-                            them, we suggest simply fetching that object, modifying it,
-                            and then passing it here.
+        adsorbate           [optional] A string of the adsorbate that you want
+                            to get calculations for. If you pass nothing, then
+                            we get all documents regardless of adsorbate.
+        extra_projections   A dictionary with key/value pairings that
+                            correspond to a new projection you want to fetch
+                            and its location in the Mongo docs, respectively.
+                            Refer to `gaspy.defaults.adsorption_projection` for
+                            examples, or to the `$project` MongoDB operation.
+        filters             A dictionary whose keys are the locations of
+                            elements in the Mongo collection and whose values
+                            are Mongo matching commands. For examples, look up
+                            Mongo `match` commands. If this argument is `None`,
+                            then it will fetch the default filters from
+                            `gaspy.defaults.adsorption_filters`. If you want to
+                            modify them, we suggest simply fetching that
+                            object, modifying it, and then passing it here.
     Returns:
-        docs    A list of dictionaries whose key/value pairings are the
-                ones given by `gaspy.defaults.adsorption_fingerprints`
-                and who meet the filtering criteria of
-                `gaspy.defaults.adsorption_filters`
+        docs    A list of dictionaries whose key/value pairings are the ones
+                given by `gaspy.defaults.adsorption_projection` and who meet
+                the filtering criteria of `gaspy.defaults.adsorption_filters`
     '''
     # Set the filtering criteria of the documents we'll be getting
     if filters is None:
-        filters = defaults.adsorption_filters(adsorbates)
-    if adsorbates:
-        filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
+        filters = defaults.adsorption_filters(adsorbate)
+    if adsorbate:
+        filters['adsorbate'] = adsorbate
     match = {'$match': filters}
 
-    # Establish the information that'll be contained in the documents we'll be getting.
-    # Also add anything the user asked for.
-    fingerprints = defaults.adsorption_fingerprints()
-    if extra_fingerprints:
-        for key, value in extra_fingerprints.items():
-            fingerprints[key] = value
-    project = {'$project': fingerprints}
+    # Establish the information that'll be contained in the documents we'll be
+    # getting. Also add anything the user asked for.
+    projection = defaults.adsorption_projection()
+    if extra_projections:
+        for key, value in extra_projections.items():
+            projection[key] = value
+    project = {'$project': projection}
 
     # Get the documents and clean them up
     pipeline = [match, project]
     with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
-    docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+        docs = [doc for doc in tqdm(cursor)]
+    docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return docs
 
 
 def _clean_up_aggregated_docs(docs, expected_keys):
     '''
-    This function takes a list of dictionaries and returns a new instance
-    of the list without dictionaries that have missing keys or `None` as values.
-    It assumes that dictionaries are flat, thus the `aggregated` part in the name.
+    This function takes a list of dictionaries and returns a new instance of
+    the list without dictionaries that have missing keys or `None` as values.
+    It assumes that dictionaries are flat, thus the `aggregated` part in the
+    name.
 
     Arg:
-        docs            A list of mongo documents, AKA a list of dicts, AKA a list of JSONs
-        expected_keys   The dict keys that that you expect to be in every document.
-                        If a document doesn't have the right keys or has `None` for one of them,
-                        then it is deleted.
+        docs            A list of mongo documents, AKA a list of dicts, AKA a
+                        list of JSONs
+        expected_keys   The dict keys that that you expect to be in every
+                        document.  If a document doesn't have the right keys or
+                        has `None` for one of them, then it is deleted.
     Returns:
         clean_docs  A subset of the `docs` argument with
     '''
@@ -139,26 +137,26 @@ def _clean_up_aggregated_docs(docs, expected_keys):
 
     cleaned_docs = []
     for doc in docs:
-        is_clean = True
+        clean = True
 
         # Clean up documents that don't have the right keys
         if set(doc.keys()) != expected_keys:
-            is_clean = False
+            clean = False
         # Clean up documents that have `None` or '' as values
         for key, value in doc.items():
             if (value is None) or (value is ''):
-                is_clean = False
+                clean = False
             # Clean up documents that have no second-shell atoms
             if key == 'neighborcoord':
                 for neighborcoord in value:  # neighborcoord looks like ['Cu:Cu-Cu-Cu-Cu', 'Cu:Cu-Cu-Cu-Cu']
                     neighbor, coord = neighborcoord.split(':')
                     if not coord:
-                        is_clean = False
+                        clean = False
                         break
-            if not is_clean:
+            if not clean:
                 break
 
-        if is_clean:
+        if clean:
             cleaned_docs.append(doc)
 
     # Warn the user if we did not actually get any documents out the end.
@@ -173,22 +171,18 @@ def get_catalog_docs():
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `catalog`.
 
-    Args:
-
-        lastest_predictions Boolean indicating whether or not you want either
-                            the latest predictions or all of them.
     Returns:
-        docs    A list of dictionaries whose key/value pairings are the
-                ones given by `gaspy.defaults.catalog_fingerprints`
+        docs    A list of dictionaries whose key/value pairings are the ones
+                given by `gaspy.defaults.catalog_projection`
     '''
     # Reorganize the documents to the way we want
-    fingerprints = defaults.catalog_fingerprints()
-    project = {'$project': fingerprints}
+    projection = defaults.catalog_projection()
+    project = {'$project': projection}
 
     # Pull and clean the documents
     pipeline = [project]
     docs = _pull_catalog_from_mongo(pipeline)
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
 
@@ -198,9 +192,9 @@ def _pull_catalog_from_mongo(pipeline):
     Given a Mongo pipeline, get the catalog documents.
 
     Arg:
-        pipeline    A list object containing the pipeline of Mongo operations that
-                    you want to use during Mongo aggregation. Refer to pymongo
-                    documentation on aggregation.
+        pipeline    A list object containing the pipeline of Mongo operations
+                    that you want to use during Mongo aggregation. Refer to
+                    pymongo documentation on aggregation.
     Returns:
         docs    A list of dictionaries containing the catalog documents as per
                 your pipeline.
@@ -208,7 +202,7 @@ def _pull_catalog_from_mongo(pipeline):
     with get_mongo_collection(collection_tag='catalog_readonly') as collection:
         print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor)]
     return docs
 
 
@@ -221,38 +215,38 @@ def get_catalog_docs_with_predictions(latest_predictions=True):
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
     Returns:
-        docs    A list of dictionaries whose key/value pairings are the
-                ones given by `gaspy.defaults.catalog_fingerprints`, along
-                with a 'predictions' key that has the surrogate modeling
-                predictions of adsorption energy.
+        docs    A list of dictionaries whose key/value pairings are the ones
+                given by `gaspy.defaults.catalog_projection`, along with a
+                'predictions' key that has the surrogate modeling predictions
+                of adsorption energy.
     '''
-    # Get the default catalog fingerprints, then append the fingerprints we
+    # Get the default catalog projection, then append the projections we
     # need to get the predictions.
-    fingerprints = defaults.catalog_fingerprints()
-    fingerprints = _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_predictions)
-    fingerprints = _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions)
+    projection = defaults.catalog_projection()
+    projection = _add_adsorption_energy_predictions_to_projection(projection, latest_predictions)
+    projection = _add_orr_predictions_to_projection(projection, latest_predictions)
 
     # Get the documents
-    project = {'$project': fingerprints}
+    project = {'$project': projection}
     pipeline = [project]
     docs = _pull_catalog_from_mongo(pipeline)
 
     # Clean the documents up
-    expected_keys = set(defaults.catalog_fingerprints())
+    expected_keys = set(defaults.catalog_projection())
     expected_keys.add('predictions')
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=expected_keys)
 
     return cleaned_docs
 
 
-def _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_predictions):
+def _add_adsorption_energy_predictions_to_projection(projection, latest_predictions):
     '''
-    This function will add particular keys to a `fingerprints` dictionary that
+    This function will add particular keys to a `projection` dictionary that
     can be used in a Mongo projection to get the adsorption energy predictions
     from our catalog.
 
     Args:
-        fingerprints        A dictionary that you plan to pass as a projection
+        projection          A dictionary that you plan to pass as a projection
                             command to a pymongo collection aggregation.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
@@ -273,21 +267,21 @@ def _add_adsorption_energy_predictions_to_fingerprints(fingerprints, latest_pred
         for model in models:
             data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model)
             if latest_predictions:
-                fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
+                projection[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
             else:
-                fingerprints[data_location] = '$'+data_location
+                projection[data_location] = '$'+data_location
 
-    return fingerprints
+    return projection
 
 
-def _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions):
+def _add_orr_predictions_to_projection(projection, latest_predictions):
     '''
-    This function will add particular keys to a `fingerprints` dictionary that
+    This function will add particular keys to a `projection` dictionary that
     can be used in a Mongo projection to get the ORR chemistry predictions from
     our catalog.
 
     Args:
-        fingerprints        A dictionary that you plan to pass as a projection
+        projection          A dictionary that you plan to pass as a projection
                             command to a pymongo collection aggregation.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
@@ -305,85 +299,38 @@ def _add_orr_predictions_to_fingerprints(fingerprints, latest_predictions):
     for model in models:
         data_location = 'predictions.orr_onset_potential_4e.%s' % model
         if latest_predictions:
-            fingerprints[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
+            projection[data_location] = {'$arrayElemAt': ['$'+data_location, -1]}
         else:
-            fingerprints[data_location] = '$'+data_location
+            projection[data_location] = '$'+data_location
 
-    return fingerprints
+    return projection
 
 
-def get_surface_docs(extra_fingerprints=None, filters=None):
+def get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list=None):
     '''
-    A wrapper for `collection.aggregate` that is tailored specifically for the
-    collection that's tagged `surface_energy`.
+    Gets the same documents from `get_catalog_docs`, but then filters out all
+    items that also show up in `get_adsorption_docs`, i.e., gets the catalog
+    items that have not yet been simulated using our default settings.
 
     Args:
-        extra_fingerprints  A dictionary with key/value pairings that correspond
-                            to a new fingerprint you want to fetch and its location in
-                            the Mongo docs, respectively. Refer to
-                            `gaspy.defaults.surface_fingerprints` for examples.
-        filters             A dictionary whose keys are the locations of elements
-                            in the Mongo collection and whose values are Mongo
-                            matching commands. For examples, look up Mongo `match`
-                            commands. If this argument is `None`, then it will
-                            fetch the default filters from
-                            `gaspy.defaults.surface_filters`. If you want to modify
-                            them, we suggest simply fetching that object, modifying it,
-                            and then passing it here.
+        adsorbate               [optional] A string of the adsorbate that you
+                                want to get documents for.
+        adsorbate_rotation_list A list of dictionaries with the 'psi', 'theta',
+                                and 'phi' keys whose values are the rotation of
+                                the adsorbate for the calculations you want to
+                                check for. Each dictionary you add to this list
+                                will add another set of sites to the output
+                                list. If you add nothing, then we'll just check
+                                for the default rotation only.
     Returns:
-        docs    A list of dictionaries whose key/value pairings are the
-                ones given by `gaspy.defaults.adsorption_fingerprints`
-                and who meet the filtering criteria of
-                `gaspy.defaults.surface_filters`
-    '''
-    # Set the filtering criteria of the documents we'll be getting
-    if filters is None:
-        filters = defaults.surface_filters()
-    match = {'$match': filters}
-
-    # Establish the information that'll be contained in the documents we'll be getting
-    # Also add anything the user asked for.
-    fingerprints = defaults.surface_fingerprints()
-    if extra_fingerprints:
-        for key, value in extra_fingerprints.items():
-            fingerprints[key] = value
-    project = {'$project': fingerprints}
-
-    # Get the documents and clean them up
-    pipeline = [match, project]
-    with get_mongo_collection(collection_tag='surface_energy') as collection:
-        print('Now pulling surface documents...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
-
-    return cleaned_docs
-
-
-def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list=None):
-    '''
-    Gets the same documents from `get_catalog_docs`, but then filters out
-    all items that also show up in `get_adsorption_docs`, i.e., gets the
-    catalog items that have not yet been simulated using our default
-    settings.
-
-    Args:
-        adsorbates  Every site in the catalog can be simulated with sets of
-                    different adsorbates. Here, you specify a sequence of
-                    strings indicating which set of adsorbates you are
-                    checking for simulation. For example:  using
-                    ['OH', 'H'] will look for simulations where OH and H
-                    are co-adsorbed. It will *not* look for simulations
-                    with either OH or H.
-    Returns:
-        docs    A list of dictionaries for various fingerprints.
+        docs    A list of dictionaries for various projection.
     '''
     if adsorbate_rotation_list is None:
-        adsorbate_rotation_list = [copy.deepcopy(defaults.adslab_settings()['rotation'])]
+        adsorbate_rotation_list = [defaults.adslab_settings()['rotation']]
 
     docs_catalog = get_catalog_docs()
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
-    docs_simulated = _get_attempted_adsorption_docs(adsorbates=adsorbates)
+    docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate)
 
     # Round all of the shift values so that they match more easily
     for doc in docs_catalog_with_rotation + docs_simulated:
@@ -393,173 +340,135 @@ def get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list=None):
     # in the catalog has been simulated or not
     print('Hashing catalog documents...')
     catalog_dict = {}
-    for doc in tqdm.tqdm(docs_catalog_with_rotation):
-        hash_ = _hash_doc(doc, ignore_keys=['mongo_id', 'formula'])
+    for doc in tqdm(docs_catalog_with_rotation):
+        hash_ = _hash_doc(doc, ignore_keys=['natoms'])
         catalog_dict[hash_] = doc
 
     # Filter out simulated documents
     for doc in docs_simulated:
-        hash_ = _hash_doc(doc, ignore_keys=['mongo_id',
-                                            'formula',
-                                            'energy',
-                                            'adsorbates',
-                                            'adslab_calculation_date'])
-        try:
-            del catalog_dict[hash_]
-        except KeyError:
-            pass
+        hash_ = _hash_doc(doc, ignore_keys=['adsorbate', 'energy'])
+        catalog_dict.pop(hash_, None)
     docs = list(catalog_dict.values())
     return docs
-
-
-def _get_attempted_adsorption_docs(adsorbates=None, calc_settings=None):
-    '''
-    A wrapper for `collection.aggregate` that is tailored specifically for the
-    collection that's tagged `adsorption`. This differs from `get_adsorption_docs`
-    in two ways:  1) it does not filter out "bad adsorptions" and 2) it takes
-    fingerprints based on initial configurations, not final, post-relaxation
-    cofigurations.
-
-    Args:
-        adsorbates      [optional] A list of the adsorbates that you need to
-                        be present in each document's corresponding atomic
-                        structure. Note that if you pass a list with two adsorbates,
-                        then you will only get matches for structures with *both*
-                        of those adsorbates; you will *not* get structures
-                        with only one of the adsorbates. If you pass nothing, then we
-                        get all documents regardless of adsorbates.
-
-        calc_settings   [optional] An OrderedDict containing the default energy
-                        cutoff, VASP pseudo-potential version number (pp_version),
-                        and exchange-correlational settings. This should be obtained
-                        (and modified, if necessary) from
-                        `gaspy.defaults.adslab_settings()['vasp']`. If `None`,
-                        then pulls default settings.
-
-    Returns:
-        cleaned_docs    A list of dictionaries whose key/value pairings are the
-                        ones given by `gaspy.defaults.adsorption_fingerprints`
-                        and who meet the filtering criteria of
-                        `gaspy.defaults.adsorption_filters`
-    '''
-    # Get only the documents that have the right calculation settings and adsorbates
-    filters = {}
-    if calc_settings is None:
-        calc_settings = defaults.adslab_settings()['vasp']
-    if adsorbates:
-        filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
-    match = {'$match': filters}
-
-    # Establish the information that'll be contained in the documents we'll be getting
-    fingerprints = defaults.adsorption_fingerprints()
-    fingerprints['coordination'] = '$processed_data.fp_init.coordination'
-    fingerprints['neighborcoord'] = '$processed_data.fp_init.neighborcoord'
-    fingerprints['nextnearestcoordination'] = '$processed_data.fp_init.nextnearestcoordination'
-    fingerprints['adsorbate_data'] = {'$arrayElemAt': ['$processed_data.calculation_info.adsorbates', 0]}
-    project = {'$project': fingerprints}
-
-    # Do a second projection to get the rotation and site information out, but keep everything else
-    fingerprints_with_rotation = dict.fromkeys(fingerprints)
-    del fingerprints_with_rotation['adsorbate_data']
-    for key in fingerprints_with_rotation:
-        fingerprints_with_rotation[key] = '$' + key
-    fingerprints_with_rotation['adsorbate_rotation'] = '$adsorbate_data.adsorbate_rotation'
-    fingerprints_with_rotation['adsorption_site'] = '$adsorbate_data.adsorption_site'
-    project_rotation = {'$project': fingerprints_with_rotation}
-
-    # Get the documents and clean them up
-    pipeline = [match, project, project_rotation]
-    with get_mongo_collection(collection_tag='adsorption') as collection:
-        print('Now pulling adsorption documents for sites we have attempted...')
-        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints_with_rotation.keys())
-
-    return cleaned_docs
 
 
 def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
     '''
     For each set of adsorbate rotations in the `adsorbate_rotation_list`
     argument, this function will copy the `docs` argument, add the adsorbate
-    rotation, and then concatenate all of the modified lists together.
-    Note that this function's name calls out "catalog" because it assumes
-    that the documentns have a structure identical to the one returned
-    by `gaspy.gasdb.get_catalog_docs`.
+    rotation, and then concatenate all of the modified lists together. Note
+    that this function's name calls out "catalog" because it assumes that the
+    documents have a structure identical to the one returned by
+    `gaspy.gasdb.get_catalog_docs`.
 
     Args:
         docs                        A list of dictionaries (documents)
         adsorbate_rotation_list     A list of dictionaries whose keys are
                                     'phi', 'theta', and 'psi'.
     Returns:
-        docs_with_rotation  Nearly identical to the `docs` argument,
-                            except it is extended n-fold for each
-                            of the n adsorbate rotations in the
-                            `adsorbate_rotation_list` argument.
+        docs_with_rotation  Nearly identical to the `docs` argument, except it
+                            is extended n-fold for each of the n adsorbate
+                            rotations in the `adsorbate_rotation_list`
+                            argument.
     '''
     docs_with_rotation = []
     for i, adsorbate_rotation in enumerate(adsorbate_rotation_list):
-        print('Making catalog copy number %i of %i...' % (i+1, len(adsorbate_rotation_list)))
+        print('Making catalog copy number %i of %i...'
+              % (i+1, len(adsorbate_rotation_list)))
         docs_copy = copy.deepcopy(docs)     # To make sure we don't modify the parent docs
-        for doc in tqdm.tqdm(docs_copy):
+        for doc in tqdm(docs_copy):
             doc['adsorbate_rotation'] = adsorbate_rotation
         docs_with_rotation += docs_copy
     return docs_with_rotation
 
 
-def _hash_docs(docs, ignore_keys=None, _return_hashes=True):
+def _get_attempted_adsorption_docs(adsorbate=None, vasp_settings=None):
     '''
-    This function helps convert the important characteristics of our systems into hashes
-    so that we may sort through them more quickly. This is useful when trying to
-    quickly compare entries in two databases.
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `adsorption`. This differs from
+    `get_adsorption_docs` in two ways:  1) it does not filter out "bad
+    adsorptions" and 2) it takes projections based on initial configurations,
+    not final, post-relaxation cofigurations. Thus this function finds
+    everything that we've attempted.
 
-    Arg:
-        docs            Sequence of single-layered dictionary/json/Mongo
-                        document/whatever you call it.
-        ignore_keys     A list of strings indicating the keys that you want to ignore
-                        when hashing each document.
-        _return_hashes  *For unit testing only!* If `False`, returns the pre-hash objects
+    Args:
+        adsorbate      [optional] A list of the adsorbates that you need to be
+                        present in each document's corresponding atomic
+                        structure. Note that if you pass a list with two
+                        adsorbates, then you will only get matches for
+                        structures with *both* of those adsorbates; you will
+                        *not* get structures with only one of the adsorbates.
+                        If you pass nothing, then we get all documents
+                        regardless of adsorbates.
+        vasp_settings   [optional] An OrderedDict containing the default energy
+                        cutoff, VASP pseudo-potential version number
+                        (pp_version), and exchange-correlational settings. This
+                        should be obtained (and modified, if necessary) from
+                        `gaspy.defaults.adslab_settings()['vasp']`. If `None`,
+                        then pulls default settings.
     Returns:
-        hashes     A set containing the hashes of the each doc in `docs`.
+        cleaned_docs    A list of dictionaries whose key/value pairings are the
+                        ones given by `gaspy.defaults.adsorption_projection`.
+                        Each document represents a calculation that we have
+                        tried.
     '''
-    # Python doesn't do well with mutable default arguments
-    if not ignore_keys:
-        ignore_keys = []
+    # Get only the documents that have the right calculation settings and
+    # adsorbates
+    if vasp_settings is None:
+        vasp_settings = defaults.adslab_settings()['vasp']
+    filters = {'vasp_settings': vasp_settings}
+    if adsorbate:
+        filters['adsorbate'] = adsorbate
+    match = {'$match': filters}
 
-    # Hash with a progress bar
-    hashes = [_hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=_return_hashes)
-              for doc in tqdm.tqdm(docs)]
-    return hashes
+    # Point the fingerprint at the unrelaxed structure instead of the relaxed
+    # structure
+    projection = defaults.adsorption_projection()
+    projection['coordination'] = '$fp_init.coordination'
+    projection['neighborcoord'] = 'fp_init.neighborcoord'
+    projection['nextnearestcoordination'] = '$fp_init.nextnearestcoordination'
+    # Get some extra adsorbate information out of Mongo
+    projection['adsorbate_rotation'] = '$adsorbate_rotation'
+    projection['adsorption_site'] = '$initial_adsorption_site'
+    project = {'$project': projection}
+
+    # Get the documents and clean them up
+    pipeline = [match, project]
+    with get_mongo_collection(collection_tag='adsorption') as collection:
+        print('Now pulling adsorption documents for sites we have attempted...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+        docs = [doc for doc in tqdm(cursor)]
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
+
+    return cleaned_docs
 
 
 def _hash_doc(doc, ignore_keys=None, _return_hash=True):
     '''
-    Hash a single Mongo document (AKA dictionary). This function currently assumes
-    that all keys are strings and values are hashable.
+    Hash a single Mongo document (AKA dictionary). This function currently
+    assumes that all keys are strings and values are hashable.
 
     Args:
-        doc             A single-layered dictionary/json/Mongo document/whatever you call it.
-        ignore_keys     A sequence of strings indicating the keys that you want to ignore
-                        when hashing the document.
-        _return_hashe   *For unit testing only!* If `False`, returns the pre-hash object
+        doc             A single-layered dictionary/json/Mongo
+                        document/whatever you call it.
+        ignore_keys     A sequence of strings indicating the keys that you want
+                        to ignore when hashing the document.
+        _return_hashe   *For unit testing only!* If `False`, returns the
+                        pre-hash object
     Returns:
         hash_   A hashed version of the document
     '''
     # Python doesn't do well with mutable default arguments
-    if not ignore_keys:
+    if ignore_keys is None:
         ignore_keys = []
-    else:
-        ignore_keys = copy.deepcopy(ignore_keys)
+    # Make sure we don't modify the parent document
+    doc = doc.copy()
 
     # Remove the keys we want to ignore
-    doc = doc.copy()    # To make sure we don't modify the parent document
+    ignore_keys = copy.deepcopy(ignore_keys)
     ignore_keys.append('mongo_id')  # Because no two things will ever share a Mongo ID
-    ignore_keys.append('adslab_calculation_date')   # Can't hash datetime objects
     for key in ignore_keys:
-        try:
-            del doc[key]
-        except KeyError:
-            pass
+        doc.pop(key, None)
 
     # Serialize the document into a string, then hash it
     serialized_doc = json.dumps(doc, sort_keys=True)
@@ -580,122 +489,123 @@ def get_low_coverage_docs(adsorbates, model_tag=defaults.model()):
     energies used to find these sites are taken from DFT calculations whenever
     possible; when not possible, the energies are taken from model predictions.
 
-    If a document came from the adsorption collection, then it will inherit
-    the structure it got from `get_adsorption_docs`. If a document came from
-    the catalog collection, then it will inherit the structure it got from
+    If a document came from the adsorption collection, then it will inherit the
+    structure it got from `get_adsorption_docs`. If a document came from the
+    catalog collection, then it will inherit the structure it got from
     `get_catalog_docs`. For ease-of-use, we also copied the predicted energies
     within each catalog document into the 'energy' key of the document (just
-    like the adsorption documents have) so that all documents have energies
-    in one consistent location.
+    like the adsorption documents have) so that all documents have energies in
+    one consistent location.
 
     Args:
-        adsorbates  A list of strings that represent the adsorbates you want
-                    to get the low-coverage sites for. Example: ['CO'] or ['CO', 'C']
-        model_tag   A string indicating which model you want to
-                    use when using non-DFT, predicted energies. Check out
-                    the `predictions.adsorption_energy` key in the catalog
-                    documents for valid inputs. Note that these keys
-                    are created by the `GASpy_regressions` submodule.
+        adsorbates  A list of strings that represent the adsorbates you want to
+                    get the low-coverage sites for. Example: ['CO'] or ['CO',
+                    'C']
+        model_tag   A string indicating which model you want to use when using
+                    non-DFT, predicted energies. Check out the
+                    `predictions.adsorption_energy` key in the catalog
+                    documents for valid inputs. Note that these keys are
+                    created by the `GASpy_regressions` submodule.
     Returns:
-        docs    A dictionary whose keys are 4-tuples of the MPID, Miller index, shift,
-                and top/bottom of a surface and whose values are the aggregated
-                documents we get from either `get_adsorption_docs` or `get_catalog_docs`
+        docs    A dictionary whose keys are 4-tuples of the MPID, Miller index,
+                shift, and top/bottom of a surface and whose values are the
+                aggregated documents we get from either `get_adsorption_docs`
+                or `get_catalog_docs`
     '''
     docs_dft = get_low_coverage_dft_docs(adsorbates=adsorbates)
     docs_ml = get_low_coverage_ml_docs(adsorbates=adsorbates, model_tag=model_tag)
+    docs_dft_by_surface = {get_surface_from_doc(doc) for doc in docs_dft}
+    docs_ml_by_surface = {get_surface_from_doc(doc) for doc in docs_ml}
 
     # For each ML-predicted surface, figure out if DFT supersedes it
-    docs = copy.deepcopy(docs_ml)
-    for surface, doc_ml in docs.items():
+    docs_by_surface = copy.deepcopy(docs_ml_by_surface)
+    for surface, doc_ml in docs_by_surface.items():
 
         try:
             # If DFT predicts a lower energy, then DFT supersedes ML
-            doc_dft = docs_dft[surface].copy()
+            doc_dft = docs_dft_by_surface[surface].copy()
             if doc_dft['energy'] < doc_ml['energy']:
-                docs[surface] = doc_dft
-                docs[surface]['DFT_calculated'] = True
+                docs_by_surface[surface] = doc_dft
+                docs_by_surface[surface]['DFT_calculated'] = True
 
-            # If both DFT and ML predict the same site to have the lowest energy,
-            # then DFT supersedes ML.
+            # If both DFT and ML predict the same site to have the lowest
+            # energy, then DFT supersedes ML.
             else:
-                ml_site_hash = _hash_doc(doc_ml, ignore_keys=['mongo_id',
-                                                              'formula',
-                                                              'adsorption_site',
-                                                              'predictions'])
-                dft_site_hash = _hash_doc(doc_dft, ignore_keys=['mongo_id',
-                                                                'formula',
-                                                                'energy',
-                                                                'adsorbates',
-                                                                'adslab_calculation_date'])
+                ml_site_hash = _hash_doc(doc_ml, ignore_keys=['adsorption_site', 'natoms', 'predictions'])
+                dft_site_hash = _hash_doc(doc_dft, ignore_keys=['energy', 'adsorbate'])
                 if dft_site_hash == ml_site_hash:
-                    docs[surface] = doc_dft.copy()
-                    docs[surface]['DFT_calculated'] = True
+                    docs_by_surface[surface] = doc_dft.copy()
+                    docs_by_surface[surface]['DFT_calculated'] = True
                 else:
-                    docs[surface]['DFT_calculated'] = False
+                    docs_by_surface[surface]['DFT_calculated'] = False
 
         # EAFP in case we don't have any DFT data for a surface.
         except KeyError:
-            docs[surface]['DFT_calculated'] = False
+            docs_by_surface[surface]['DFT_calculated'] = False
 
-    # If we somehow have a DFT site that is on a surface that's not
-    # even in our catalog, then just add it
-    surfaces_ml = set(docs_ml.keys())
-    for surface, doc_dft in docs_dft.items():
+    # If we somehow have a DFT site that is on a surface that's not even in our
+    # catalog, then just add it. This might happen because we still have data
+    # from old versions of our catalog.
+    surfaces_ml = set(docs_ml_by_surface.keys())
+    for surface, doc_dft in docs_dft_by_surface.items():
         if surface not in surfaces_ml:
-            docs[surface] = doc_dft
-            docs[surface]['DFT_calculated'] = True
+            docs_by_surface[surface] = doc_dft
+            docs_by_surface[surface]['DFT_calculated'] = True
 
+    docs = list(docs_by_surface.values())
     return docs
 
 
-def get_low_coverage_dft_docs(adsorbates, filters=None):
+def get_low_coverage_dft_docs(adsorbate, filters=None):
     '''
-    This function is analogous to the `get_adsorption_docs` function, except
-    it only returns documents that represent the low-coverage sites for
-    each surface (i.e., the sites with the lowest energy for their respective surface).
+    This function is analogous to the `get_adsorption_docs` function, except it
+    only returns documents that represent the low-coverage sites for each
+    surface (i.e., the sites with the lowest energy for their respective
+    surface).
 
     Arg:
-        adsorbates  A list of the adsorbates that you need to be present in each
-                    document's corresponding atomic structure. Note that if you
-                    pass a list with two adsorbates, then you will only get
-                    matches for structures with *both* of those adsorbates; you
-                    will *not* get structures with only one of the adsorbates.
-        filters     A dictionary whose keys are the locations of elements
-                    in the Mongo collection and whose values are Mongo
-                    matching commands. For examples, look up Mongo `match`
-                    commands. If this argument is `None`, then it will
-                    fetch the default filters from
-                    `gaspy.defaults.adsorption_filters`. If you want to modify
-                    them, we suggest simply fetching that object, modifying it,
-                    and then passing it here.
+        adsorbate   A string of the adsorbate that you want to get calculations
+                    for.
+        adsorbate   A list of the adsorbates that you need to be present in
+                    each document's corresponding atomic structure. Note that
+                    if you pass a list with two adsorbates, then you will only
+                    get matches for structures with *both* of those adsorbates;
+                    you will *not* get structures with only one of the
+                    adsorbates.
+        filters     A dictionary whose keys are the locations of elements in
+                    the Mongo collection and whose values are Mongo matching
+                    commands. For examples, look up Mongo `match` commands. If
+                    this argument is `None`, then it will fetch the default
+                    filters from `gaspy.defaults.adsorption_filters`. If you
+                    want to modify them, we suggest simply fetching that
+                    object, modifying it, and then passing it here.
     Returns:
-        docs_by_surface A dictionary whose keys are a 4-tuple indicating what a surface
-                        is (mpid, miller, shift, top) and whose values are the projected
-                        Mongo document for the low coverage site on that surface.
+        docs    A list of aggregated Mongo documents (i.e., dictionaries) from
+                our `adsorption` Mongo collection that happen to have the
+                lowest adsorption energy on their respective surfaces, as
+                defined by their (mpid, miller, shift, top) values.
     '''
     # Set the filtering criteria of the documents we'll be getting
     if filters is None:
-        filters = defaults.adsorption_filters(adsorbates)
-    if adsorbates:
-        filters['processed_data.calculation_info.adsorbate_names'] = adsorbates
+        filters = defaults.adsorption_filters(adsorbate)
+    if adsorbate:
+        filters['adsorbate'] = adsorbate
     match = {'$match': filters}
 
-    # Project the catalog items onto what a "adsorption document" would normally look like.
-    fingerprints = defaults.adsorption_fingerprints()
-    # Round the shift so that we can group more easily. Credit to Vince Browdren on Stack Exchange
-    fingerprints['shift'] = {'$subtract': [{'$add': ['$processed_data.calculation_info.shift',
-                                                     0.0049999999999999999]},
-                                           {'$mod': [{'$add': ['$processed_data.calculation_info.shift',
-                                                               0.0049999999999999999]},
-                                                     0.01]}]}
-    project = {'$project': fingerprints}
+    # Get the standard document projection, then round the shift so that we can
+    # group more easily. Credit to Vince Browdren on Stack Exchange
+    projections = defaults.adsorption_projections()
+    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
+                                          {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
+    project = {'$project': projections}
 
-    # Now order the documents so that the low-coverage sites come first
-    # (i.e., the one with the lowest energy)
+    # Now order the documents so that the low-coverage sites come first (i.e.,
+    # the one with the lowest energy)
     sort = {'$sort': {'energy': 1}}
 
-    # Get the first document for each surface, which (after sorting) is the low-coverage document
-    grouping_fields = dict.fromkeys(fingerprints.keys())
+    # Get the first document for each surface, which (after sorting) is the
+    # low-coverage document
+    grouping_fields = dict.fromkeys(projections.keys())
     for key in grouping_fields:
         grouping_fields[key] = {'$first': '$'+key}
     grouping_fields['_id'] = {'mpid': '$mpid',
@@ -704,54 +614,49 @@ def get_low_coverage_dft_docs(adsorbates, filters=None):
                               'top': '$top'}
     group = {'$group': grouping_fields}
 
-    # Get the documents
+    # Pull the documents
     pipeline = [match, project, sort, group]
     with get_mongo_collection(collection_tag='adsorption') as collection:
         print('Now pulling low coverage adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor)]
 
-    # Clean the documents up
+    # Clean and return the documents
     for doc in docs:
         del doc['_id']
-    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
-
-    # Structure the output into a surface:document dictionary
-    docs_by_surface = {}
-    for doc in cleaned_docs:
-        surface = _get_surface_from_doc(doc)
-        docs_by_surface[surface] = doc
-    return docs_by_surface
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projections.keys())
+    return cleaned_docs
 
 
-def _get_surface_from_doc(doc):
+def get_surface_from_doc(doc):
     '''
-    Some of our functions parse by "surface", which we identify by mpid, Miller index,
-    shift, and whether it's on the top or bottom of the slab. This helper function
-    parses an aggregated/projected Mongo document for you and gives you back a tuple
-    that contains these surface identifiers.
+    Some of our functions parse by "surface", which we identify by mpid, Miller
+    index, shift, and whether it's on the top or bottom of the slab. This
+    helper function parses an aggregated/projected Mongo document for you and
+    gives you back a tuple that contains these surface identifiers.
 
     Arg:
-        doc     A Mongo document (dictionary) that contains the keys 'mpid', 'miller',
-                'shift', and 'top'.
+        doc     A Mongo document (dictionary) that contains the keys 'mpid',
+                'miller', 'shift', and 'top'.
     Returns:
-        surface A 4-tuple whose elements are the mpid, Miller index, shift, and a
-                boolean indicating whether the surface is on the top or bottom of
-                the slab. Note that the Miller indices will be formatted as a string,
-                and the shift will be rounded to 2 decimal places.
+        surface A 4-tuple whose elements are the mpid, Miller index, shift, and
+                a Boolean indicating whether the surface is on the top or
+                bottom of the slab. Note that the Miller indices will be
+                formatted as a string, and the shift will be rounded to 2
+                decimal places.
     '''
     surface = (doc['mpid'], str(doc['miller']), round(doc['shift'], 2), doc['top'])
     return surface
 
 
-def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.model()):
+def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
     '''
     This function is analogous to the `get_catalog_docs` function, except
     it only returns documents that represent the low-coverage sites for
     each surface (i.e., the sites with the lowest energy for their respective surface).
 
     Arg:
-        adsorbates  A list of the adsorbates that you need to be present in each
+        adsorbate   A list of the adsorbates that you need to be present in each
                     document's corresponding atomic structure. Note that if you
                     pass a list with two adsorbates, then you will only get
                     matches for structures with *both* of those adsorbates; you
@@ -759,29 +664,29 @@ def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.model()):
         model_tag   A string indicating which model you want to use to predict
                     the adsorption energy.
     Returns:
-        docs_by_surface A dictionary whose keys are a 4-tuple indicating what a surface
-                        is (mpid, miller, shift, top) and whose values are the projected
-                        Mongo document for the low coverage site on that surface.
+        docs    A list of aggregated Mongo documents (i.e., dictionaries) from
+                our `catalog` Mongo collection that happen to have the lowest
+                ML-predicted adsorption energy on their respective surfaces, as
+                defined by their (mpid, miller, shift, top) values.
     '''
-    # Project the catalog items onto what a "catalog document" would normally look like.
-    fingerprints = defaults.catalog_fingerprints()
-    # Round the shift so that we can group more easily. Credit to Vince Browdren on Stack Exchange
-    fingerprints['shift'] = {'$subtract': [{'$add': ['$processed_data.calculation_info.shift',
-                                                     0.0049999999999999999]},
-                                           {'$mod': [{'$add': ['$processed_data.calculation_info.shift',
-                                                               0.0049999999999999999]},
-                                                     0.01]}]}
-    # Add the predictions
-    data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbates[0], model_tag)
-    fingerprints['energy'] = {'$arrayElemAt': [{'$arrayElemAt': ['$'+data_location, -1]}, 1]}
-    project = {'$project': fingerprints}
+    # Get the standard document projection, then round the shift so that we can
+    # group more easily. Credit to Vince Browdren on Stack Exchange
+    projections = defaults.catalog_projection()
+    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
+                                          {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
 
-    # Now order the documents so that the low-coverage sites come first
-    # (i.e., the one with the lowest energy)
+    # Add the predictions
+    data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model_tag)
+    projections['energy'] = {'$arrayElemAt': [{'$arrayElemAt': ['$'+data_location, -1]}, 1]}
+    project = {'$project': projections}
+
+    # Now order the documents so that the low-coverage sites come first (i.e.,
+    # the one with the lowest energy)
     sort = {'$sort': {'energy': 1}}
 
-    # Get the first document for each surface, which (after sorting) is the low-coverage document
-    grouping_fields = dict.fromkeys(fingerprints.keys())
+    # Get the first document for each surface, which (after sorting) is the
+    # low-coverage document
+    grouping_fields = dict.fromkeys(projections.keys())
     for key in grouping_fields:
         grouping_fields[key] = {'$first': '$'+key}
     grouping_fields['_id'] = {'mpid': '$mpid',
@@ -795,73 +700,19 @@ def get_low_coverage_ml_docs(adsorbates, model_tag=defaults.model()):
     with get_mongo_collection(collection_tag='catalog') as collection:
         print('Now pulling low coverage catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm.tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor)]
 
     # Clean the documents up
     for doc in docs:
         del doc['_id']
-    docs = _clean_up_aggregated_docs(docs, expected_keys=fingerprints.keys())
-
-    # Structure the output into a surface:document dictionary
-    docs_by_surface = {}
-    for doc in docs:
-        surface = _get_surface_from_doc(doc)
-        docs_by_surface[surface] = doc
-    return docs_by_surface
-
-
-def remove_duplicates_in_adsorption_collection():
-    ''' Things that share FireWorks IDs for slab+adsorbate structures are duplicates '''
-    identifying_query = {'adslab_fwid': '$processed_data.FW_info.slab+adsorbate'}
-    _remove_duplicates_in_a_collection(collection_tag='adsorption',
-                                       identifying_query=identifying_query)
-
-
-def remove_duplicates_in_atoms_collection():
-    ''' Things that share FireWorks IDs are duplicates '''
-    identifying_query = {'fwid': '$fwid'}
-    _remove_duplicates_in_a_collection(collection_tag='atoms',
-                                       identifying_query=identifying_query)
-
-
-def _remove_duplicates_in_a_collection(collection_tag, identifying_query):
-    '''
-    This function removes duplicate entries in a collection. "What constitutes
-    a 'duplicate'", you ask? You do, of course, via the `identifying_query`
-    argument!
-
-    Args:
-        collection_tag      A string indicating which collection you want to parse
-        identifying_query   A mongo-style query (i.e., a dictionary) with a
-                            virtually arbitrary key and a value corresponding
-                            to the location of the Mongo document information
-                            that should be unique among all documents.
-    '''
-    group = {'_id': identifying_query}
-
-    # Reference <https://www.compose.com/articles/finding-duplicate-documents-in-mongodb/>
-    # for details on how this works
-    group['mongo_ids'] = {'$addToSet': '$_id'}
-    group['count'] = {'$sum': 1}
-    match = {'count': {'$gt': 1}}
-
-    # `docs` will have one entry per FWID that happens to have multiple documents
-    pipeline = [{'$group': group}, {'$match': match}]
-    with get_mongo_collection(collection_tag=collection_tag) as collection:
-        docs = list(collection.aggregate(pipeline=pipeline, allowDiskUse=True))
-
-        # For each FWID that has duplicates, keep only the last document.
-        # Delete the rest.
-        for doc in docs:
-            extra_mongo_ids = doc['mongo_ids'][:-1]
-            for id_ in extra_mongo_ids:
-                collection.delete_one({'_id': id_})
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projections.keys())
+    return cleaned_docs
 
 
 def purge_adslab(fwid):
     '''
-    This function will "purge" an adsorption calculation from our database
-    by removing it from our Mongo collections and defusing it within FireWorks.
+    This function will "purge" an adsorption calculation from our database by
+    removing it from our Mongo collections and defusing it within FireWorks.
 
     Arg:
         fwid    The FireWorks ID of the calculation in question
@@ -873,4 +724,53 @@ def purge_adslab(fwid):
         collection.delete_one({'fwid': fwid})
 
     with get_mongo_collection('adsorption') as collection:
-        collection.delete_one({'processed_data.FW_info.slab+adsorbate': fwid})
+        collection.delete_one({'fwids.adslab': fwid})
+
+
+#def get_surface_docs(extra_projections=None, filters=None):
+#    '''
+#    A wrapper for `collection.aggregate` that is tailored specifically for the
+#    collection that's tagged `surface_energy`.
+#
+#    Args:
+#        extra_projections   A dictionary with key/value pairings that
+#                            correspond to a new projection you want to fetch
+#                            and its location in the Mongo docs, respectively.
+#                            Refer to `gaspy.defaults.surface_projection` for
+#                            examples, or to the `$project` MongoDB operation.
+#        filters             A dictionary whose keys are the locations of elements
+#                            in the Mongo collection and whose values are Mongo
+#                            matching commands. For examples, look up Mongo `match`
+#                            commands. If this argument is `None`, then it will
+#                            fetch the default filters from
+#                            `gaspy.defaults.surface_filters`. If you want to modify
+#                            them, we suggest simply fetching that object, modifying it,
+#                            and then passing it here.
+#    Returns:
+#        docs    A list of dictionaries whose key/value pairings are the
+#                ones given by `gaspy.defaults.adsorption_projection`
+#                and who meet the filtering criteria of
+#                `gaspy.defaults.surface_filters`
+#    '''
+#    # Set the filtering criteria of the documents we'll be getting
+#    if filters is None:
+#        filters = defaults.surface_filters()
+#    match = {'$match': filters}
+#
+#    # Establish the information that'll be contained in the documents we'll be getting
+#    # Also add anything the user asked for.
+#    projection = defaults.surface_projection()
+#    if extra_projections:
+#        for key, value in extra_projections.items():
+#            projection[key] = value
+#    project = {'$project': projection}
+#
+#    # Get the documents and clean them up
+#    pipeline = [match, project]
+#    with get_mongo_collection(collection_tag='surface_energy') as collection:
+#        print('Now pulling surface documents...')
+#        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+#        docs = [doc for doc in tqdm(cursor)]
+#    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
+#
+#    return cleaned_docs

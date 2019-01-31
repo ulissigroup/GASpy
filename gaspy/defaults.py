@@ -193,53 +193,49 @@ def adsorbates():
     return adsorbates
 
 
-def model():
+def adsorption_projection():
     '''
-    We use surrogate models to make predictions of DFT information. This is the
-    tag associated with our default model.
-    '''
-    return 'model0'
+    WARNING:  A lot of code depends on this. Do not add or remove anything out
+    without thinking very hard about it. If you do add something, consider
+    changing the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
 
-
-def adsorption_fingerprints():
-    '''
-    WARNING:  A lot of code depends on this. Do not add or remove anything out without
-    thinking very hard about it. If you do add something, consider changing
-    the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
-
-    Returns a dictionary that is meant to be passed to mongo aggregators to create
-    new mongo docs. The keys here are the keys for the new mongo doc, and the values
-    are where you can find the information from the old mongo docs (in our databases).
+    Returns:
+        projection  A dictionary that is meant to be passed as a projection
+                    operator to a Mongo `find` or `aggregate` command. The keys
+                    here are the keys for the new dictionary/doc you are
+                    making, and the values are where you can find the
+                    information from the old Mongo docs (in our `adsorption`
+                    collection).
     '''
     fingerprints = {'_id': 0,
                     'mongo_id': '$_id',
-                    'mpid': '$processed_data.calculation_info.mpid',
-                    'formula': '$processed_data.calculation_info.formula',
-                    'miller': '$processed_data.calculation_info.miller',
-                    'shift': '$processed_data.calculation_info.shift',
-                    'top': '$processed_data.calculation_info.top',
-                    'coordination': '$processed_data.fp_final.coordination',
-                    'neighborcoord': '$processed_data.fp_final.neighborcoord',
-                    'nextnearestcoordination': '$processed_data.fp_final.nextnearestcoordination',
-                    'energy': '$results.energy',
-                    'adsorbates': '$processed_data.calculation_info.adsorbate_names',
-                    'adslab_calculation_date': '$processed_data.FW_info.adslab_calculation_date'}
+                    'adsorbate': '$adsorbate',
+                    'mpid': '$mpid',
+                    'miller': '$miller',
+                    'shift': '$shift',
+                    'top': '$top',
+                    'coordination': '$fp_final.coordination',
+                    'neighborcoord': '$fp_final.neighborcoord',
+                    'nextnearestcoordination': '$fp_final.nextnearestcoordination',
+                    'energy': '$results.energy'}
     return fingerprints
 
 
-def adsorption_filters(adsorbates):
+def adsorption_filter(adsorbate):
     '''
-    Not all of our adsorption calculations are "good" ones. Some end up in desorptions,
-    dissociations, do not converge, or have ridiculous energies. These are the
-    filters we use to sift out these "bad" documents.
+    Not all of our adsorption calculations are "good" ones. Some end up in
+    desorptions, dissociations, do not converge, or have ridiculous energies.
+    These are the filters we use to sift out these "bad" documents. It also
+    happens to be the `query` operator we can pass to Mongo's `find` or
+    `aggregate` commands.
 
     Arg:
-        adsorbates  A list of the adsorbates that you need to
-                    be present in each document's corresponding atomic
-                    structure. Note that if you pass a list with two adsorbates,
-                    then you will only get matches for structures with *both*
-                    of those adsorbates; you will *not* get structures
-                    with only one of the adsorbates.
+        adsorbate   A string of the adsorbate that you want to get
+                    calculations for.
+    Returns:
+        filters     A dictionary that is meant to be used as a `query` argument
+                    for our `adsorption` Mongo collection's `find` or
+                    `aggregate` commands.
     '''
     filters = {}
 
@@ -249,72 +245,75 @@ def adsorption_filters(adsorbates):
     ads_move_max = 1.5          # Maximum distance the adsorbate can move [Ang]
     bare_slab_move_max = 0.5    # Maximum distance that any atom can move on bare slab [Ang]
     slab_move_max = 1.5         # Maximum distance that any slab atom can move after adsorption [Ang]
-    if adsorbates == ['CO']:
-        energy_min = -7.
-        energy_max = 5.
-    elif adsorbates == ['H']:
-        energy_min = -5.
-        energy_max = 5.
-    elif adsorbates == ['O']:
-        energy_min = -4.
-        energy_max = 9.
-    elif adsorbates == ['OH']:
-        energy_min = -3.5
-        energy_max = 4.
-    elif adsorbates == ['OOH']:
-        energy_min = 0.
-        energy_max = 9.
+    if adsorbate == 'CO':
+        energy_range = (-7., 5.)
+    elif adsorbate == 'H':
+        energy_range = (-5., 5.)
+    elif adsorbate == 'O':
+        energy_range = (-4., 9.)
+    elif adsorbate == 'OH':
+        energy_range = (-3.5, 4.)
+    elif adsorbate == 'OOH':
+        energy_range = (0., 9.)
     else:
-        energy_min = -50.
-        energy_max = 50.
-        warnings.warn('You are using adsorption document filters for a set of adsorbates that '
-                      'we have not yet established valid energy bounds for, yet. We are accepting '
-                      'anything in the range between %i and %i eV.' % (energy_min, energy_max))
+        energy_range = (-50., 50.)
+        warnings.warn('You are using adsorption document filters for an '
+                      'adsorbate (%s) that we have not yet established valid '
+                      'energy bounds for. We are accepting anything in the'
+                      'range between %i and %i eV.'
+                      % (adsorbate, energy_range[0], energy_range[1]))
 
     # Distribute filters into mongo-readable form
-    filters['results.energy'] = {'$gt': energy_min, '$lt': energy_max}
+    filters['results.energy'] = {'$gt': energy_range[0], '$lt': energy_range[1]}
     filters['results.fmax'] = {'$lt': f_max}
-    filters['processed_data.movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
-    filters['processed_data.movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
-    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': slab_move_max}
-    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
+    filters['movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
+    filters['movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
+    filters['movement_data.max_surface_movement'] = {'$lt': slab_move_max}
+    filters['vasp_settings.gga'] = xc_settings()['gga']
 
     return filters
 
 
-def catalog_fingerprints():
+def catalog_projection():
     '''
-    WARNING:  A lot of code depends on this. Do not add or remove anything out without
-    thinking very hard about it. If you do add something, consider changing
-    the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
+    WARNING:  A lot of code depends on this. Do not add or remove anything out
+    without thinking very hard about it. If you do add something, consider
+    changing the ignore_keys in `gaspy.gasdb.get_unsimulated_catalog_docs`.
 
-    Returns a dictionary that is meant to be passed to mongo aggregators to create
-    new mongo docs. The keys here are the keys for the new mongo doc, and the values
-    are where you can find the information from the old mongo docs (in our databases).
+    Returns:
+        projection  A dictionary that is meant to be passed as a projection
+                    operator to a Mongo `find` or `aggregate` command. The keys
+                    here are the keys for the new dictionary/doc you are
+                    making, and the values are where you can find the
+                    information from the old Mongo docs (in our `catalog`
+                    collection).
     '''
-    fingerprints = {'_id': 0,
-                    'mongo_id': '$_id',
-                    'mpid': '$processed_data.calculation_info.mpid',
-                    'formula': '$processed_data.calculation_info.formula',
-                    'miller': '$processed_data.calculation_info.miller',
-                    'shift': '$processed_data.calculation_info.shift',
-                    'top': '$processed_data.calculation_info.top',
-                    'natoms': '$atoms.natoms',
-                    'coordination': '$processed_data.fp_init.coordination',
-                    'neighborcoord': '$processed_data.fp_init.neighborcoord',
-                    'nextnearestcoordination': '$processed_data.fp_init.nextnearestcoordination',
-                    'adsorption_site': '$processed_data.calculation_info.adsorption_site'}
-    return fingerprints
+    projection = {'_id': 0,
+                  'mongo_id': '$_id',
+                  'mpid': '$mpid',
+                  'miller': '$miller',
+                  'shift': '$shift',
+                  'top': '$top',
+                  'natoms': '$atoms.natoms',
+                  'coordination': '$coordination',
+                  'neighborcoord': '$neighborcoord',
+                  'nextnearestcoordination': '$nextnearestcoordination',
+                  'adsorption_site': '$adsorption_site'}
+    return projection
 
 
-def surface_fingerprints():
+def surface_projection():
     '''
-    WARNING:  A lot of code depends on this. Do not take anything out without thinking
-    very hard about it.
+    WARNING:  A lot of code depends on this. Do not take anything out without
+    thinking very hard about it.
 
-    Returns a dictionary that is meant to be passed to mongo aggregators to create
-    new mongo docs. The keys here are the keys for the new mongo doc, and the values
-    are where you can find the information from the old mongo docs (in our databases).
+    Returns:
+        projection  A dictionary that is meant to be passed as a projection
+                    operator to a Mongo `find` or `aggregate` command. The keys
+                    here are the keys for the new dictionary/doc you are
+                    making, and the values are where you can find the
+                    information from the old Mongo docs (in our
+                    `surface_energy` collection).
     '''
     fingerprints = {'_id': 0,
                     'mongo_id': '$_id',
@@ -328,11 +327,17 @@ def surface_fingerprints():
     return fingerprints
 
 
-def surface_filters():
+def surface_filter():
     '''
-    Not all of our surface calculations are "good" ones. Some do not converge
-    or have end up having a lot of movement. These are the filters we use to sift
-    out these "bad" documents.
+    Not all of our surface energy calculations are "good" ones. Some do not
+    converge or have end up having a lot of movement. These are the filters we
+    use to sift out these "bad" documents. It also happens to be the `query`
+    operator we can pass to Mongo's `find` or `aggregate` commands.
+
+    Returns:
+        filters     A dictionary that is meant to be used as a `query` argument
+                    for our `surface_energy` Mongo collection's `find` or
+                    `aggregate` commands.
     '''
     filters = {}
 
@@ -347,3 +352,11 @@ def surface_filters():
     filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
 
     return filters
+
+
+def model():
+    '''
+    We use surrogate models to make predictions of DFT information. This is the
+    tag associated with our default model.
+    '''
+    return 'model0'

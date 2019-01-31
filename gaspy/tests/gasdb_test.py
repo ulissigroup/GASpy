@@ -1,9 +1,9 @@
 '''
 Tests for the `gasdb` submodule. Since this submodule deals with Mongo
 databases so much, we created and work with various collections that are tagged
-with `unit_testing_adsorption`. We assume that these collections have very
-specific contents. We also assume that documents within each collection should
-have the same exact JSON architecture.
+like `unit_testing_adsorption` or `unit_testing_atoms`. We assume that these
+collections have very specific contents. We also assume that documents within
+each collection should have the same exact JSON architecture.
 '''
 
 __author__ = 'Kevin Tran'
@@ -24,30 +24,28 @@ from ..gasdb import (get_mongo_collection,
                      get_catalog_docs_with_predictions,
                      _add_adsorption_energy_predictions_to_fingerprints,
                      _add_orr_predictions_to_fingerprints,
-                     get_surface_docs,
+                     #get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
                      _duplicate_docs_per_rotations,
-                     _hash_docs,
                      _hash_doc,
                      get_low_coverage_docs,
                      get_low_coverage_dft_docs,
-                     _get_surface_from_doc,
-                     get_low_coverage_ml_docs,
-                     remove_duplicates_in_adsorption_collection)
+                     get_surface_from_doc,
+                     get_low_coverage_ml_docs)
 
 # Things we need to do the tests
 import pytest
 import copy
 import pickle
 import random
-import binascii
 import hashlib
+from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
 from ..utils import read_rc
-from ..defaults import catalog_fingerprints
+from ..defaults import catalog_projection
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
@@ -95,106 +93,43 @@ def test_ConnectableCollection(collection_tag):
     assert '__exit__' in dir(collection)
 
 
-@pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates, extra_fingerprints',
-                         [(None, None),
-                          (['CO'], None),
-                          (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
-                          (['H'], {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'})])
-def test_to_create_expected_aggregated_adsorption_documents(adsorbates, extra_fingerprints):
-    docs = get_adsorption_docs(adsorbates=adsorbates, extra_fingerprints=extra_fingerprints)
-    file_name = __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints)
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-    assert True
-
-
-def get_expected_aggregated_adsorption_documents(adsorbates=None, extra_fingerprints=None):
-    file_name = __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints)
-    with open(file_name, 'rb') as file_handle:
-        docs = pickle.load(file_handle)
-    return docs
-
-
-def __get_file_name_from_adsorbates_and_extra_fingerprints(adsorbates, extra_fingerprints):
-    '''
-    We need to save pickle caches for some test results with different parameters.
-    This is a helper function to establish what these files will be called.
-    '''
-    # Turn `extra_fingerprints` into a hex string. EAFP to deal with nested vs. flat fingerprints
-    try:
-        fps_as_str = str(list(extra_fingerprints.keys())) + str(list(extra_fingerprints.values()))
-    except AttributeError:
-        fps_as_str = ''
-    fps_as_hex = binascii.hexlify(fps_as_str.encode()).hex()
-    fps_as_hex = fps_as_hex[:5] + fps_as_hex[-5:]   # Hackly get around an issue around too-long-of-a-file-name
-
-    # Turn `adsorbates` into a string. EAFP to deal with `None`
-    try:
-        ads_as_str = '_'.join(adsorbates)
-    except TypeError:
-        ads_as_str = ''
-
-    # Concatenate inputs
-    inputs_as_str = ads_as_str + '_' + fps_as_hex
-    file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_adsorption_documents_' + inputs_as_str + '.pkl'
-    return file_name
-
-
 @pytest.mark.filterwarnings('ignore:  You are using adsorption document filters '
-                            'for a set of adsorbates that we have not yet '
+                            'for a set of adsorbate that we have not yet '
                             'established valid energy bounds for, yet.')
-@pytest.mark.parametrize('adsorbates, extra_fingerprints',
+@pytest.mark.parametrize('adsorbate, extra_fingerprints',
                          [(None, None),
                           (['CO'], None),
-                          (None, {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'}),
-                          (['H'], {'adslab FWID': 'processed.data.FW_info.slab+adsorbate'})])
-def test_get_adsorption_docs(adsorbates, extra_fingerprints):
+                          (None, {'adslab FWID': 'fwids.adslab'}),
+                          (['H'], {'adslab FWID': 'fwids.adslab'})])
+def test_get_adsorption_docs(adsorbate, extra_fingerprints):
     '''
-    Currently not testing the "filters" argument because, well, I am being lazy.
+    Currently not testing the `filters` argument because, well, I am being lazy.
     Feel free to change that yourself.
     '''
-    expected_docs = get_expected_aggregated_adsorption_documents(adsorbates=adsorbates,
-                                                                 extra_fingerprints=extra_fingerprints)
-    docs = get_adsorption_docs(adsorbates=adsorbates, extra_fingerprints=extra_fingerprints)
-    assert _compare_unordered_sequences(docs, expected_docs)
+    docs = get_adsorption_docs(adsorbate=adsorbate, extra_fingerprints=extra_fingerprints)
 
-
-def _compare_unordered_sequences(seq0, seq1):
-    '''
-    If (1) we want to see if two sequences are identical, (2) do not care about ordering,
-    (3) the items are not hashable, and (4) items are not orderable, then use this
-    function to compare them. Credit goes to CrowbarKZ on StackOverflow.
-    '''
-    # A hack to ignore mongo IDs, which we don't _really_ care about...
-    seq0 = __remove_mongo_ids_from_docs(seq0)
-    seq1 = __remove_mongo_ids_from_docs(seq1)
-
-    try:
-        for element in seq1:
-            seq0.remove(element)
-    except ValueError:
-        return False
-    return not seq0
-
-
-def __remove_mongo_ids_from_docs(docs):
-    ''' Helper function to remove the 'mongo_id' key:value pairing from a list of dictionaries '''
-    new_docs = []
+    assert len(docs) > 0
     for doc in docs:
-        try:
-            del doc['mongo_id']
-        except KeyError:
-            pass
-        new_docs.append(doc)
-    return new_docs
+        assert isinstance(doc['mongo_id'], ObjectId)
+        assert isinstance(doc['adsorbate'], str)
+        assert isinstance(doc['mpid'], str)
+        assert len(doc['miller']) == 3
+        assert all(isinstance(miller, int) for miller in doc['miller'])
+        assert isinstance(doc['shift'], float)
+        assert isinstance(doc['top'], bool)
+        assert isinstance(doc['coordination'], str)
+        assert isinstance(doc['neighborcoord'], str)
+        assert isinstance(doc['nextnearestcoordination'], str)
+        assert isinstance(doc['energy'], float)
+        for fingerprint in extra_fingerprints:
+            assert fingerprint in doc
 
 
 def test__clean_up_aggregated_docs():
-    expected_docs = get_expected_aggregated_adsorption_documents()
-    dirty_docs = __make_documents_dirty(expected_docs)
-    clean_docs = _clean_up_aggregated_docs(dirty_docs, expected_keys=expected_docs[0].keys())
-    assert _compare_unordered_sequences(clean_docs, expected_docs)
+    docs = get_adsorption_docs()
+    dirty_docs = __make_documents_dirty(docs)
+    clean_docs = _clean_up_aggregated_docs(dirty_docs, expected_keys=docs[0].keys())
+    assert docs == clean_docs
 
 
 def __make_documents_dirty(docs):
@@ -223,82 +158,43 @@ def __make_documents_dirty(docs):
     return dirty_docs
 
 
-@pytest.mark.baseline
-def test_to_create_aggregated_catalog_documents():
-    docs = get_catalog_docs()
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_catalog_documents' + '.pkl', 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-    assert True
-
-
-def get_expected_aggregated_catalog_documents():
-    with open(REGRESSION_BASELINES_LOCATION + 'aggregated_catalog_documents' + '.pkl', 'rb') as file_handle:
-        docs = pickle.load(file_handle)
-    return docs
-
-
 def test_get_catalog_docs():
-    expected_docs = get_expected_aggregated_catalog_documents()
     docs = get_catalog_docs()
-    assert docs == expected_docs
-
-
-@pytest.mark.baseline
-def test_to_create_unprocessed_catalog_docs():
-    fingerprints = catalog_fingerprints()
-    project = {'$project': fingerprints}
-    pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
-
-    with open(REGRESSION_BASELINES_LOCATION + 'unprocessed_catalog_documents' + '.pkl', 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
+    for doc in docs:
+        assert isinstance(doc['mongo_id'], ObjectId)
+        assert isinstance(doc['mpid'], str)
+        assert len(doc['miller']) == 3
+        assert all(isinstance(miller, int) for miller in doc['miller'])
+        assert isinstance(doc['shift'], float)
+        assert isinstance(doc['top'], bool)
+        assert isinstance(doc['natoms'], int)
+        assert isinstance(doc['coordination'], str)
+        assert isinstance(doc['neighborcoord'], str)
+        assert isinstance(doc['nextnearestcoordination'], str)
+        assert len(doc['adsorption_site']) == 3
+        assert all(isinstance(coordinate, float) for coordinate in doc['adsorption_site'])
 
 
 def test__pull_catalog_from_mongo():
-    fingerprints = catalog_fingerprints()
-    project = {'$project': fingerprints}
+    projection = catalog_projection()
+    project = {'$project': projection}
     pipeline = [project]
     docs = _pull_catalog_from_mongo(pipeline)
 
-    with open(REGRESSION_BASELINES_LOCATION + 'unprocessed_catalog_documents' + '.pkl', 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
-    assert docs == expected_docs
-
-
-@pytest.mark.baseline
-@pytest.mark.parametrize('latest_predictions', [True, False])
-def test_to_create_catalog_docs_with_predictions(latest_predictions):
-    docs = get_catalog_docs_with_predictions(latest_predictions)
-
-    arg_hash = hashlib.sha224(str(latest_predictions).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_predictions_%s' % arg_hash + '.pkl'
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-    assert True
+    assert len(docs) > 0
+    for doc in docs:
+        for key in projection:
+            assert key in doc
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test_get_catalog_docs_with_predictions(latest_predictions):
-    '''
-    This could be a "real" test, but I am really busy and don't have time to design one.
-    So I'm turning this into a regression test to let someone else (probably me)
-    deal with this later.
-
-    If you do fix this, you should probably add more than one day's worth of predictions
-    to the unit testing catalog.
-    '''
-    docs = get_catalog_docs_with_predictions(latest_predictions)
-
-    arg_hash = hashlib.sha224(str(latest_predictions).encode()).hexdigest()
-    file_name = REGRESSION_BASELINES_LOCATION + 'catalog_with_predictions_%s' % arg_hash + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
-    assert docs == expected_docs
+    assert False
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test__add_adsorption_energy_predictions_to_fingerprints(latest_predictions):
-    default_fingerprints = catalog_fingerprints()
+    default_fingerprints = catalog_projection()
     fingerprints = _add_adsorption_energy_predictions_to_fingerprints(default_fingerprints, latest_predictions)
 
     # Get ALL of the adsorbates and models in the unit testing collection
@@ -326,7 +222,7 @@ def test__add_adsorption_energy_predictions_to_fingerprints(latest_predictions):
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test__add_orr_predictions_to_fingerprints(latest_predictions):
-    default_fingerprints = catalog_fingerprints()
+    default_fingerprints = catalog_projection()
     fingerprints = _add_orr_predictions_to_fingerprints(default_fingerprints, latest_predictions)
 
     # Get ALL of the models in the unit testing collection
@@ -349,103 +245,34 @@ def test__add_orr_predictions_to_fingerprints(latest_predictions):
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-def test_to_create_aggregated_surface_documents(extra_fingerprints):
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
-            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
-    except AttributeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-
-    docs = get_surface_docs(extra_fingerprints)
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-    assert True
-
-
-@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-def test_get_surface_docs(extra_fingerprints):
-    '''
-    Currently not testing the "filters" argument because, well, I am being lazy.
-    Feel free to change that yourself.
-    '''
-    # EAFP to set the file name; depends on whether or not there are extra fingerprints
-    try:
-        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
-                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
-    except AttributeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-
-    with open(file_name, 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
-    docs = get_surface_docs(extra_fingerprints)
-    assert docs == expected_docs
-
-
-@pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates, adsorbate_rotation_list',
+@pytest.mark.parametrize('adsorbate, adsorbate_rotation_list',
                          [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
                           (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
                                     {'phi': 0., 'theta': 30., 'psi': 0.}])])
-def test_to_create_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list):
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
+def test_to_create_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
+    docs = get_unsimulated_catalog_docs(adsorbate=adsorbate,
                                         adsorbate_rotation_list=adsorbate_rotation_list)
 
-    arg_hash = hashlib.sha224((str(adsorbates) + str(adsorbate_rotation_list)).encode()).hexdigest()
+    arg_hash = hashlib.sha224((str(adsorbate) + str(adsorbate_rotation_list)).encode()).hexdigest()
     file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_catalog_docs_%s' % arg_hash + '.pkl'
     with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-@pytest.mark.parametrize('adsorbates, adsorbate_rotation_list',
+@pytest.mark.parametrize('adsorbate, adsorbate_rotation_list',
                          [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
                           (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
                                     {'phi': 0., 'theta': 30., 'psi': 0.}])])
-def test_get_unsimulated_catalog_docs(adsorbates, adsorbate_rotation_list):
-    arg_hash = hashlib.sha224((str(adsorbates) + str(adsorbate_rotation_list)).encode()).hexdigest()
+def test_get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
+    arg_hash = hashlib.sha224((str(adsorbate) + str(adsorbate_rotation_list)).encode()).hexdigest()
     file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_catalog_docs_%s' % arg_hash + '.pkl'
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
 
-    docs = get_unsimulated_catalog_docs(adsorbates=adsorbates,
+    docs = get_unsimulated_catalog_docs(adsorbate=adsorbate,
                                         adsorbate_rotation_list=adsorbate_rotation_list)
     assert docs == expected_docs
-
-
-@pytest.mark.baseline
-@pytest.mark.parametrize('adsorbates', [None, ['H'], ['CO']])
-def test_to_create_attempted_adsorption_docs(adsorbates):
-    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates)
-
-    # EAFP to tag the pickle, since it'll be odd if adsorbates == None
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'attempted_' + '_'.join(adsorbates) + '_adsorption_docs' + '.pkl'
-    except TypeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'attempted_' + 'all' + '_adsorption_docs' + '.pkl'
-
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-
-
-@pytest.mark.parametrize('adsorbates', [None, ['H'], ['CO']])
-def test__get_attempted_adsorption_docs(adsorbates):
-    '''
-    The expected documents in here should differ from the ones in
-    `get_expected_aggregated_adsorption_documents` because these ones
-    use initial fingerprints, not final fingerprints.
-    '''
-    # EAFP to find the pickle name, since it'll be odd if adsorbates == None
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'attempted_' + '_'.join(adsorbates) + '_adsorption_docs' + '.pkl'
-    except TypeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'attempted_' + 'all' + '_adsorption_docs' + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
-
-    docs = _get_attempted_adsorption_docs(adsorbates=adsorbates)
-    #assert docs == expected_docs
-    assert _compare_unordered_sequences(docs, expected_docs)
 
 
 def test__duplicate_docs_per_rotation():
@@ -465,48 +292,20 @@ def test__duplicate_docs_per_rotation():
             assert doc['adsorbate_rotation'] == expected_rotation
 
 
-@pytest.mark.baseline
-@pytest.mark.parametrize('ignore_keys', [None, ['mpid'], ['mpid', 'top']])
-def test_to_create_hashed_docs(ignore_keys):
-    docs = get_expected_aggregated_adsorption_documents()
-    strings = _hash_docs(docs=docs, ignore_keys=ignore_keys, _return_hashes=False)
-
-    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbates == None
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'hashed_docs_ignoring_' + '_'.join(ignore_keys) + '.pkl'
-    except TypeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'hashed_docs_ignoring_nothing.pkl'
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(strings, file_handle)
-
-
-@pytest.mark.parametrize('ignore_keys', [None, ['mpid'], ['mpid', 'top']])
-def test__hash_docs(ignore_keys):
-    '''
-    Note that since Python 3's `hash` returns a different hash for
-    each instance of Python, we actually perform regression testing
-    on the serialized documents, not the hash itself.
-    '''
-    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbates == None
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'hashed_docs_ignoring_' + '_'.join(ignore_keys) + '.pkl'
-    except TypeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'hashed_docs_ignoring_nothing.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_serialized_doc = pickle.load(file_handle)
-
-    docs = get_expected_aggregated_adsorption_documents()
-    serialized_doc = _hash_docs(docs=docs, ignore_keys=ignore_keys, _return_hashes=False)
-    assert serialized_doc == expected_serialized_doc
+@pytest.mark.parametrize('adsorbate', [None, 'H', 'CO'])
+def test__get_attempted_adsorption_docs(adsorbate):
+    attempted_docs = _get_attempted_adsorption_docs(adsorbate=adsorbate)
+    all_docs = get_adsorption_docs(adsorbate=adsorbate, filter={})
+    assert len(attempted_docs) == len(all_docs)
 
 
 @pytest.mark.baseline
 @pytest.mark.parametrize('ignore_keys', [None, ['mpid'], ['mpid', 'top']])
 def test_to_create_hashed_doc(ignore_keys):
-    doc = get_expected_aggregated_adsorption_documents()[0]
+    doc = get_adsorption_docs()[0]
     string = _hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=False)
 
-    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbates == None
+    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbate == None
     try:
         file_name = REGRESSION_BASELINES_LOCATION + 'hashed_doc_ignoring_' + '_'.join(ignore_keys) + '.pkl'
     except TypeError:
@@ -520,9 +319,9 @@ def test__hash_doc(ignore_keys):
     '''
     Note that since Python 3's `hash` returns a different hash for
     each instance of Python, we actually perform regression testing
-    ond the pre-hashed string, not the hash itself.
+    on the pre-hashed string, not the hash itself.
     '''
-    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbates == None
+    # EAFP to find the pickle name of the cache, since it'll be odd if adsorbate == None
     try:
         file_name = REGRESSION_BASELINES_LOCATION + 'hashed_doc_ignoring_' + '_'.join(ignore_keys) + '.pkl'
     except TypeError:
@@ -530,143 +329,142 @@ def test__hash_doc(ignore_keys):
     with open(file_name, 'rb') as file_handle:
         expected_string = pickle.load(file_handle)
 
-    doc = get_expected_aggregated_adsorption_documents()[0]
+    doc = get_adsorption_docs()[0]
     string = _hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=False)
     assert string == expected_string
 
 
-@pytest.mark.parametrize('adsorbates, model_tag',
+@pytest.mark.parametrize('adsorbate, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
-def test_surfaces_from_get_low_coverage_docs(adsorbates, model_tag):
+def test_surfaces_from_get_low_coverage_docs(adsorbate, model_tag):
     '''
     We test `get_low_coverage_docs_by_surface' in multiple unit tests.
     This test checks that the surfaces we find are correct.
     '''
-    low_coverage_docs = get_low_coverage_docs(adsorbates, model_tag)
+    low_coverage_docs = get_low_coverage_docs(adsorbate, model_tag)
     surfaces = set(low_coverage_docs.keys())
 
-    adsorption_docs = get_adsorption_docs(adsorbates)
-    catalog_docs = get_unsimulated_catalog_docs(adsorbates)
+    adsorption_docs = get_adsorption_docs(adsorbate)
+    catalog_docs = get_unsimulated_catalog_docs(adsorbate)
     expected_surfaces = set((doc['mpid'], str(doc['miller']), round(doc['shift'], 2), doc['top'])
                             for doc in adsorption_docs + catalog_docs)
     assert surfaces == expected_surfaces
 
 
-@pytest.mark.parametrize('adsorbates, model_tag',
+@pytest.mark.parametrize('adsorbate, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
-def test_energies_from_get_low_coverage_docs(adsorbates, model_tag):
+def test_energies_from_get_low_coverage_docs(adsorbate, model_tag):
     '''
     We test `get_low_coverage_docs_by_surface' in multiple unit tests.
     This test verifies that the documents provided by this function are
     actually have the minimum energy within each surface.
     '''
-    low_coverage_docs = get_low_coverage_docs(adsorbates, model_tag)
-    docs_dft = get_low_coverage_dft_docs(adsorbates)
-    docs_ml = get_low_coverage_ml_docs(adsorbates, model_tag)
+    low_coverage_docs = get_low_coverage_docs(adsorbate, model_tag)
+    docs_dft = get_low_coverage_dft_docs(adsorbate)
+    docs_ml = get_low_coverage_ml_docs(adsorbate, model_tag)
+    docs_dft_by_surface = {get_surface_from_doc: doc for doc in docs_dft}
+    docs_ml_by_surface = {get_surface_from_doc: doc for doc in docs_ml}
 
-    for surface, doc in low_coverage_docs.items():
+    for doc in low_coverage_docs:
+        surface = get_surface_from_doc(doc)
 
-        if doc['DFT_calculated']:
+        if doc['DFT_calculated'] is True:
             try:
-                doc_ml = docs_ml[surface]
+                doc_ml = docs_ml_by_surface[surface]
                 assert doc['energy'] <= doc_ml['energy']
             except KeyError:
                 continue
 
-        else:
+        elif doc['DFT_calculated'] is False:
             try:
-                doc_dft = docs_dft[surface]
+                doc_dft = docs_dft_by_surface[surface]
                 assert doc['energy'] <= doc_dft['energy']
             except KeyError:
                 continue
 
 
-@pytest.mark.parametrize('adsorbates', [['H'], ['CO']])
-def test_get_low_coverage_dft_docs(adsorbates):
+@pytest.mark.parametrize('adsorbate', [['H'], ['CO']])
+def test_get_low_coverage_dft_docs(adsorbate):
     '''
-    For each surface, verify that every single document in
-    our adsorption collection has a higher (or equal) adsorption
-    energy than the one reported by `get_low_coverage_dft_docs`
+    For each surface, verify that every single document in our adsorption
+    collection has a higher (or equal) adsorption energy than the one reported
+    by `get_low_coverage_dft_docs`
     '''
-    low_coverage_docs = get_low_coverage_dft_docs(adsorbates)
-    all_docs = get_adsorption_docs(adsorbates)
+    low_coverage_docs = get_low_coverage_dft_docs(adsorbate)
+    low_coverage_docs_by_surface = {get_surface_from_doc(doc): doc
+                                    for doc in low_coverage_docs}
+    all_docs = get_adsorption_docs(adsorbate)
 
     for doc in all_docs:
+        surface = get_surface_from_doc(doc)
         energy = doc['energy']
-
-        surface = _get_surface_from_doc(doc)
-        low_cov_energy = low_coverage_docs[surface]['energy']
+        low_cov_energy = low_coverage_docs_by_surface[surface]['energy']
         assert low_cov_energy <= energy
 
 
-def test__get_surface_from_doc():
+def test_get_surface_from_doc():
     doc = {'mpid': 'mp-23',
            'miller': [1, 0, 0],
            'shift': 0.001,
            'top': True}
-    surface = _get_surface_from_doc(doc)
+    surface = get_surface_from_doc(doc)
 
     expected_surface = ('mp-23', '[1, 0, 0]', 0., True)
     assert surface == expected_surface
 
 
-@pytest.mark.parametrize('adsorbates, model_tag',
+@pytest.mark.parametrize('adsorbate, model_tag',
                          [(['H'], 'model0'),
                           (['CO'], 'model0')])
-def test_get_low_coverage_ml_docs(adsorbates, model_tag):
+def test_get_low_coverage_ml_docs(adsorbate, model_tag):
     '''
     For each surface, verify that every single document in
     our adsorption collection has a higher (or equal) adsorption
     energy than the one reported by `get_low_coverage_ml_docs`
     '''
-    low_coverage_docs = get_low_coverage_ml_docs(adsorbates)
+    low_coverage_docs = get_low_coverage_ml_docs(adsorbate)
+    low_coverage_docs_by_surface = {get_surface_from_doc(doc): doc
+                                    for doc in low_coverage_docs}
     all_docs = get_catalog_docs_with_predictions()
 
     for doc in all_docs:
-        energy = doc['predictions']['adsorption_energy'][adsorbates[0]][model_tag][1]
-        surface = _get_surface_from_doc(doc)
-        low_cov_energy = low_coverage_docs[surface]['energy']
+        energy = doc['predictions']['adsorption_energy'][adsorbate][model_tag][1]
+        surface = get_surface_from_doc(doc)
+        low_cov_energy = low_coverage_docs_by_surface[surface]['energy']
         assert low_cov_energy <= energy
 
 
-def test_remove_duplicates_in_adsorption_collection():
-    collection_tag = 'adsorption'
-    starting_doc_count, id_of_duplicate_doc = add_duplicate_document_to_collection(collection_tag)
-
-    try:
-        remove_duplicates_in_adsorption_collection()
-
-        # Verify that removal worked
-        with get_mongo_collection(collection_tag=collection_tag) as collection:
-            current_doc_count = collection.count_documents({})
-        assert current_doc_count == starting_doc_count
-
-    # Clean up the extra document if the function failed to delete it
-    except:     # noqa: E722
-        with get_mongo_collection(collection_tag=collection_tag) as collection:
-            collection.delete_one({'_id': {'$eq': id_of_duplicate_doc}})
-        raise
-
-
-def add_duplicate_document_to_collection(collection_tag):
-    '''
-    Pick a random document in the collection, then add it to the collection
-
-    Arg:
-        collection_tag  String indicating which collection you'll be adding a duplicate to
-    Output:
-        starting_count  How many documents the collection starts with before the duplicate is added
-        id_             Mongo's ID tag of the duplicate document that you just added
-    '''
-    with get_mongo_collection(collection_tag=collection_tag) as collection:
-        docs = list(collection.find({}))
-        starting_count = len(docs)
-
-        doc_duplicate = random.choice(docs)
-        del doc_duplicate['_id']
-
-        insertion_result = collection.insert_one(doc_duplicate)
-        id_ = insertion_result.inserted_id
-    return starting_count, id_
+#@pytest.mark.baseline
+#@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+#def test_to_create_aggregated_surface_documents(extra_fingerprints):
+#    try:
+#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
+#            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
+#    except AttributeError:
+#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+#
+#    docs = get_surface_docs(extra_fingerprints)
+#    with open(file_name, 'wb') as file_handle:
+#        pickle.dump(docs, file_handle)
+#    assert True
+#
+#
+#@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+#def test_get_surface_docs(extra_fingerprints):
+#    '''
+#    Currently not testing the "filters" argument because, well, I am being lazy.
+#    Feel free to change that yourself.
+#    '''
+#    # EAFP to set the file name; depends on whether or not there are extra fingerprints
+#    try:
+#        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
+#                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
+#    except AttributeError:
+#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+#
+#    with open(file_name, 'rb') as file_handle:
+#        expected_docs = pickle.load(file_handle)
+#    docs = get_surface_docs(extra_fingerprints)
+#    assert docs == expected_docs
