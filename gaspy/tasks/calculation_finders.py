@@ -288,9 +288,6 @@ class FindAdslab(FindCalculation):
                                 as a dictionary.
         bulk_vasp_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
-        mpid            A string indicating the Materials Project ID of the bulk
-                        you are looking for (e.g., 'mp-30')
-        vasp_settings   A dictionary containing your VASP settings
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
