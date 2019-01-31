@@ -170,9 +170,18 @@ class MakeAdslabFW(luigi.Task):
         # the site, shift, and top values we're looking for
         with open(self.input().path, 'rb') as file_handle:
             adslab_docs = pickle.load(file_handle)
-        doc = self._find_matching_adslab_doc(adslab_docs=adslab_docs,
-                                             adsorption_site=self.adsorption_site,
-                                             shift=self.shift, top=self.top)
+        if self.adsorbate_name != '':
+            doc = self._find_matching_adslab_doc(adslab_docs=adslab_docs,
+                                                 adsorption_site=self.adsorption_site,
+                                                 shift=self.shift,
+                                                 top=self.top)
+        # Hacky solution for finding empty slabs, where we don't care about the
+        # site. This is only here because we are still (unfortunately) using
+        # the adslab infrastructure to do slab calculations.
+        else:
+            doc = self._find_matching_adslab_doc_for_slab(adslab_docs=adslab_docs,
+                                                          shift=self.shift,
+                                                          top=self.top)
         atoms = make_atoms_from_doc(doc)
 
         # Create, package, and submit the FireWork
@@ -207,7 +216,6 @@ class MakeAdslabFW(luigi.Task):
         just return the first one without any notification
 
         Args:
-
             adslab_docs     A list of dictionaryies created by
                             `GenerateAdslabs`
             adsorption_site A 3-long sequence of floats indicating the
@@ -216,7 +224,6 @@ class MakeAdslabFW(luigi.Task):
                             termination)
             top             A Boolean indicating whether or not the site is on
                             the top or the bottom of the slab
-
         Returns:
             doc     The first dictionary within the `adslab_docs` list that has
             matching site, shift, and top values
@@ -230,3 +237,31 @@ class MakeAdslabFW(luigi.Task):
         raise RuntimeError('You just tried to make an adslab FireWork rocket '
                            'that we could not enumerate. Try changing the '
                            'adsorption site, shift, top, or miller.')
+
+
+    @staticmethod
+    def _find_matching_adslab_doc_for_slab(adslab_docs, shift, top):
+        '''
+        This method is nearly identical to the `_find_matching_adslab_doc`
+        method, except it ignores the adsorption site. This is used mainly in
+        case you are trying to make a bare Adslab.
+
+        Args:
+            adslab_docs     A list of dictionaryies created by
+                            `GenerateAdslabs`
+            shift           A float indicating the shift (i.e., slab
+                            termination)
+            top             A Boolean indicating whether or not the site is on
+                            the top or the bottom of the slab
+        Returns:
+            doc     The first dictionary within the `adslab_docs` list that has
+            matching site, shift, and top values
+        '''
+        for doc in adslab_docs:
+            if math.isclose(doc['shift'], shift):
+                if doc['top'] == top:
+                    return doc
+
+        raise RuntimeError('You just tried to make an adslab FireWork rocket '
+                           'that we could not enumerate. Try changing the '
+                           'shift, top, or miller.')
