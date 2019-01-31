@@ -17,7 +17,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
-from .core import save_task_output, make_task_output_object
+from .core import save_task_output, make_task_output_object, get_task_output
 from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                orient_atoms_upwards,
@@ -467,13 +467,12 @@ class GenerateAllSitesFromBulk(luigi.Task):
             site_generators.append(site_generator)
         # Yield all the dynamic dependencies at once so that Luigi will run
         # them in parallel instead of sequentially
-        outputs_of_generators = yield site_generators
+        yield site_generators
 
         # Concatenate, append, and save the sites we just enumerated
         all_site_docs = []
-        for generator, generator_output in zip(site_generators, outputs_of_generators):
-            with open(generator_output.path, 'rb') as file_handle:
-                site_docs = pickle.load(file_handle)
+        for generator in site_generators:
+            site_docs = get_task_output(generator)
             for doc in site_docs:
                 doc['miller'] = generator.miller_indices
             all_site_docs.extend(site_docs)
