@@ -9,7 +9,9 @@ import json
 from tqdm import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from . import defaults, utils
+from . import defaults
+from .utils import read_rc
+from .fireworks_helper_scripts import get_launchpad
 
 
 def get_mongo_collection(collection_tag):
@@ -33,7 +35,7 @@ def get_mongo_collection(collection_tag):
                     methods.
     '''
     # Login info
-    mongo_info = utils.read_rc('mongo_info')[collection_tag]
+    mongo_info = read_rc('mongo_info')[collection_tag]
     host = mongo_info['host']
     port = int(mongo_info['port'])
     database_name = mongo_info['database']
@@ -717,7 +719,7 @@ def purge_adslab(fwid):
     Arg:
         fwid    The FireWorks ID of the calculation in question
     '''
-    lpad = utils.get_lpad()
+    lpad = get_launchpad()
     lpad.defuse_fw(fwid)
 
     with get_mongo_collection('atoms') as collection:
