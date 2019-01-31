@@ -7,6 +7,7 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import os
+import types
 from collections import Iterable
 import pickle
 import warnings
@@ -142,38 +143,49 @@ def evaluate_luigi_task(task, force=False):
     Arg:
         task    Class instance of a luigi task
         force   A boolean indicating whether or not you want to forcibly
-                evaluate the task and all the upstream requirements.
-                Useful for re-doing tasks that you know have already been
-                completed.
-    '''
+                evaluate the task and all the upstream requirements. Useful for
+                re-doing tasks that you know have already been completed.
+        '''
     # Don't do anything if it's already done and we're not redoing
     if task.complete() and not(force):
         return
 
     else:
         # Execute prerequisite task[s] recursively
-        requirements = task.requires()
-        if requirements:
-            if isinstance(requirements, dict):
-                for req in requirements.values():
-                    if not(req.complete()) or force:
-                        evaluate_luigi_task(req, force)
+        dependencies = task.requires()
+        if dependencies:
+            if isinstance(dependencies, dict):
+                for dep in dependencies.values():
+                    if not(dep.complete()) or force:
+                        evaluate_luigi_task(dep, force)
 
-            elif isinstance(requirements, Iterable):
-                for req in requirements:
-                    if not(req.complete()) or force:
-                        evaluate_luigi_task(req, force)
+            elif isinstance(dependencies, Iterable):
+                for dep in dependencies:
+                    if not(dep.complete()) or force:
+                        evaluate_luigi_task(dep, force)
             else:
-                if not(requirements.complete()) or force:
-                    evaluate_luigi_task(requirements, force)
+                if not(dependencies.complete()) or force:
+                    evaluate_luigi_task(dependencies, force)
 
-        # Luigi will yell at us if we try to overwrite output files.
-        # So if we're foricbly redoing tasks, we need to delete the old outputs.
+        # Luigi will yell at us if we try to overwrite output files. So if
+        # we're foricbly redoing tasks, we need to delete the old outputs.
         if force:
             os.remove(task.output().path)
 
         # After prerequisites are done, run the task
-        task.run()
+        run_results = task.run()
+
+        # If there are dynamic dependencies, then run them
+        if isinstance(run_results, types.GeneratorType):
+            for dependency in run_results:
+                if isinstance(dependency, luigi.Task):
+                    evaluate_luigi_task(dependency)
+                # Sometimes we can actually get a list of dynamic
+                # dependendencies instead of one at a time. We address that
+                # here.
+                elif isinstance(dependency, Iterable):
+                    for dep in dependency:
+                        evaluate_luigi_task(dep)
 
 
 class DumpFWToTraj(luigi.Task):

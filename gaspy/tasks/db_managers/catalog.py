@@ -13,7 +13,8 @@ from pymatgen.ext.matproj import MPRester
 from ..core import (run_tasks,
                     get_task_output,
                     save_task_output,
-                    make_task_output_object)
+                    make_task_output_object,
+                    evaluate_luigi_task)
 from ..atoms_generators import GenerateAllSitesFromBulk
 from ... import defaults
 from ...utils import read_rc, unfreeze_dict
@@ -26,8 +27,7 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-def update_catalog_collection(elements, max_miller,
-                              n_processes=1, local_scheduler=True):
+def update_catalog_collection(elements, max_miller, n_processes=1):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
@@ -38,20 +38,11 @@ def update_catalog_collection(elements, max_miller,
         max_miller          An integer indicating the maximum Miller index
                             to be enumerated
         n_processes         An integer indicating how many threads you want to
-                            use when running different instances of Luigi. If
-                            you do not expect many updates, stick to the
-                            default of 1. If you are re-creating your
-                            collection from scratch, you may want to want to
-                            increase this argument.
-        local_scheduler     A Boolean indicating whether or not you want to
-                            use the local scheduler. Normally we want to
-                            use the Luigi daemon (i.e., not a local
-                            scheduler), but this function will spawn a
-                            heck ton of tasks that might bog down the
-                            daemon. And we use atomic writes for our Luigi
-                            pickles, so it's less of a risk... and we
-                            don't update the catalog often... so it's ok
-                            to use a local scheduler here.
+                            use when running the tasks. If you do not expect
+                            many updates, stick to the default of 1, or go up
+                            to 4. If you are re-creating your collection from
+                            scratch, you may want to want to increase this
+                            argument as high as you can.
     '''
     # Figure out the MPIDs we need to enumerate
     get_mpid_task = _GetMpids(elements=elements)
@@ -59,18 +50,14 @@ def update_catalog_collection(elements, max_miller,
     mpids = get_task_output(get_mpid_task)
 
     # For each MPID, enumerate all the sites and then add them to our `catalog`
-    # Mongo collection. Note that we try to run each task sequentially and
-    # individually instead of all at once so that Luigi doesn't spend days just
-    # looking for calculations before trying to dump them.
+    # Mongo collection. Do this in parallel because it can be.
     if n_processes > 1:
         with multiprocess.Pool(n_processes) as pool:
-            list(pool.imap(func=lambda mpid: __run_insert_to_catalog_task(mpid,
-                                                                          max_miller,
-                                                                          local_scheduler),
-                           iterable=mpids, chunksize=10))
+            list(pool.imap(func=lambda mpid: __run_insert_to_catalog_task(mpid, max_miller),
+                           iterable=mpids, chunksize=100))
     else:
         for mpid in mpids:
-            __run_insert_to_catalog_task(mpid, max_miller, local_scheduler)
+            __run_insert_to_catalog_task(mpid, max_miller)
 
 
 class _GetMpids(luigi.Task):
@@ -129,28 +116,26 @@ class _GetMpids(luigi.Task):
         return make_task_output_object(self)
 
 
-def __run_insert_to_catalog_task(mpid, max_miller, local_scheduler):
+def __run_insert_to_catalog_task(mpid, max_miller):
     '''
     Very light wrapper to instantiate a `_InsertSitesToCatalog` task and then
-    use Luigi to run it.
+    run it manually.
 
     Args:
         mpid                A string indicating the Materials Project ID of the
                             bulk you want to enumerate sites from
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
-        local_scheduler     A Boolean indicating whether or not you want to
-                            use the local scheduler. Normally we want to
-                            use the Luigi daemon (i.e., not a local
-                            scheduler), but this function will spawn a
-                            heck ton of tasks that might bog down the
-                            daemon. And we use atomic writes for our Luigi
-                            pickles, so it's less of a risk... and we
-                            don't update the catalog often... so it's ok
-                            to use a local scheduler here.
     '''
     task = _InsertSitesToCatalog(mpid, max_miller)
-    run_tasks([task], workers=1, local_scheduler=local_scheduler)
+    try:
+        evaluate_luigi_task(task)
+
+    # We need bulk calculations to enumerate our catalog. If these calculations
+    # aren't done, then we won't find the Luigi task pickles. If this happens,
+    # then we should just move on to the next thing.
+    except FileNotFoundError:
+        pass
 
 
 class _InsertSitesToCatalog(luigi.Task):
