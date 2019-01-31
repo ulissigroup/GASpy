@@ -145,7 +145,7 @@ def evaluate_luigi_task(task, force=False):
         force   A boolean indicating whether or not you want to forcibly
                 evaluate the task and all the upstream requirements. Useful for
                 re-doing tasks that you know have already been completed.
-        '''
+    '''
     # Don't do anything if it's already done and we're not redoing
     if task.complete() and not(force):
         return
