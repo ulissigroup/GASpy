@@ -7,7 +7,8 @@ information.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
-from ..core import run_tasks, get_task_output
+import multiprocess
+from ..core import get_task_output, evaluate_luigi_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
 from ...utils import turn_string_site_into_tuple
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
@@ -15,27 +16,37 @@ from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab, find_max_movement
 
 
-def update_adsorption_collection(workers=1, local_scheduler=False):
+def update_adsorption_collection(n_processes=1):
     '''
     This function will parse and dump all of the completed adsorption
     calculations in our `atoms` Mongo collection into our `adsorption`
     collection. It will not dump anything that is already there.
 
     Args:
-        workers         An integer indicating how many processes/workers you
-                        want executing the prerequisite Luigi tasks.
-        local_scheduler A Boolean indicating whether or not you want to
-                        use a local scheduler. You should use a local
-                        scheduler only when you want something done
-                        quickly but dirtily. If you do not use local
-                        scheduling, then we will use our Luigi daemon
-                        to manage things, which should be the status
-                        quo.
+        n_processes     An integer indicating how many threads you want to use
+                        when running the tasks. If you do not expect many
+                        updates, stick to the default of 1, or go up to 4. If
+                        you are re-creating your collection from scratch, you
+                        may want to want to increase this argument as high as
+                        you can.
     '''
-    # Calculate the adsorption energies for adsorption calculations that show
-    # up in our `atoms` Mongo collection
+    # Figure out what we need to dump
     missing_docs = _find_atoms_docs_not_in_adsorption_collection()
-    calc_energy_docs = __get_luigi_adsorption_energies(missing_docs, workers, local_scheduler)
+
+    # Multi-thread calculations for adsorption energies
+    if n_processes > 1:
+        with multiprocess.Pool(n_processes) as pool:
+            generator = pool.imap(__run_calculate_adsorption_energy_task,
+                                  missing_docs, chunksize=100)
+            calc_energy_docs = list(generator)
+    # Don't need pooling if we only want to use one thread
+    else:
+        calc_energy_docs = [__run_calculate_adsorption_energy_task(doc)
+                            for doc in missing_docs]
+
+    # If a calculation fails, our helper function will return `None`. Let's
+    # take those out here.
+    calc_energy_docs = [doc for doc in calc_energy_docs if doc is not None]
 
     # Turn the adsorption energies into `adsorption` documents, then save them
     adsorption_docs = [__create_adsorption_doc(doc) for doc in calc_energy_docs]
@@ -60,7 +71,7 @@ def _find_atoms_docs_not_in_adsorption_collection():
     # Find the FWIDs of the documents inside our adsorption collection
     with get_mongo_collection('adsorption') as collection:
         docs_adsorption = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
-    fwids_in_adsorption = set(doc['fwids']['adsorption'] for doc in docs_adsorption)
+    fwids_in_adsorption = set(doc['fwids']['slab+adsorbate'] for doc in docs_adsorption)
 
     # Find the FWIDs of the documents inside our atoms collection
     with get_mongo_collection('atoms') as collection:
@@ -79,55 +90,39 @@ def _find_atoms_docs_not_in_adsorption_collection():
     return missing_ads_docs
 
 
-def __get_luigi_adsorption_energies(atoms_docs, workers=1, local_scheduler=False):
+def __run_calculate_adsorption_energy_task(atoms_doc):
     '''
     This function will parse adsorption documents from our `atoms` collection,
     create Luigi tasks to calculate adsorption energies for each document, run
     the tasks, and then give you the results.
 
     Args:
-        atoms_docs      A list of dictionaries taken from our `atoms` Mongo
-                        collection
-        workers         An integer indicating how many processes/workers you
-                        want executing the prerequisite Luigi tasks.
-        local_scheduler A Boolean indicating whether or not you want to
-                        use a local scheduler. You should use a local
-                        scheduler only when you want something done
-                        quickly but dirtily. If you do not use local
-                        scheduling, then we will use our Luigi daemon
-                        to manage things, which should be the status
-                        quo.
+        atoms_doc   A dictionary taken from our `atoms` Mongo collection
     Returns:
-        energy_docs     A list of dictionaries obtained from the output of the
-                        `CalculateAdsorptionEnergy` task
+        energy_doc  A dictionary obtained from the output of the
+                    `CalculateAdsorptionEnergy` task
     '''
-    # Make and execute the Luigi tasks to calculate the adsorption energies
-    calc_energy_tasks = []
-    for doc in atoms_docs:
-        adsorption_site = turn_string_site_into_tuple(doc['fwname']['adsorption_site'])
-        task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,
-                                         shift=doc['fwname']['shift'],
-                                         top=doc['fwname']['top'],
-                                         adsorbate_name=doc['fwname']['adsorbate'],
-                                         rotation=doc['fwname']['adsorbate_rotation'],
-                                         mpid=doc['fwname']['mpid'],
-                                         miller_indices=doc['fwname']['miller'],
-                                         adslab_vasp_settings=doc['fwname']['vasp_settings'])
-        calc_energy_tasks.append(task)
-    run_tasks(calc_energy_tasks, workers=workers, local_scheduler=local_scheduler)
+    # Reformat the site because of silly historical reasons
+    adsorption_site = turn_string_site_into_tuple(atoms_doc['fwname']['adsorption_site'])
 
-    # Get all of the results from each task
-    energy_docs = []
-    for task in calc_energy_tasks:
-        try:
-            energy_docs.append(get_task_output(task))
+    # Create, run, and return the output of the task
+    task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,
+                                     shift=atoms_doc['fwname']['shift'],
+                                     top=atoms_doc['fwname']['top'],
+                                     adsorbate_name=atoms_doc['fwname']['adsorbate'],
+                                     rotation=atoms_doc['fwname']['adsorbate_rotation'],
+                                     mpid=atoms_doc['fwname']['mpid'],
+                                     miller_indices=atoms_doc['fwname']['miller'],
+                                     adslab_vasp_settings=atoms_doc['fwname']['vasp_settings'])
+    try:
+        evaluate_luigi_task(task)
+        energy_doc = get_task_output(task)
+        return energy_doc
 
-        # If a task has failed and not produced an output, we don't want that
-        # to stop us from updating the successful runs
-        except FileNotFoundError:
-            continue
-
-    return energy_docs
+    # If a task has failed and not produced an output, we don't want that to
+    # stop us from updating the successful runs
+    except FileNotFoundError:
+        pass
 
 
 def __create_adsorption_doc(energy_doc):
