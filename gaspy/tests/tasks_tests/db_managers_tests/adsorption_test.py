@@ -11,7 +11,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 # Things we're testing
 from ....tasks.db_managers.adsorption import (update_adsorption_collection,
                                               _find_atoms_docs_not_in_adsorption_collection,
-                                              __get_luigi_adsorption_energies,
+                                              __run_calculate_adsorption_energy_task,
                                               __create_adsorption_doc)
 
 # Things we need to do the tests
@@ -61,13 +61,14 @@ def test__find_atoms_docs_not_in_adsorption_collection():
     assert len(ads_docs) == 0
 
 
-def test___get_luigi_adsorption_energies():
+def test___run_calculate_adsorption_energy_task():
     with get_mongo_collection('atoms') as collection:
         query = {'fwname.calculation_type': 'slab+adsorbate optimization',
                  'fwname.adsorbate': {'$ne': ''}}
         adslab_docs = list(collection.find(query))
         try:
-            energy_docs = __get_luigi_adsorption_energies(adslab_docs, local_scheduler=True)
+            energy_docs = [__run_calculate_adsorption_energy_task(doc)
+                           for doc in adslab_docs]
         finally:
             clean_up_tasks()
 
@@ -77,10 +78,10 @@ def test___get_luigi_adsorption_energies():
 
             # Verify that the slabs and adslabs within our documents are from
             # our `atoms` collection
-            slab_fwid = doc['slab']['fwid']
-            adslab_fwid = doc['adslab']['fwid']
-            assert doc['slab'] == list(collection.find({'fwid': slab_fwid}))[0]
-            assert doc['adslab'] == list(collection.find({'fwid': adslab_fwid}))[0]
+            slab_fwid = doc['fwids']['slab']
+            adslab_fwid = doc['fwids']['adslab']
+            assert len(list(collection.find({'fwid': slab_fwid}))) == 1
+            assert len(list(collection.find({'fwid': adslab_fwid}))) == 1
 
 
 def test___create_adsorption_doc():
@@ -89,7 +90,7 @@ def test___create_adsorption_doc():
                  'fwname.adsorbate': {'$ne': ''}}
         adslab_doc = list(collection.find(query))[0]
     try:
-        energy_doc = __get_luigi_adsorption_energies([adslab_doc], local_scheduler=True)[0]
+        energy_doc = __run_calculate_adsorption_energy_task(adslab_doc)
     finally:
         clean_up_tasks()
     doc = __create_adsorption_doc(energy_doc)

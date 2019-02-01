@@ -22,8 +22,8 @@ from ..gasdb import (get_mongo_collection,
                      get_catalog_docs,
                      _pull_catalog_from_mongo,
                      get_catalog_docs_with_predictions,
-                     _add_adsorption_energy_predictions_to_fingerprints,
-                     _add_orr_predictions_to_fingerprints,
+                     _add_adsorption_energy_predictions_to_projection,
+                     _add_orr_predictions_to_projection,
                      #get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
@@ -36,6 +36,7 @@ from ..gasdb import (get_mongo_collection,
 
 # Things we need to do the tests
 import pytest
+import warnings
 import copy
 import pickle
 import random
@@ -45,7 +46,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
 from ..utils import read_rc
-from ..defaults import catalog_projection
+from ..defaults import catalog_projection, adslab_settings
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
@@ -96,17 +97,26 @@ def test_ConnectableCollection(collection_tag):
 @pytest.mark.filterwarnings('ignore:  You are using adsorption document filters '
                             'for a set of adsorbate that we have not yet '
                             'established valid energy bounds for, yet.')
-@pytest.mark.parametrize('adsorbate, extra_fingerprints',
+@pytest.mark.parametrize('adsorbate, extra_projections',
                          [(None, None),
-                          (['CO'], None),
+                          ('CO', None),
                           (None, {'adslab FWID': 'fwids.adslab'}),
-                          (['H'], {'adslab FWID': 'fwids.adslab'})])
-def test_get_adsorption_docs(adsorbate, extra_fingerprints):
+                          ('H', {'adslab FWID': 'fwids.adslab'})])
+def test_get_adsorption_docs(adsorbate, extra_projections):
     '''
     Currently not testing the `filters` argument because, well, I am being lazy.
     Feel free to change that yourself.
     '''
-    docs = get_adsorption_docs(adsorbate=adsorbate, extra_fingerprints=extra_fingerprints)
+    # If there is no adsorbate, then we should be alerting the user
+    if adsorbate is None:
+        with pytest.warns(UserWarning, match='You are using adsorption document '
+                          'filters for an adsorbate'):
+            docs = get_adsorption_docs(adsorbate=adsorbate,
+                                       extra_projections=extra_projections)
+    # If they specify an adsorbate, then proceed as normal
+    else:
+        docs = get_adsorption_docs(adsorbate=adsorbate,
+                                   extra_projections=extra_projections)
 
     assert len(docs) > 0
     for doc in docs:
@@ -115,18 +125,21 @@ def test_get_adsorption_docs(adsorbate, extra_fingerprints):
         assert isinstance(doc['mpid'], str)
         assert len(doc['miller']) == 3
         assert all(isinstance(miller, int) for miller in doc['miller'])
-        assert isinstance(doc['shift'], float)
+        assert isinstance(doc['shift'], (float, int))
         assert isinstance(doc['top'], bool)
         assert isinstance(doc['coordination'], str)
-        assert isinstance(doc['neighborcoord'], str)
+        for neighbor in doc['neighborcoord']:
+            assert isinstance(neighbor, str)
+        assert isinstance(doc['neighborcoord'], list)
         assert isinstance(doc['nextnearestcoordination'], str)
         assert isinstance(doc['energy'], float)
-        for fingerprint in extra_fingerprints:
-            assert fingerprint in doc
+        if extra_projections is not None:
+            for projection in extra_projections:
+                assert projection in doc
 
 
 def test__clean_up_aggregated_docs():
-    docs = get_adsorption_docs()
+    docs = get_adsorption_docs('CO')
     dirty_docs = __make_documents_dirty(docs)
     clean_docs = _clean_up_aggregated_docs(dirty_docs, expected_keys=docs[0].keys())
     assert docs == clean_docs
@@ -165,11 +178,12 @@ def test_get_catalog_docs():
         assert isinstance(doc['mpid'], str)
         assert len(doc['miller']) == 3
         assert all(isinstance(miller, int) for miller in doc['miller'])
-        assert isinstance(doc['shift'], float)
+        assert isinstance(doc['shift'], (float, int))
         assert isinstance(doc['top'], bool)
         assert isinstance(doc['natoms'], int)
         assert isinstance(doc['coordination'], str)
-        assert isinstance(doc['neighborcoord'], str)
+        for neighbor in doc['neighborcoord']:
+            assert isinstance(neighbor, str)
         assert isinstance(doc['nextnearestcoordination'], str)
         assert len(doc['adsorption_site']) == 3
         assert all(isinstance(coordinate, float) for coordinate in doc['adsorption_site'])
@@ -184,7 +198,15 @@ def test__pull_catalog_from_mongo():
     assert len(docs) > 0
     for doc in docs:
         for key in projection:
-            assert key in doc
+            try:
+                assert key in doc
+
+            # Ignore this projection that tells us to omit _id
+            except AssertionError:
+                if key == '_id':
+                    pass
+                else:
+                    raise
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
@@ -193,9 +215,9 @@ def test_get_catalog_docs_with_predictions(latest_predictions):
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
-def test__add_adsorption_energy_predictions_to_fingerprints(latest_predictions):
-    default_fingerprints = catalog_projection()
-    fingerprints = _add_adsorption_energy_predictions_to_fingerprints(default_fingerprints, latest_predictions)
+def test__add_adsorption_energy_predictions_to_projections(latest_predictions):
+    default_projections = catalog_projection()
+    projections = _add_adsorption_energy_predictions_to_projection(default_projections, latest_predictions)
 
     # Get ALL of the adsorbates and models in the unit testing collection
     with get_mongo_collection('catalog') as collection:
@@ -215,15 +237,15 @@ def test__add_adsorption_energy_predictions_to_fingerprints(latest_predictions):
         for model in models:
             data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model)
             if latest_predictions:
-                assert fingerprints[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
+                assert projections[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
             else:
-                assert fingerprints[data_location] == '$'+data_location
+                assert projections[data_location] == '$'+data_location
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
-def test__add_orr_predictions_to_fingerprints(latest_predictions):
-    default_fingerprints = catalog_projection()
-    fingerprints = _add_orr_predictions_to_fingerprints(default_fingerprints, latest_predictions)
+def test__add_orr_predictions_to_projections(latest_predictions):
+    default_projections = catalog_projection()
+    projections = _add_orr_predictions_to_projection(default_projections, latest_predictions)
 
     # Get ALL of the models in the unit testing collection
     with get_mongo_collection('catalog') as collection:
@@ -239,16 +261,16 @@ def test__add_orr_predictions_to_fingerprints(latest_predictions):
     for model in models:
         data_location = 'predictions.orr_onset_potential_4e.%s' % model
         if latest_predictions:
-            assert fingerprints[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
+            assert projections[data_location] == {'$arrayElemAt': ['$'+data_location, -1]}
         else:
-            assert fingerprints[data_location] == '$'+data_location
+            assert projections[data_location] == '$'+data_location
 
 
 @pytest.mark.baseline
 @pytest.mark.parametrize('adsorbate, adsorbate_rotation_list',
-                         [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
-                          (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
-                                    {'phi': 0., 'theta': 30., 'psi': 0.}])])
+                         [('H', [{'phi': 0., 'theta': 0., 'psi': 0.}]),
+                          ('CO', [{'phi': 0., 'theta': 0., 'psi': 0.},
+                                  {'phi': 0., 'theta': 30., 'psi': 0.}])])
 def test_to_create_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
     docs = get_unsimulated_catalog_docs(adsorbate=adsorbate,
                                         adsorbate_rotation_list=adsorbate_rotation_list)
@@ -261,9 +283,9 @@ def test_to_create_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
 
 
 @pytest.mark.parametrize('adsorbate, adsorbate_rotation_list',
-                         [(['H'], [{'phi': 0., 'theta': 0., 'psi': 0.}]),
-                          (['CO'], [{'phi': 0., 'theta': 0., 'psi': 0.},
-                                    {'phi': 0., 'theta': 30., 'psi': 0.}])])
+                         [('H', [{'phi': 0., 'theta': 0., 'psi': 0.}]),
+                          ('CO', [{'phi': 0., 'theta': 0., 'psi': 0.},
+                                  {'phi': 0., 'theta': 30., 'psi': 0.}])])
 def test_get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
     arg_hash = hashlib.sha224((str(adsorbate) + str(adsorbate_rotation_list)).encode()).hexdigest()
     file_name = REGRESSION_BASELINES_LOCATION + 'unsimulated_catalog_docs_%s' % arg_hash + '.pkl'
@@ -292,17 +314,25 @@ def test__duplicate_docs_per_rotation():
             assert doc['adsorbate_rotation'] == expected_rotation
 
 
-@pytest.mark.parametrize('adsorbate', [None, 'H', 'CO'])
+@pytest.mark.parametrize('adsorbate', ['H', 'CO'])
 def test__get_attempted_adsorption_docs(adsorbate):
     attempted_docs = _get_attempted_adsorption_docs(adsorbate=adsorbate)
-    all_docs = get_adsorption_docs(adsorbate=adsorbate, filter={})
+
+    filters = {'vasp_settings.%s' % setting: value
+               for setting, value in adslab_settings()['vasp'].items()}
+    all_docs = get_adsorption_docs(adsorbate=adsorbate, filters=filters)
     assert len(attempted_docs) == len(all_docs)
 
 
 @pytest.mark.baseline
 @pytest.mark.parametrize('ignore_keys', [None, ['mpid'], ['mpid', 'top']])
 def test_to_create_hashed_doc(ignore_keys):
-    doc = get_adsorption_docs()[0]
+    # GASpy is going to yell at us about finding documents with no adsorbates.
+    # Ignore it.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+
+        doc = get_adsorption_docs()[0]
     string = _hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=False)
 
     # EAFP to find the pickle name of the cache, since it'll be odd if adsorbate == None
@@ -329,33 +359,19 @@ def test__hash_doc(ignore_keys):
     with open(file_name, 'rb') as file_handle:
         expected_string = pickle.load(file_handle)
 
-    doc = get_adsorption_docs()[0]
+    # GASpy is going to yell at us about finding documents with no adsorbates.
+    # Ignore it.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        doc = get_adsorption_docs()[0]
     string = _hash_doc(doc=doc, ignore_keys=ignore_keys, _return_hash=False)
     assert string == expected_string
 
 
 @pytest.mark.parametrize('adsorbate, model_tag',
-                         [(['H'], 'model0'),
-                          (['CO'], 'model0')])
-def test_surfaces_from_get_low_coverage_docs(adsorbate, model_tag):
-    '''
-    We test `get_low_coverage_docs_by_surface' in multiple unit tests.
-    This test checks that the surfaces we find are correct.
-    '''
-    low_coverage_docs = get_low_coverage_docs(adsorbate, model_tag)
-    surfaces = set(low_coverage_docs.keys())
-
-    adsorption_docs = get_adsorption_docs(adsorbate)
-    catalog_docs = get_unsimulated_catalog_docs(adsorbate)
-    expected_surfaces = set((doc['mpid'], str(doc['miller']), round(doc['shift'], 2), doc['top'])
-                            for doc in adsorption_docs + catalog_docs)
-    assert surfaces == expected_surfaces
-
-
-@pytest.mark.parametrize('adsorbate, model_tag',
-                         [(['H'], 'model0'),
-                          (['CO'], 'model0')])
-def test_energies_from_get_low_coverage_docs(adsorbate, model_tag):
+                         [('H', 'model0'),
+                          ('CO', 'model0')])
+def test_get_low_coverage_docs(adsorbate, model_tag):
     '''
     We test `get_low_coverage_docs_by_surface' in multiple unit tests.
     This test verifies that the documents provided by this function are
@@ -385,7 +401,7 @@ def test_energies_from_get_low_coverage_docs(adsorbate, model_tag):
                 continue
 
 
-@pytest.mark.parametrize('adsorbate', [['H'], ['CO']])
+@pytest.mark.parametrize('adsorbate', ['H', 'CO'])
 def test_get_low_coverage_dft_docs(adsorbate):
     '''
     For each surface, verify that every single document in our adsorption

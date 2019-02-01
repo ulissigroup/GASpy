@@ -19,7 +19,6 @@ import math
 from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict
-from ...mongo import make_atoms_from_doc
 from ...tasks import get_task_output, evaluate_luigi_task
 
 GAS_SETTINGS = defaults.gas_settings()
@@ -50,15 +49,11 @@ def test_CalculateAdsorptionEnergy():
         run_task_locally(task)
         doc = get_task_output(task)
 
-        # I just checked this one calculation by hand and found some
-        # key information about it.
+        # I just checked this one calculation by hand and found some key
+        # information about it.
         assert math.isclose(doc['adsorption_energy'], -1.5959449799999899)
-        assert doc['slab']['fwid'] == 124894
-        assert doc['adslab']['fwid'] == 124897
-        # Make sure we can actually turn the subdictionaries into `ase.Atoms`
-        # objects
-        _ = make_atoms_from_doc(doc['slab'])    # noqa: F841
-        _ = make_atoms_from_doc(doc['adslab'])  # noqa: F841
+        assert doc['fwids']['slab'] == 124894
+        assert doc['fwids']['adslab'] == 124897
 
     finally:
         clean_up_tasks()

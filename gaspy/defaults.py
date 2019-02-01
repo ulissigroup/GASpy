@@ -217,11 +217,11 @@ def adsorption_projection():
                     'coordination': '$fp_final.coordination',
                     'neighborcoord': '$fp_final.neighborcoord',
                     'nextnearestcoordination': '$fp_final.nextnearestcoordination',
-                    'energy': '$results.energy'}
+                    'energy': '$adsorption_energy'}
     return fingerprints
 
 
-def adsorption_filter(adsorbate):
+def adsorption_filters(adsorbate=None):
     '''
     Not all of our adsorption calculations are "good" ones. Some end up in
     desorptions, dissociations, do not converge, or have ridiculous energies.
@@ -261,14 +261,15 @@ def adsorption_filter(adsorbate):
                       'adsorbate (%s) that we have not yet established valid '
                       'energy bounds for. We are accepting anything in the'
                       'range between %i and %i eV.'
-                      % (adsorbate, energy_range[0], energy_range[1]))
+                      % (adsorbate, energy_range[0], energy_range[1]),
+                      UserWarning)
 
     # Distribute filters into mongo-readable form
-    filters['results.energy'] = {'$gt': energy_range[0], '$lt': energy_range[1]}
+    filters['adsorption_energy'] = {'$gt': energy_range[0], '$lt': energy_range[1]}
     filters['results.fmax'] = {'$lt': f_max}
     filters['movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
     filters['movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
-    filters['movement_data.max_surface_movement'] = {'$lt': slab_move_max}
+    filters['movement_data.max_slab_movement'] = {'$lt': slab_move_max}
     filters['vasp_settings.gga'] = xc_settings()['gga']
 
     return filters
@@ -302,61 +303,61 @@ def catalog_projection():
     return projection
 
 
-def surface_projection():
-    '''
-    WARNING:  A lot of code depends on this. Do not take anything out without
-    thinking very hard about it.
-
-    Returns:
-        projection  A dictionary that is meant to be passed as a projection
-                    operator to a Mongo `find` or `aggregate` command. The keys
-                    here are the keys for the new dictionary/doc you are
-                    making, and the values are where you can find the
-                    information from the old Mongo docs (in our
-                    `surface_energy` collection).
-    '''
-    fingerprints = {'_id': 0,
-                    'mongo_id': '$_id',
-                    'mpid': '$processed_data.calculation_info.mpid',
-                    'formula': '$processed_data.calculation_info.formula',
-                    'miller': '$processed_data.calculation_info.miller',
-                    'intercept': '$processed_data.surface_energy_info.intercept',
-                    'intercept_uncertainty': '$processed_data.surface_energy_info.intercept_uncertainty',
-                    'initial_configuration': '$initial_configuration',
-                    'FW_info': '$processed_data.FW_info'}
-    return fingerprints
-
-
-def surface_filter():
-    '''
-    Not all of our surface energy calculations are "good" ones. Some do not
-    converge or have end up having a lot of movement. These are the filters we
-    use to sift out these "bad" documents. It also happens to be the `query`
-    operator we can pass to Mongo's `find` or `aggregate` commands.
-
-    Returns:
-        filters     A dictionary that is meant to be used as a `query` argument
-                    for our `surface_energy` Mongo collection's `find` or
-                    `aggregate` commands.
-    '''
-    filters = {}
-
-    # Easy-to-read (and change) filters before we distribute them
-    # into harder-to-read (but mongo-readable) structures
-    f_max = 0.5                 # Maximum atomic force [eV/Ang]
-    max_surface_movement = 0.5  # Maximum distance that any atom can move [Ang]
-
-    # Distribute filters into mongo-readable form
-    filters['results.fmax'] = {'$lt': f_max}
-    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
-
-    return filters
-
-
 def model():
     '''
     We use surrogate models to make predictions of DFT information. This is the
     tag associated with our default model.
     '''
     return 'model0'
+
+
+#def surface_projection():
+#    '''
+#    WARNING:  A lot of code depends on this. Do not take anything out without
+#    thinking very hard about it.
+#
+#    Returns:
+#        projection  A dictionary that is meant to be passed as a projection
+#                    operator to a Mongo `find` or `aggregate` command. The keys
+#                    here are the keys for the new dictionary/doc you are
+#                    making, and the values are where you can find the
+#                    information from the old Mongo docs (in our
+#                    `surface_energy` collection).
+#    '''
+#    fingerprints = {'_id': 0,
+#                    'mongo_id': '$_id',
+#                    'mpid': '$processed_data.calculation_info.mpid',
+#                    'formula': '$processed_data.calculation_info.formula',
+#                    'miller': '$processed_data.calculation_info.miller',
+#                    'intercept': '$processed_data.surface_energy_info.intercept',
+#                    'intercept_uncertainty': '$processed_data.surface_energy_info.intercept_uncertainty',
+#                    'initial_configuration': '$initial_configuration',
+#                    'FW_info': '$processed_data.FW_info'}
+#    return fingerprints
+#
+#
+#def surface_filters():
+#    '''
+#    Not all of our surface energy calculations are "good" ones. Some do not
+#    converge or have end up having a lot of movement. These are the filters we
+#    use to sift out these "bad" documents. It also happens to be the `query`
+#    operator we can pass to Mongo's `find` or `aggregate` commands.
+#
+#    Returns:
+#        filters     A dictionary that is meant to be used as a `query` argument
+#                    for our `surface_energy` Mongo collection's `find` or
+#                    `aggregate` commands.
+#    '''
+#    filters = {}
+#
+#    # Easy-to-read (and change) filters before we distribute them
+#    # into harder-to-read (but mongo-readable) structures
+#    f_max = 0.5                 # Maximum atomic force [eV/Ang]
+#    max_surface_movement = 0.5  # Maximum distance that any atom can move [Ang]
+#
+#    # Distribute filters into mongo-readable form
+#    filters['results.fmax'] = {'$lt': f_max}
+#    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
+#    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
+#
+#    return filters

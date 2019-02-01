@@ -12,12 +12,14 @@ import warnings
 warnings.filterwarnings('ignore', category=ImportWarning)
 
 # Things we're testing
-from ...tasks.make_fireworks import (MakeGasFW,
+from ...tasks.make_fireworks import (FireworkMaker,
+                                     MakeGasFW,
                                      MakeBulkFW,
                                      MakeAdslabFW)
 
 # Things we need to do the tests
 import pytest
+import luigi
 from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict, turn_site_into_str
@@ -30,6 +32,11 @@ GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
+
+
+def test_FireworkMaker():
+    assert issubclass(FireworkMaker, luigi.Task)
+    assert FireworkMaker().complete() is False
 
 
 def test_MakeGasFW():

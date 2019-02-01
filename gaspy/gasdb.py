@@ -4,6 +4,7 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 import warnings
+import math
 import copy
 import json
 from tqdm import tqdm
@@ -84,9 +85,10 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
                             modify them, we suggest simply fetching that
                             object, modifying it, and then passing it here.
     Returns:
-        docs    A list of dictionaries whose key/value pairings are the ones
-                given by `gaspy.defaults.adsorption_projection` and who meet
-                the filtering criteria of `gaspy.defaults.adsorption_filters`
+        cleaned_docs    A list of dictionaries whose key/value pairings are the
+                        ones given by `gaspy.defaults.adsorption_projection`
+                        and who meet the filtering criteria of
+                        `gaspy.defaults.adsorption_filters`
     '''
     # Set the filtering criteria of the documents we'll be getting
     if filters is None:
@@ -109,9 +111,9 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
         print('Now pulling adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm(cursor)]
-    docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
-    return docs
+    return cleaned_docs
 
 
 def _clean_up_aggregated_docs(docs, expected_keys):
@@ -315,8 +317,8 @@ def get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list=None):
     items that have not yet been simulated using our default settings.
 
     Args:
-        adsorbate               [optional] A string of the adsorbate that you
-                                want to get documents for.
+        adsorbate               A string of the adsorbate that you want to get
+                                documents for.
         adsorbate_rotation_list A list of dictionaries with the 'psi', 'theta',
                                 and 'phi' keys whose values are the rotation of
                                 the adsorbate for the calculations you want to
@@ -351,6 +353,7 @@ def get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list=None):
         hash_ = _hash_doc(doc, ignore_keys=['adsorbate', 'energy'])
         catalog_dict.pop(hash_, None)
     docs = list(catalog_dict.values())
+
     return docs
 
 
@@ -384,7 +387,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
     return docs_with_rotation
 
 
-def _get_attempted_adsorption_docs(adsorbate=None, vasp_settings=None):
+def _get_attempted_adsorption_docs(adsorbate, vasp_settings=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`. This differs from
@@ -394,14 +397,8 @@ def _get_attempted_adsorption_docs(adsorbate=None, vasp_settings=None):
     everything that we've attempted.
 
     Args:
-        adsorbate      [optional] A list of the adsorbates that you need to be
-                        present in each document's corresponding atomic
-                        structure. Note that if you pass a list with two
-                        adsorbates, then you will only get matches for
-                        structures with *both* of those adsorbates; you will
-                        *not* get structures with only one of the adsorbates.
-                        If you pass nothing, then we get all documents
-                        regardless of adsorbates.
+        adsorbate       A string indicating the adsorbate that you want to find
+                        the attempted calculations for.
         vasp_settings   [optional] An OrderedDict containing the default energy
                         cutoff, VASP pseudo-potential version number
                         (pp_version), and exchange-correlational settings. This
@@ -418,7 +415,8 @@ def _get_attempted_adsorption_docs(adsorbate=None, vasp_settings=None):
     # adsorbates
     if vasp_settings is None:
         vasp_settings = defaults.adslab_settings()['vasp']
-    filters = {'vasp_settings': vasp_settings}
+    filters = {'vasp_settings.%s' % setting: value
+               for setting, value in vasp_settings.items()}
     if adsorbate:
         filters['adsorbate'] = adsorbate
     match = {'$match': filters}
@@ -427,7 +425,7 @@ def _get_attempted_adsorption_docs(adsorbate=None, vasp_settings=None):
     # structure
     projection = defaults.adsorption_projection()
     projection['coordination'] = '$fp_init.coordination'
-    projection['neighborcoord'] = 'fp_init.neighborcoord'
+    projection['neighborcoord'] = '$fp_init.neighborcoord'
     projection['nextnearestcoordination'] = '$fp_init.nextnearestcoordination'
     # Get some extra adsorbate information out of Mongo
     projection['adsorbate_rotation'] = '$adsorbate_rotation'
@@ -482,7 +480,7 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
         return serialized_doc
 
 
-def get_low_coverage_docs(adsorbates, model_tag=defaults.model()):
+def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
     '''
     Each surface has many possible adsorption sites. The site with the most
     negative adsorption energy (i.e., the strongest-binding site) will tend to
@@ -500,9 +498,8 @@ def get_low_coverage_docs(adsorbates, model_tag=defaults.model()):
     one consistent location.
 
     Args:
-        adsorbates  A list of strings that represent the adsorbates you want to
-                    get the low-coverage sites for. Example: ['CO'] or ['CO',
-                    'C']
+        adsorbate   A string indicating the adsorbate you want to get the
+                    low-coverage sites for, e.g., 'CO' or 'H'
         model_tag   A string indicating which model you want to use when using
                     non-DFT, predicted energies. Check out the
                     `predictions.adsorption_energy` key in the catalog
@@ -514,10 +511,10 @@ def get_low_coverage_docs(adsorbates, model_tag=defaults.model()):
                 aggregated documents we get from either `get_adsorption_docs`
                 or `get_catalog_docs`
     '''
-    docs_dft = get_low_coverage_dft_docs(adsorbates=adsorbates)
-    docs_ml = get_low_coverage_ml_docs(adsorbates=adsorbates, model_tag=model_tag)
-    docs_dft_by_surface = {get_surface_from_doc(doc) for doc in docs_dft}
-    docs_ml_by_surface = {get_surface_from_doc(doc) for doc in docs_ml}
+    docs_dft = get_low_coverage_dft_docs(adsorbate=adsorbate)
+    docs_ml = get_low_coverage_ml_docs(adsorbate=adsorbate, model_tag=model_tag)
+    docs_dft_by_surface = {get_surface_from_doc(doc): doc for doc in docs_dft}
+    docs_ml_by_surface = {get_surface_from_doc(doc): doc for doc in docs_ml}
 
     # For each ML-predicted surface, figure out if DFT supersedes it
     docs_by_surface = copy.deepcopy(docs_ml_by_surface)
@@ -596,7 +593,7 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
 
     # Get the standard document projection, then round the shift so that we can
     # group more easily. Credit to Vince Browdren on Stack Exchange
-    projections = defaults.adsorption_projections()
+    projections = defaults.adsorption_projection()
     projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
                                           {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
     project = {'$project': projections}
@@ -647,8 +644,18 @@ def get_surface_from_doc(doc):
                 formatted as a string, and the shift will be rounded to 2
                 decimal places.
     '''
-    surface = (doc['mpid'], str(doc['miller']), round(doc['shift'], 2), doc['top'])
+    surface = (doc['mpid'], str(doc['miller']), round_(doc['shift'], 2), doc['top'])
     return surface
+
+
+def round_(n, decimals=0):
+    '''
+    Python can't round for jack. We use someone else's home-brew to do
+    rounding. Credit goes to David Amos
+    (<https://realpython.com/python-rounding/#rounding-half-up>).
+    '''
+    multiplier = 10 ** decimals
+    return math.floor(n*multiplier + 0.5) / multiplier
 
 
 def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
