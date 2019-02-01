@@ -310,7 +310,9 @@ def _add_orr_predictions_to_projection(projection, latest_predictions):
     return projection
 
 
-def get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list=None):
+def get_unsimulated_catalog_docs(adsorbate,
+                                 adsorbate_rotation_list=None,
+                                 vasp_settings=None):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out all
     items that also show up in `get_adsorption_docs`, i.e., gets the catalog
@@ -326,15 +328,26 @@ def get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list=None):
                                 will add another set of sites to the output
                                 list. If you add nothing, then we'll just check
                                 for the default rotation only.
+        vasp_settings           [optional] An OrderedDict containing the
+                                default energy cutoff, VASP pseudo-potential
+                                version number (pp_version), and
+                                exchange-correlational settings. This should be
+                                obtained (and modified, if necessary) from
+                                `gaspy.defaults.adslab_settings()['vasp']`. If
+                                `None`, then pulls default settings.
     Returns:
         docs    A list of dictionaries for various projection.
     '''
+    # Python doesn't like mutable default arguments
+    if vasp_settings is None:
+        vasp_settings = defaults.adslab_settings()['vasp']
     if adsorbate_rotation_list is None:
         adsorbate_rotation_list = [defaults.adslab_settings()['rotation']]
 
     docs_catalog = get_catalog_docs()
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
-    docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate)
+    docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate,
+                                                    vasp_settings=vasp_settings)
 
     # Round all of the shift values so that they match more easily
     for doc in docs_catalog_with_rotation + docs_simulated:
