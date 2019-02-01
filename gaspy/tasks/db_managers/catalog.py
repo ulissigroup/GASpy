@@ -62,7 +62,7 @@ def update_catalog_collection(elements, max_miller, n_processes=1):
     if n_processes > 1:
         with multiprocess.Pool(n_processes) as pool:
             list(pool.imap(func=lambda mpid: __run_insert_to_catalog_task(mpid, max_miller),
-                           iterable=mpids, chunksize=100))
+                           iterable=mpids, chunksize=20))
     else:
         for mpid in mpids:
             __run_insert_to_catalog_task(mpid, max_miller)
