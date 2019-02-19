@@ -52,6 +52,10 @@ RUN conda install \
     ipykernel=4.9.0 \
     tqdm=4.24.0
 
+# Patch Luigi until the PR comes through
+RUN sed -i '1108s/ValueError/(ValueError, TypeError)/' /miniconda3/lib/python3.6/site-packages/luigi/parameter.py
+RUN sed -i '1109s/literal_eval(x)/tuple(literal_eval(x))/' /miniconda3/lib/python3.6/site-packages/luigi/parameter.py
+
 # The $HOME/.ssh mount is so that you can mount your ~/.ssh into it, so that
 # you can freely log into other things from inside the container.
 # The $GASPY_HOME mount is so that you can use whatever version of GASpy.
