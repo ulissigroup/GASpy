@@ -1,3 +1,4 @@
+
 '''
 This module houses the functions needed to make and submit FireWorks rockets.
 
@@ -169,6 +170,7 @@ class MakeAdslabFW(FireworkMaker):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
+
     def requires(self):
         return GenerateAdslabs(adsorbate_name=self.adsorbate_name,
                                rotation=self.rotation,
@@ -210,7 +212,7 @@ class MakeAdslabFW(FireworkMaker):
                    'miller': self.miller_indices,
                    'shift': self.shift,
                    'top': self.top,
-                   'slabrepeat': doc['slab_repeat'],
+                   'slab_repeat': doc['slab_repeat'],
                    'vasp_settings': vasp_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,

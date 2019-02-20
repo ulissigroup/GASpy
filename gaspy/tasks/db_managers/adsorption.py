@@ -179,7 +179,7 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['miller'] = adslab_doc['fwname']['miller']
     adsorption_doc['shift'] = adslab_doc['fwname']['shift']
     adsorption_doc['top'] = adslab_doc['fwname']['top']
-    adsorption_doc['slabrepeat'] = adslab_doc['fwname']['slabrepeat']
+    adsorption_doc['slab_repeat'] = adslab_doc['fwname']['slab_repeat']
     adsorption_doc['vasp_settings'] = adslab_doc['fwname']['vasp_settings']
     adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
                                'slab': slab_doc['fwid']}
