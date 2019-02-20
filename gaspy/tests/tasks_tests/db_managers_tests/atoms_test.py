@@ -79,7 +79,8 @@ def test__make_atoms_doc_from_fwid():
     # Check that we have some of the necessary fields
     assert 'fwname' in doc  # If we weren't patching, this would be a real comparison
     assert doc['fwid'] == fwid
-    assert 'directory' in doc
+    assert isinstance(doc['directory'], str)
+    assert isinstance('calculation_date', str)
 
 
 def test___patch_old_document():

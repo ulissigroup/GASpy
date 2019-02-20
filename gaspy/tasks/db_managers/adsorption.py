@@ -192,4 +192,6 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['movement_data'] = {'max_bare_slab_movement': max_bare_slab_movement,
                                        'max_slab_movement': max_slab_movement,
                                        'max_adsorbate_movement': max_ads_movement}
+    adsorption_doc['calculation_dates'] = {'slab+adsorbate': adslab_doc['calculation_date'],
+                                           'slab': slab_doc['calculation_date']}
     return adsorption_doc

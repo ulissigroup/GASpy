@@ -112,3 +112,4 @@ def test___create_adsorption_doc():
     assert 'fp_init' in doc
     assert 'fp_final' in doc
     assert all(isinstance(datum, float) for datum in doc['movement_data'].values())
+    assert all(isinstance(date, str) for date in doc['calculation_dates'].values())

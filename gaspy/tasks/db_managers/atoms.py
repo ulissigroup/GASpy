@@ -134,6 +134,7 @@ def _make_atoms_doc_from_fwid(fwid):
     doc['fwname'] = fw.name
     doc['fwid'] = fwid
     doc['directory'] = fw.launches[-1].launch_dir
+    doc['calculation_date'] = fw.updated_on
 
     # Fix some of our old FireWorks
     doc = __patch_old_document(doc, atoms, fw)
