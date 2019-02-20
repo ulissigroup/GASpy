@@ -8,6 +8,7 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 from datetime import datetime
+import warnings
 import uuid
 import subprocess
 import multiprocess
@@ -66,6 +67,9 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
         else:
             docs = [_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing]
 
+    # Sometimes `_make_atoms_doc_from_fwid` fails. Parse out the failures here.
+    docs = [doc for doc in docs if doc is not None]
+
     if len(docs) > 0:
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
@@ -110,8 +114,18 @@ def _make_atoms_doc_from_fwid(fwid):
     # Get the `ase.Atoms` objects of the initial and final images
     lpad = get_launchpad()
     fw = lpad.get_fw_by_id(fwid)
-    starting_atoms = get_atoms_from_fw(fw, index=0)
-    atoms = get_atoms_from_fw(fw, index=-1)
+    try:
+        starting_atoms = get_atoms_from_fw(fw, index=0)
+        atoms = get_atoms_from_fw(fw, index=-1)
+
+    # Sometimes the length of the initial atoms and the final atoms are
+    # different. If this happens, then defuse the Firework
+    except ValueError as error:
+        fwid = fw.fw_id
+        lpad.defuse_fw(fwid)
+        warnings.warn('Just defused FireWork %i because the number of initial '
+                      'and final atoms differed.' % fwid)
+        return None
 
     # Turn the atoms objects into a document and then add additional
     # information

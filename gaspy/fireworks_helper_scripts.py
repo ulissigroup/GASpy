@@ -301,8 +301,16 @@ def get_atoms_from_fw(fw, index=-1):
     # We can grab the original trajhex and then transfer its tags & constraints
     # to the newly decoded atoms
     original_atoms = decode_trajhex_to_atoms(trajhexes[0])
-    atoms.set_tags(original_atoms.get_tags())
-    atoms.set_constraint(original_atoms.constraints)
+    try:
+        atoms.set_tags(original_atoms.get_tags())
+        atoms.set_constraint(original_atoms.constraints)
+
+    # Sometimes the length of the initial atoms and the final atoms are
+    # different. If this happens, then add a more useful error message.
+    except ValueError as error:
+        raise ValueError('The number of atoms from beginning to end of '
+                         'calculation has changed for FireWork ID %i'
+                         % fw.fw_id).with_traceback(error.__traceback__)
 
     # Patch some old, kinda-broken atoms
     patched_atoms = __patch_old_atoms_tags(fw, atoms)
