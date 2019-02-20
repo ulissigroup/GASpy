@@ -100,13 +100,13 @@ def test___create_adsorption_doc():
     assert isinstance(doc['adsorbate'], str)
     assert set(doc['adsorbate_rotation'].keys()) == set(['phi', 'theta', 'psi'])
     assert all(isinstance(angle, float) for angle in doc['adsorbate_rotation'].values())
-    assert isinstance(doc['initial_adsorption_site'], str)
+    assert all(isinstance(coord, float) for coord in doc['initial_adsorption_site'])
     assert isinstance(doc['mpid'], str)
     assert len(doc['miller']) == 3
     assert isinstance(doc['shift'], float) or isinstance(doc['shift'], int)
     assert isinstance(doc['top'], bool)
     # `slabrepeat` should be a tuple of ints, but historically it was made as a string
-    assert isinstance(doc['slabrepeat'], str)
+    assert all(isinstance(repeat, int) for repeat in doc['slab_repeat'])
     assert isinstance(doc['vasp_settings'], dict)
     assert all(isinstance(fwid, int) for fwid in doc['fwids'].values())
     assert 'fp_init' in doc

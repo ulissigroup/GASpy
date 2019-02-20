@@ -9,7 +9,6 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import warnings
 import luigi
 from .. import defaults
-from ..utils import turn_site_into_str
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import is_rocket_running
 from .core import save_task_output, make_task_output_object, get_task_output
@@ -316,7 +315,12 @@ class FindAdslab(FindCalculation):
         '''
         self.gasdb_query = {'fwname.calculation_type': 'slab+adsorbate optimization',
                             'fwname.adsorbate': self.adsorbate_name,
-                            'fwname.adsorption_site': turn_site_into_str(self.adsorption_site),
+                            'fwname.adsorption_site.0': {'$gte': self.adsorption_site[0] - 1e-2,
+                                                         '$lte': self.adsorption_site[0] + 1e-2},
+                            'fwname.adsorption_site.1': {'$gte': self.adsorption_site[1] - 1e-2,
+                                                         '$lte': self.adsorption_site[1] + 1e-2},
+                            'fwname.adsorption_site.2': {'$gte': self.adsorption_site[2] - 1e-2,
+                                                         '$lte': self.adsorption_site[2] + 1e-2},
                             'fwname.mpid': self.mpid,
                             'fwname.miller': self.miller_indices,
                             'fwname.shift': {'$gte': self.shift - 1e-4,
@@ -327,7 +331,12 @@ class FindAdslab(FindCalculation):
                             'fwname.adsorbate_rotation.psi': self.rotation['psi']}
         self.fw_query = {'name.calculation_type': 'slab+adsorbate optimization',
                          'name.adsorbate': self.adsorbate_name,
-                         'name.adsorption_site': turn_site_into_str(self.adsorption_site),
+                         'name.adsorption_site.0': {'$gte': self.adsorption_site[0] - 1e-2,
+                                                    '$lte': self.adsorption_site[0] + 1e-2},
+                         'name.adsorption_site.1': {'$gte': self.adsorption_site[1] - 1e-2,
+                                                    '$lte': self.adsorption_site[1] + 1e-2},
+                         'name.adsorption_site.2': {'$gte': self.adsorption_site[2] - 1e-2,
+                                                    '$lte': self.adsorption_site[2] + 1e-2},
                          'name.mpid': self.mpid,
                          'name.miller': self.miller_indices,
                          'name.shift': {'$gte': self.shift - 1e-4,
@@ -348,11 +357,15 @@ class FindAdslab(FindCalculation):
         # should take out some extraneous adsorbate information. We should have
         # a separate set of tasks, but that's for future us to fix.
         if self.adsorbate_name == '':
-            del self.gasdb_query['fwname.adsorption_site']
+            del self.gasdb_query['fwname.adsorption_site.0']
+            del self.gasdb_query['fwname.adsorption_site.1']
+            del self.gasdb_query['fwname.adsorption_site.2']
             del self.gasdb_query['fwname.adsorbate_rotation.phi']
             del self.gasdb_query['fwname.adsorbate_rotation.theta']
             del self.gasdb_query['fwname.adsorbate_rotation.psi']
-            del self.fw_query['name.adsorption_site']
+            del self.fw_query['name.adsorption_site.0']
+            del self.fw_query['name.adsorption_site.1']
+            del self.fw_query['name.adsorption_site.2']
             del self.fw_query['name.adsorbate_rotation.phi']
             del self.fw_query['name.adsorbate_rotation.theta']
             del self.fw_query['name.adsorbate_rotation.psi']

@@ -11,7 +11,6 @@ import traceback
 import multiprocess
 from ..core import get_task_output, evaluate_luigi_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
-from ...utils import turn_string_site_into_tuple
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab, find_max_movement
@@ -104,7 +103,7 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                     `CalculateAdsorptionEnergy` task
     '''
     # Reformat the site because of silly historical reasons
-    adsorption_site = turn_string_site_into_tuple(atoms_doc['fwname']['adsorption_site'])
+    adsorption_site = atoms_doc['fwname']['adsorption_site']
 
     # Create, run, and return the output of the task
     task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,

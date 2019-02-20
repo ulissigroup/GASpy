@@ -22,7 +22,7 @@ import math
 import luigi
 from .utils import clean_up_tasks
 from ... import defaults
-from ...utils import turn_site_into_str, unfreeze_dict
+from ...utils import unfreeze_dict
 from ...mongo import make_atoms_from_doc
 from ...tasks.core import get_task_output
 from ...tasks.make_fireworks import (MakeGasFW,
@@ -232,7 +232,7 @@ def test_FindAdslab_successfully():
         _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
         assert doc['fwname']['calculation_type'] == 'slab+adsorbate optimization'
-        assert doc['fwname']['adsorption_site'] == turn_site_into_str(adsorption_site)
+        assert doc['fwname']['adsorption_site'] == list(adsorption_site)
         assert math.isclose(doc['fwname']['shift'], shift)
         assert doc['fwname']['top'] == top
         assert doc['fwname']['adsorbate'] == adsorbate_name

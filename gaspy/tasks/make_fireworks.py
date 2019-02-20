@@ -19,7 +19,7 @@ import luigi
 from .atoms_generators import GenerateGas, GenerateBulk, GenerateAdslabs
 from .. import defaults
 from ..mongo import make_atoms_from_doc
-from ..utils import unfreeze_dict, turn_site_into_str
+from ..utils import unfreeze_dict
 from ..fireworks_helper_scripts import make_firework, submit_fwork, get_launchpad
 
 GAS_SETTINGS = defaults.gas_settings()
@@ -207,7 +207,7 @@ class MakeAdslabFW(FireworkMaker):
         fw_name = {'calculation_type': 'slab+adsorbate optimization',
                    'adsorbate': self.adsorbate_name,
                    'adsorbate_rotation': self.rotation,
-                   'adsorption_site': turn_site_into_str(self.adsorption_site),
+                   'adsorption_site': self.adsorption_site,
                    'mpid': self.mpid,
                    'miller': self.miller_indices,
                    'shift': self.shift,

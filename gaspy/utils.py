@@ -8,6 +8,35 @@ import json
 from collections import OrderedDict, Iterable, Mapping
 
 
+def print_dict(dict_, indent=0):
+    '''
+    This function prings a nested dictionary, but in a prettier format. This is
+    strictly for reporting and/or debugging purposes.
+
+    Inputs:
+        dict_   The nested dictionary to print
+        indent  How many tabs to start the printing at
+    '''
+    if isinstance(dict_, dict):
+        for key, value in dict_.items():
+            # If the dictionary key is `spec`, then it's going to print out a
+            # bunch of messy looking things we don't care about. So skip it.
+            if key != 'spec':
+                print('\t' * indent + str(key))
+                if isinstance(value, dict) or isinstance(value, list):
+                    print_dict(value, indent+1)
+                else:
+                    print('\t' * (indent+1) + str(value))
+    elif isinstance(dict_, list):
+        for item in dict_:
+            if isinstance(item, dict) or isinstance(item, list):
+                print_dict(item, indent+1)
+            else:
+                print('\t' * (indent+1) + str(item))
+    else:
+        pass
+
+
 def read_rc(query=None):
     '''
     This function will pull out keys from the .gaspyrc file for you
@@ -68,35 +97,6 @@ def _find_rc_file():
                 raise EnvironmentError('You have not yet made an appropriate .gaspyrc.json configuration file yet.')
 
 
-def print_dict(dict_, indent=0):
-    '''
-    This function prings a nested dictionary, but in a prettier format. This is
-    strictly for reporting and/or debugging purposes.
-
-    Inputs:
-        dict_   The nested dictionary to print
-        indent  How many tabs to start the printing at
-    '''
-    if isinstance(dict_, dict):
-        for key, value in dict_.items():
-            # If the dictionary key is `spec`, then it's going to print out a
-            # bunch of messy looking things we don't care about. So skip it.
-            if key != 'spec':
-                print('\t' * indent + str(key))
-                if isinstance(value, dict) or isinstance(value, list):
-                    print_dict(value, indent+1)
-                else:
-                    print('\t' * (indent+1) + str(value))
-    elif isinstance(dict_, list):
-        for item in dict_:
-            if isinstance(item, dict) or isinstance(item, list):
-                print_dict(item, indent+1)
-            else:
-                print('\t' * (indent+1) + str(item))
-    else:
-        pass
-
-
 def unfreeze_dict(frozen_dict):
     '''
     Recursive function to turn a Luigi frozen dictionary into an ordered dictionary,
@@ -130,46 +130,3 @@ def unfreeze_dict(frozen_dict):
         unfrozen_dict = frozen_dict
 
     return unfrozen_dict
-
-
-def turn_site_into_str(site):
-    '''
-    For some reason, we have historically been storing adsorption sites as
-    strings instead of arrays. We suspect it has to do with rounding, although
-    we should have probably just rounded the floats inside the arrays.
-    Regardless, this function will turn a site into a string consistently.
-
-    Arg:
-        site    A 3-long sequence of floats, probably carterias coordinates
-    Returns:
-        site_str    The `site` argument, but formatted with brackets, spaces,
-                    and as a string. For example:
-                        [0, 0, 0]               --> '[  0.     0.     0.  ]'
-                        [1.23, 4.56, -7.89]     --> '[  1.23   4.56  -7.89]'
-                        [10.23, -40.56, 70.89]  --> '[ 10.23 -40.56  70.89]'
-                        [-10.23, -40.56, 70.89] --> '[-10.23 -40.56  70.89]'
-    '''
-    # Yeah, this code is an illegible golf mess. I'm leaving it partly because
-    # of laziness and partly out of objection to the fact that we actually need
-    # to make this function in the first place.
-    site_str = '[' + ' '.join('{:6.2f}'.format(coord).rstrip('0').ljust(6, ' ') for coord in site) + ']'
-    return site_str
-
-
-def turn_string_site_into_tuple(site_str):
-    '''
-    This function is the inverse of the `turn_site_into_str` function.
-
-    Arg:
-        site_str    The `site` argument, but formatted with brackets, spaces,
-                    and as a string. For example:
-                        [0, 0, 0]               --> '[  0.     0.     0.  ]'
-                        [1.23, 4.56, -7.89]     --> '[  1.23   4.56  -7.89]'
-                        [10.23, -40.56, 70.89]  --> '[ 10.23 -40.56  70.89]'
-                        [-10.23, -40.56, 70.89] --> '[-10.23 -40.56  70.89]'
-
-    Returns:
-        site    A 3-long sequence of floats, probably Cartesian coordinates
-    '''
-    site = tuple(float(coord) for coord in site_str.replace('[', '').replace(']', '').split())
-    return site

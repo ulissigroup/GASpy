@@ -22,7 +22,7 @@ import pytest
 import luigi
 from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
-from ...utils import unfreeze_dict, turn_site_into_str
+from ...utils import unfreeze_dict
 from ...tasks.core import get_task_output
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
@@ -145,12 +145,12 @@ def test_MakeAdslabFW():
         assert fwork.name['calculation_type'] == 'slab+adsorbate optimization'
         assert fwork.name['adsorbate'] == adsorbate_name
         assert fwork.name['adsorbate_rotation'] == rotation
-        assert fwork.name['adsorption_site'] == turn_site_into_str(adsorption_site)
+        assert fwork.name['adsorption_site'] == adsorption_site
         assert fwork.name['mpid'] == mpid
         assert fwork.name['miller'] == miller_indices
         assert fwork.name['shift'] == shift
         assert fwork.name['top'] == top
-        assert isinstance(fwork.name['slabrepeat'], tuple)
+        assert isinstance(fwork.name['slab_repeat'], tuple)
         assert fwork.name['vasp_settings'] == ADSLAB_SETTINGS['vasp']
 
     finally:

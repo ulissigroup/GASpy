@@ -11,9 +11,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 # Things we're testing
 from ..utils import (read_rc,
                      _find_rc_file,
-                     unfreeze_dict,
-                     turn_site_into_str,
-                     turn_string_site_into_tuple)
+                     unfreeze_dict)
 
 # Things we need to do the tests
 import pytest
@@ -111,19 +109,3 @@ def _look_for_type_in_dict(type_, dict_):
     elif isinstance(dict_, collections.Iterable) and not isinstance(dict_, str):
         for element in dict_:
             _look_for_type_in_dict(type_, element)
-
-
-def test_turn_site_into_str():
-    assert turn_site_into_str([0., 0., 0.]) == '[  0.     0.     0.  ]'
-    assert turn_site_into_str([-0., 0., 0.]) == '[ -0.     0.     0.  ]'
-    assert turn_site_into_str([1.23, 4.56, -7.89]) == '[  1.23   4.56  -7.89]'
-    assert turn_site_into_str([10.23, -40.56, 70.89]) == '[ 10.23 -40.56  70.89]'
-    assert turn_site_into_str([-10.23, -40.56, 70.89]) == '[-10.23 -40.56  70.89]'
-
-
-def test_turn_string_site_into_tuple():
-    assert turn_string_site_into_tuple('[  0.     0.     0.  ]') == (0., 0., 0.)
-    assert turn_string_site_into_tuple('[ -0.     0.     0.  ]') == (-0., 0., 0.)
-    assert turn_string_site_into_tuple('[  1.23   4.56  -7.89]') == (1.23, 4.56, -7.89)
-    assert turn_string_site_into_tuple('[ 10.23 -40.56  70.89]') == (10.23, -40.56, 70.89)
-    assert turn_string_site_into_tuple('[-10.23 -40.56  70.89]') == (-10.23, -40.56, 70.89)
