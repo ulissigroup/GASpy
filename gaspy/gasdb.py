@@ -389,15 +389,25 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
                             rotations in the `adsorbate_rotation_list`
                             argument.
     '''
-    docs_with_rotation = []
-    for i, adsorbate_rotation in enumerate(adsorbate_rotation_list):
-        print('Making catalog copy number %i of %i...'
-              % (i+1, len(adsorbate_rotation_list)))
-        docs_copy = copy.deepcopy(docs)     # To make sure we don't modify the parent docs
-        for doc in tqdm(docs_copy):
+    # If we have more than one rotation, we'll need to copy and parse the
+    # documents
+    if len(adsorbate_rotation_list) > 1:
+        docs_with_rotation = []
+        for i, adsorbate_rotation in enumerate(adsorbate_rotation_list):
+            print('Making catalog copy number %i of %i...'
+                  % (i+1, len(adsorbate_rotation_list)))
+            docs_copy = copy.deepcopy(docs)     # To make sure we don't modify the parent docs
+            for doc in tqdm(docs_copy):
+                doc['adsorbate_rotation'] = adsorbate_rotation
+            docs_with_rotation += docs_copy
+        return docs_with_rotation
+
+    # If we have only one rotation, we just need to add it. No copying
+    # necessary.
+    else:
+        for doc in docs:
             doc['adsorbate_rotation'] = adsorbate_rotation
-        docs_with_rotation += docs_copy
-    return docs_with_rotation
+        return docs
 
 
 def _get_attempted_adsorption_docs(adsorbate, vasp_settings=None):
