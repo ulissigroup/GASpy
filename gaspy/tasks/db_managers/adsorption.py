@@ -7,6 +7,7 @@ information.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+import traceback
 import multiprocess
 from ..core import get_task_output, evaluate_luigi_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
@@ -123,6 +124,11 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     # stop us from updating the successful runs
     except FileNotFoundError:
         pass
+
+    # If some other error pops up, then we want to report it, but move on so
+    # that we can still update other things.
+    except RuntimeError:
+        traceback.print_exc()
 
 
 def __create_adsorption_doc(energy_doc):
