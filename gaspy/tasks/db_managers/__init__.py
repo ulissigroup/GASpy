@@ -13,6 +13,6 @@ from .atoms import update_atoms_collection
 from .adsorption import update_adsorption_collection
 
 
-def update_all_collections():
-    update_atoms_collection()
-    update_adsorption_collection()
+def update_all_collections(n_processes=1):
+    update_atoms_collection(n_processes=n_processes)
+    update_adsorption_collection(n_processes=n_processes)
