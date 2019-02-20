@@ -8,6 +8,7 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import traceback
+import warnings
 import multiprocess
 from ..core import get_task_output, evaluate_luigi_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
@@ -128,6 +129,9 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     # that we can still update other things.
     except RuntimeError:
         traceback.print_exc()
+        warnings.warn('We caught the exception reported just above and moved on '
+                      'with updating the adsorption updating. Here is the '
+                      'offending document:\n%s' % atoms_doc)
 
 
 def __create_adsorption_doc(energy_doc):
