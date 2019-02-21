@@ -741,22 +741,27 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
     return cleaned_docs
 
 
-def purge_adslab(fwid):
+def purge_adslabs(fwids):
     '''
-    This function will "purge" an adsorption calculation from our database by
-    removing it from our Mongo collections and defusing it within FireWorks.
+    This function will "purge" adsorption calculations from our database by
+    removing it from our Mongo collections and defusing them within FireWorks.
 
     Arg:
-        fwid    The FireWorks ID of the calculation in question
+        fwids   The FireWorks IDs of the calculations in question
     '''
     lpad = get_launchpad()
-    lpad.defuse_fw(fwid)
 
+    print('Defusing FWs...')
+    for fwid in tqdm(fwids):
+        lpad.defuse_fw(fwid)
+
+    print('Removing FWs from atoms collection...')
     with get_mongo_collection('atoms') as collection:
-        collection.delete_one({'fwid': fwid})
+        collection.delete_many({'fwid': {'$in': fwids}})
 
+    print('Removing FWs from adsorption collection...')
     with get_mongo_collection('adsorption') as collection:
-        collection.delete_one({'fwids.adslab': fwid})
+        collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})
 
 
 #def get_surface_docs(extra_projections=None, filters=None):
