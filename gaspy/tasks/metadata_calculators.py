@@ -7,7 +7,6 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import sys
 import pickle
-#from ase.calculators.singlepoint import SinglePointCalculator
 import luigi
 from .core import save_task_output, make_task_output_object
 from .calculation_finders import FindGas, FindAdslab
