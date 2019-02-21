@@ -216,7 +216,6 @@ def adsorption_projection():
                     'top': '$top',
                     'coordination': '$fp_final.coordination',
                     'neighborcoord': '$fp_final.neighborcoord',
-                    'nextnearestcoordination': '$fp_final.nextnearestcoordination',
                     'energy': '$adsorption_energy'}
     return fingerprints
 
@@ -300,7 +299,6 @@ def catalog_projection():
                   'natoms': '$atoms.natoms',
                   'coordination': '$coordination',
                   'neighborcoord': '$neighborcoord',
-                  'nextnearestcoordination': '$nextnearestcoordination',
                   'adsorption_site': '$adsorption_site'}
     return projection
 

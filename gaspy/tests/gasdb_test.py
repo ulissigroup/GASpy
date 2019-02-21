@@ -131,7 +131,6 @@ def test_get_adsorption_docs(adsorbate, extra_projections):
         for neighbor in doc['neighborcoord']:
             assert isinstance(neighbor, str)
         assert isinstance(doc['neighborcoord'], list)
-        assert isinstance(doc['nextnearestcoordination'], str)
         assert isinstance(doc['energy'], float)
         if extra_projections is not None:
             for projection in extra_projections:
@@ -184,7 +183,6 @@ def test_get_catalog_docs():
         assert isinstance(doc['coordination'], str)
         for neighbor in doc['neighborcoord']:
             assert isinstance(neighbor, str)
-        assert isinstance(doc['nextnearestcoordination'], str)
         assert len(doc['adsorption_site']) == 3
         assert all(isinstance(coordinate, float) for coordinate in doc['adsorption_site'])
 
