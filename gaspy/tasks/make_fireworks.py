@@ -247,8 +247,8 @@ class MakeAdslabFW(FireworkMaker):
             matching site, shift, and top values
         '''
         for doc in adslab_docs:
-            if np.allclose(doc['adsorption_site'], adsorption_site):
-                if math.isclose(doc['shift'], shift):
+            if np.allclose(doc['adsorption_site'], adsorption_site, atol=0.01):
+                if math.isclose(doc['shift'], shift, abs_tol=0.01):
                     if doc['top'] == top:
                         return doc
 
@@ -276,7 +276,7 @@ class MakeAdslabFW(FireworkMaker):
             matching site, shift, and top values
         '''
         for doc in adslab_docs:
-            if math.isclose(doc['shift'], shift):
+            if math.isclose(doc['shift'], shift, abs_tol=0.01):
                 if doc['top'] == top:
                     return doc
 
