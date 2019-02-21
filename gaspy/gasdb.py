@@ -406,7 +406,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
     # necessary.
     else:
         for doc in docs:
-            doc['adsorbate_rotation'] = adsorbate_rotation
+            doc['adsorbate_rotation'] = adsorbate_rotation_list[0]
         return docs
 
 

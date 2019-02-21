@@ -311,6 +311,13 @@ def test__duplicate_docs_per_rotation():
         for doc in duplicated_docs[start_slice:end_slice]:
             assert doc['adsorbate_rotation'] == expected_rotation
 
+    # Check that we can handle a single rotation correctly, too
+    rotation_list = [{'phi': 0., 'theta': 0., 'psi': 0.}]
+    duplicated_docs = _duplicate_docs_per_rotations(docs, rotation_list)
+    assert len(rotation_list)*len(docs) == len(duplicated_docs)
+    for doc in duplicated_docs:
+        assert doc['adsorbate_rotation'] == rotation_list[0]
+
 
 @pytest.mark.parametrize('adsorbate', ['H', 'CO'])
 def test__get_attempted_adsorption_docs(adsorbate):
