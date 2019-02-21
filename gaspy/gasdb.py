@@ -349,10 +349,6 @@ def get_unsimulated_catalog_docs(adsorbate,
     docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate,
                                                     vasp_settings=vasp_settings)
 
-    # Round all of the shift values so that they match more easily
-    for doc in docs_catalog_with_rotation + docs_simulated:
-        doc['shift'] = round(doc['shift'], 2)
-
     # Hash all of the documents, which we will use to check if something
     # in the catalog has been simulated or not
     print('Hashing catalog documents...')
