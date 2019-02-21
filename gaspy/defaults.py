@@ -255,6 +255,8 @@ def adsorption_filters(adsorbate=None):
         energy_range = (-3.5, 4.)
     elif adsorbate == 'OOH':
         energy_range = (0., 9.)
+    elif adsorbate == 'N':
+        energy_range = (-10, 10)
     else:
         energy_range = (-50., 50.)
         warnings.warn('You are using adsorption document filters for an '
