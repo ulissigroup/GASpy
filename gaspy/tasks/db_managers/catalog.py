@@ -14,6 +14,7 @@ will slow us down since we are already parallelizing via multiprocess.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+from datetime import datetime
 import pickle
 import luigi
 import multiprocess
@@ -245,8 +246,8 @@ class _InsertSitesToCatalog(luigi.Task):
             # Add the documents to the catalog
             if not _testing and len(inserted_docs) > 0:
                 collection.insert_many(inserted_docs)
-                print('Just created %i new entries in the cataog collection'
-                      % len(inserted_docs))
+                print('[%s] Just created %i new entries in the adsorption collection'
+                      % (datetime.now(), len(inserted_docs)))
         save_task_output(self, incumbent_docs + inserted_docs)
 
     def output(self):

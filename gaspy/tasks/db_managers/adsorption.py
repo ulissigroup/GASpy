@@ -55,8 +55,8 @@ def update_adsorption_collection(n_processes=1):
     if len(adsorption_docs) > 0:
         with get_mongo_collection('adsorption') as collection:
             collection.insert_many(adsorption_docs)
-        print('Just created %i new entries in the adsorption collection at %s'
-              % (len(adsorption_docs), datetime.now()))
+        print('[%s] Just created %i new entries in the adsorption collection'
+              % (datetime.now(), len(adsorption_docs)))
 
 
 def _find_atoms_docs_not_in_adsorption_collection():

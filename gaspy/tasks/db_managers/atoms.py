@@ -73,8 +73,8 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     if len(docs) > 0:
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
-        print('Just created %i new entries in the atoms collection at %s'
-              % (len(docs), datetime.now()))
+        print('[%s] Just created %i new entries in the adsorption collection'
+              % (datetime.now(), len(docs)))
 
 
 def _find_fwids_missing_from_atoms_collection():
