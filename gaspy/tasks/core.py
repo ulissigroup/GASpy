@@ -21,7 +21,7 @@ GASDB_PATH = utils.read_rc('gasdb_path')
 TASKS_CACHE_LOCATION = utils.read_rc('gasdb_path') + '/pickles/'
 
 
-def run_tasks(tasks, workers=1, local_scheduler=False):
+def schedule_tasks(tasks, workers=1, local_scheduler=False):
     '''
     This light wrapping function will execute any tasks you want through the
     Luigi host that is listed in the `.gaspyrc.json` file.
@@ -51,6 +51,65 @@ def run_tasks(tasks, workers=1, local_scheduler=False):
             luigi.build(tasks, workers=workers, scheduler_host=luigi_host)
         else:
             luigi.build(tasks, workers=workers, local_scheduler=True)
+
+
+def run_task(task, force=False):
+    '''
+    This follows luigi logic to evaluate a task by recursively evaluating all
+    requirements. This is useful for executing tasks that are typically
+    independent of other tasks, e.g., populating a catalog of sites.
+
+    This differs from `schedule_tasks` in that this function will execute the
+    task manually, while `schedule_tasks` will get the Luigi daemon/scheduler
+    to do it. This function should be used for debugging, testing, or if you
+    know you'll spawn > 200 tasks (which Luigi schedulers are bad at handling).
+
+    Arg:
+        task    Class instance of a luigi task
+        force   A boolean indicating whether or not you want to forcibly
+                evaluate the task and all the upstream requirements. Useful for
+                re-doing tasks that you know have already been completed.
+    '''
+    # Don't do anything if it's already done and we're not redoing
+    if task.complete() and not(force):
+        return
+
+    else:
+        # Execute prerequisite task[s] recursively
+        dependencies = task.requires()
+        if dependencies:
+            if isinstance(dependencies, dict):
+                for dep in dependencies.values():
+                    if not(dep.complete()) or force:
+                        run_task(dep, force)
+
+            elif isinstance(dependencies, Iterable):
+                for dep in dependencies:
+                    if not(dep.complete()) or force:
+                        run_task(dep, force)
+            else:
+                if not(dependencies.complete()) or force:
+                    run_task(dependencies, force)
+
+        # Luigi will yell at us if we try to overwrite output files. So if
+        # we're foricbly redoing tasks, we need to delete the old outputs.
+        if force:
+            os.remove(task.output().path)
+
+        # After prerequisites are done, run the task
+        run_results = task.run()
+
+        # If there are dynamic dependencies, then run them
+        if isinstance(run_results, types.GeneratorType):
+            for dependency in run_results:
+                if isinstance(dependency, luigi.Task):
+                    run_task(dependency)
+                # Sometimes we can actually get a list of dynamic
+                # dependendencies instead of one at a time. We address that
+                # here.
+                elif isinstance(dependency, Iterable):
+                    for dep in dependency:
+                        run_task(dep)
 
 
 def make_task_output_object(task):
@@ -127,65 +186,6 @@ def get_task_output(task):
     with open(target.path, 'rb') as file_handle:
         output = pickle.load(file_handle)
     return output
-
-
-def evaluate_luigi_task(task, force=False):
-    '''
-    This follows luigi logic to evaluate a task by recursively evaluating all
-    requirements. This is useful for executing tasks that are typically
-    independent of other tasks, e.g., populating a catalog of sites.
-
-    This differs from `run_tasks` in that this function will execute the task
-    manually, while `run_tasks` will get the Luigi daemon/scheduler to do it.
-    This function should be used for debugging and/or testing, while
-    `run_tasks` should be used for production.
-
-    Arg:
-        task    Class instance of a luigi task
-        force   A boolean indicating whether or not you want to forcibly
-                evaluate the task and all the upstream requirements. Useful for
-                re-doing tasks that you know have already been completed.
-    '''
-    # Don't do anything if it's already done and we're not redoing
-    if task.complete() and not(force):
-        return
-
-    else:
-        # Execute prerequisite task[s] recursively
-        dependencies = task.requires()
-        if dependencies:
-            if isinstance(dependencies, dict):
-                for dep in dependencies.values():
-                    if not(dep.complete()) or force:
-                        evaluate_luigi_task(dep, force)
-
-            elif isinstance(dependencies, Iterable):
-                for dep in dependencies:
-                    if not(dep.complete()) or force:
-                        evaluate_luigi_task(dep, force)
-            else:
-                if not(dependencies.complete()) or force:
-                    evaluate_luigi_task(dependencies, force)
-
-        # Luigi will yell at us if we try to overwrite output files. So if
-        # we're foricbly redoing tasks, we need to delete the old outputs.
-        if force:
-            os.remove(task.output().path)
-
-        # After prerequisites are done, run the task
-        run_results = task.run()
-
-        # If there are dynamic dependencies, then run them
-        if isinstance(run_results, types.GeneratorType):
-            for dependency in run_results:
-                if isinstance(dependency, luigi.Task):
-                    evaluate_luigi_task(dependency)
-                # Sometimes we can actually get a list of dynamic
-                # dependendencies instead of one at a time. We address that
-                # here.
-                elif isinstance(dependency, Iterable):
-                    for dep in dependency:
-                        evaluate_luigi_task(dep)
 
 
 class DumpFWToTraj(luigi.Task):

@@ -13,7 +13,7 @@ from ...tasks.core import (make_task_output_object,
                            make_task_output_location,
                            save_task_output,
                            get_task_output,
-                           evaluate_luigi_task)
+                           run_task)
 
 # Things we need to do the tests
 import pickle
@@ -23,6 +23,49 @@ from ...utils import read_rc
 
 # Get the path for the GASdb folder location from the gaspy config file
 TASKS_OUTPUTS_LOCATION = read_rc('gasdb_path') + '/pickles/'
+
+
+def test_evaluate_luigi_task():
+    '''
+    We made some test tasks and try to execute them here. Then we verify
+    the output results of the tasks.
+    '''
+    # Define where/what the outputs should be
+    output_file_names = ['BranchTestTask/BranchTestTask_False_1_ca4048d8e6.pkl',
+                         'BranchTestTask/BranchTestTask_False_42_fedcdcbd62.pkl',
+                         'BranchTestTask/BranchTestTask_True_7_498ea8eed2.pkl',
+                         'RootTestTask/RootTestTask__99914b932b.pkl']
+    output_file_names = [TASKS_OUTPUTS_LOCATION + file_name
+                         for file_name in output_file_names]
+    expected_outputs = [1, 42, 7, 'We did it!']
+
+    # Run the tasks
+    task = RootTestTask()
+    try:
+        run_task(task)
+
+        # Test that each task executed correctly
+        for output_file_name, expected_output in zip(output_file_names, expected_outputs):
+            with open(output_file_name, 'rb') as file_handle:
+                output = pickle.load(file_handle)
+            assert output == expected_output
+
+        # Test that when the "force" argument is `False`, tasks ARE NOT rerun
+        file_creation_times = [os.path.getmtime(output_file) for output_file in output_file_names]
+        run_task(RootTestTask(), force=False)
+        for output_file, expected_ctime in zip(output_file_names, file_creation_times):
+            ctime = os.path.getmtime(output_file)
+            assert ctime == expected_ctime
+
+        # Test that when the "force" argument is `True`, tasks ARE rerun
+        run_task(RootTestTask(), force=True)
+        for output_file, old_ctime in zip(output_file_names, file_creation_times):
+            ctime = os.path.getmtime(output_file)
+            assert ctime > old_ctime
+
+    # Clean up
+    finally:
+        clean_up_tasks()
 
 
 def test_make_task_output_object():
@@ -86,54 +129,11 @@ def test_save_task_output():
 def test_get_task_output():
     task = RootTestTask()
     try:
-        evaluate_luigi_task(task)
+        run_task(task)
         output = get_task_output(task)
 
         expected_output = 'We did it!'
         assert output == expected_output
 
-    finally:
-        clean_up_tasks()
-
-
-def test_evaluate_luigi_task():
-    '''
-    We made some test tasks and try to execute them here. Then we verify
-    the output results of the tasks.
-    '''
-    # Define where/what the outputs should be
-    output_file_names = ['BranchTestTask/BranchTestTask_False_1_ca4048d8e6.pkl',
-                         'BranchTestTask/BranchTestTask_False_42_fedcdcbd62.pkl',
-                         'BranchTestTask/BranchTestTask_True_7_498ea8eed2.pkl',
-                         'RootTestTask/RootTestTask__99914b932b.pkl']
-    output_file_names = [TASKS_OUTPUTS_LOCATION + file_name
-                         for file_name in output_file_names]
-    expected_outputs = [1, 42, 7, 'We did it!']
-
-    # Run the tasks
-    task = RootTestTask()
-    try:
-        evaluate_luigi_task(task)
-
-        # Test that each task executed correctly
-        for output_file_name, expected_output in zip(output_file_names, expected_outputs):
-            with open(output_file_name, 'rb') as file_handle:
-                output = pickle.load(file_handle)
-            assert output == expected_output
-
-        # Test that when the "force" argument is `False`, tasks ARE NOT rerun
-        file_creation_times = [os.path.getmtime(output_file) for output_file in output_file_names]
-        evaluate_luigi_task(RootTestTask(), force=False)
-        for output_file, expected_ctime in zip(output_file_names, file_creation_times):
-            ctime = os.path.getmtime(output_file)
-            assert ctime == expected_ctime
-
-        # Test that when the "force" argument is `True`, tasks ARE rerun
-        evaluate_luigi_task(RootTestTask(), force=True)
-        for output_file, old_ctime in zip(output_file_names, file_creation_times):
-            ctime = os.path.getmtime(output_file)
-            assert ctime > old_ctime
-
-    # Clean up
     finally:
         clean_up_tasks()

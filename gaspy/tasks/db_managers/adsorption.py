@@ -11,7 +11,7 @@ import traceback
 import warnings
 from datetime import datetime
 import multiprocess
-from ..core import get_task_output, evaluate_luigi_task
+from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
@@ -117,7 +117,7 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                      miller_indices=atoms_doc['fwname']['miller'],
                                      adslab_vasp_settings=atoms_doc['fwname']['vasp_settings'])
     try:
-        evaluate_luigi_task(task)
+        run_task(task)
         energy_doc = get_task_output(task)
         return energy_doc
 

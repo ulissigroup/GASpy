@@ -19,7 +19,7 @@ import math
 from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict
-from ...tasks import get_task_output, evaluate_luigi_task
+from ...tasks import get_task_output, run_task
 
 GAS_SETTINGS = defaults.gas_settings()
 
@@ -85,11 +85,11 @@ def test_CalculateAdsorbateEnergy():
 
 def test_CalculateAdsorbateEnergy_Error():
     '''
-    WARNING:  This test uses `evaluate_luigi_task`, which has a chance of
-    actually submitting a FireWork to production. To avoid this, you must try
-    to make sure that you have all of the gas calculations in the unit testing
-    atoms collection.  If you copy/paste this test into somewhere else, make
-    sure that you use `evaluate_luigi_task` appropriately.
+    WARNING:  This test uses `run_task`, which has a chance of actually
+    submitting a FireWork to production. To avoid this, you must try to make
+    sure that you have all of the gas calculations in the unit testing atoms
+    collection.  If you copy/paste this test into somewhere else, make sure
+    that you use `run_task` appropriately.
 
     If we try to calculate the energy of an adsorbate that we have not yet
     defined, then this task should yell at us.
@@ -103,7 +103,7 @@ def test_CalculateAdsorbateEnergy_Error():
 
     try:
         with pytest.raises(KeyError, message='Expected a KeyError') as exc_info:
-            evaluate_luigi_task(task)
+            run_task(task)
             assert ('You are trying to calculate the adsorbate energy of an '
                     'undefined adsorbate, U' in str(exc_info.value))
 

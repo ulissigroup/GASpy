@@ -33,7 +33,7 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from . import test_cases
 from .tasks_tests.utils import clean_up_tasks
 from .. import defaults
-from ..tasks import get_task_output, evaluate_luigi_task
+from ..tasks import get_task_output, schedule_tasks
 from ..mongo import make_atoms_from_doc
 from ..tasks.atoms_generators import GenerateBulk
 
@@ -51,7 +51,7 @@ SLAB_SETTINGS = defaults.slab_settings()
 def test_to_create_slabs_from_bulk_atoms(mpid, miller_indices):
     bulk_generator = GenerateBulk(mpid)
     try:
-        evaluate_luigi_task(bulk_generator)
+        schedule_tasks([bulk_generator], local_scheduler=True)
         doc = get_task_output(bulk_generator)
         atoms = make_atoms_from_doc(doc)
         slabs = make_slabs_from_bulk_atoms(atoms, miller_indices,
@@ -76,7 +76,7 @@ def test_to_create_slabs_from_bulk_atoms(mpid, miller_indices):
 def test_make_slabs_from_bulk_atoms(mpid, miller_indices):
     bulk_generator = GenerateBulk(mpid)
     try:
-        evaluate_luigi_task(bulk_generator)
+        schedule_tasks([bulk_generator], local_scheduler=True)
         doc = get_task_output(bulk_generator)
         atoms = make_atoms_from_doc(doc)
         slabs = make_slabs_from_bulk_atoms(atoms, miller_indices,
@@ -108,7 +108,7 @@ def test_make_slabs_from_bulk_atoms_warning():
     slab_generator_settings['miller_index'] = (2, 1, 1)
     bulk_generator = GenerateBulk('mp-30')
     try:
-        evaluate_luigi_task(bulk_generator)
+        schedule_tasks([bulk_generator], local_scheduler=True)
         doc = get_task_output(bulk_generator)
         atoms = make_atoms_from_doc(doc)
 

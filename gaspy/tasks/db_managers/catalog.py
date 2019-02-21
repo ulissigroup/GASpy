@@ -18,11 +18,11 @@ import pickle
 import luigi
 import multiprocess
 from pymatgen.ext.matproj import MPRester
-from ..core import (run_tasks,
+from ..core import (schedule_tasks,
+                    run_task,
                     get_task_output,
                     save_task_output,
-                    make_task_output_object,
-                    evaluate_luigi_task)
+                    make_task_output_object)
 from ..atoms_generators import GenerateAllSitesFromBulk
 from ... import defaults
 from ...utils import read_rc, unfreeze_dict
@@ -54,7 +54,7 @@ def update_catalog_collection(elements, max_miller, n_processes=1):
     '''
     # Figure out the MPIDs we need to enumerate
     get_mpid_task = _GetMpids(elements=elements)
-    run_tasks([get_mpid_task])
+    schedule_tasks([get_mpid_task])
     mpids = get_task_output(get_mpid_task)
 
     # For each MPID, enumerate all the sites and then add them to our `catalog`
@@ -137,7 +137,7 @@ def __run_insert_to_catalog_task(mpid, max_miller):
     '''
     task = _InsertSitesToCatalog(mpid, max_miller)
     try:
-        evaluate_luigi_task(task)
+        run_task(task)
 
     # We need bulk calculations to enumerate our catalog. If these calculations
     # aren't done, then we won't find the Luigi task pickles. If this happens,
