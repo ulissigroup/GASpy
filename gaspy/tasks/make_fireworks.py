@@ -29,13 +29,16 @@ ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
 class FireworkMaker(luigi.Task):
+    _complete = False
+
     def complete(self):
         '''
-        This task is designed to make and submit you a FireWork every time you
-        call it. To get Luigi to do this for us, it must never be marked as
-        "complete".
+        This task is designed to make and submit you a FireWork once every time
+        you call it. To get Luigi to do this for us, it must be not be marked
+        as "complete" until the `run` method changes the `self._complete` flag
+        to `True`.
         '''
-        return False
+        return self._complete
 
 
 class MakeGasFW(FireworkMaker):
@@ -68,6 +71,9 @@ class MakeGasFW(FireworkMaker):
                               fw_name=fw_name,
                               vasp_settings=vasp_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
+
+        # Let Luigi know that we've made the FireWork
+        self._complete = True
 
         # Pass out the firework for testing, if necessary
         if _testing is True:
@@ -108,6 +114,9 @@ class MakeBulkFW(FireworkMaker):
         # Increase the priority because it's a bulk
         lpad = get_launchpad()
         lpad.set_priority(fwork.fw_id, 100)
+
+        # Let Luigi know that we've made the FireWork
+        self._complete = True
 
         # Pass out the firework for testing, if necessary
         if _testing is True:
@@ -170,7 +179,6 @@ class MakeAdslabFW(FireworkMaker):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
-
     def requires(self):
         return GenerateAdslabs(adsorbate_name=self.adsorbate_name,
                                rotation=self.rotation,
@@ -218,6 +226,9 @@ class MakeAdslabFW(FireworkMaker):
                               fw_name=fw_name,
                               vasp_settings=vasp_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
+
+        # Let Luigi know that we've made the FireWork
+        self._complete = True
 
         # Pass out the firework for testing, if necessary
         if _testing is True:

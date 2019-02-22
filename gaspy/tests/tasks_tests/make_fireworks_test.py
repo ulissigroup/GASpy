@@ -58,6 +58,7 @@ def test_MakeGasFW():
         assert fwork.name['calculation_type'] == 'gas phase optimization'
         assert fwork.name['gasname'] == gas_name
         assert fwork.name['vasp_settings'] == GAS_SETTINGS['vasp']
+        assert task.complete() is True
 
     finally:
         clean_up_tasks()
@@ -82,6 +83,7 @@ def test_MakeBulkFW():
         assert fwork.name['calculation_type'] == 'unit cell optimization'
         assert fwork.name['mpid'] == mpid
         assert fwork.name['vasp_settings'] == BULK_SETTINGS['vasp']
+        assert task.complete() is True
 
     finally:
         clean_up_tasks()
@@ -152,6 +154,7 @@ def test_MakeAdslabFW():
         assert fwork.name['top'] == top
         assert isinstance(fwork.name['slab_repeat'], tuple)
         assert fwork.name['vasp_settings'] == ADSLAB_SETTINGS['vasp']
+        assert task.complete() is True
 
     finally:
         clean_up_tasks()
