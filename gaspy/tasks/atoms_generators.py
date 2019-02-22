@@ -404,9 +404,7 @@ class GenerateAdslabs(luigi.Task):
 
 class GenerateAllSitesFromBulk(luigi.Task):
     '''
-    This task will enumerate a set of adsorption sites, and then it will find
-    these sites in the `catalog` Mongo collection. If any site is not in the
-    catalog, then this task will insert it to the catalog.
+    This task will enumerate all the adsorption sites from a single bulk.
 
     Luigi normally likes unit tasks (i.e., a task that adds only one site to
     the catalog, instead of a bunch), but this would end up spawing millions
