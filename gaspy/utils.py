@@ -171,12 +171,14 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
         # can be an issue for some of our large systems.
         if not chunked:
             iterator = pool.imap(function, inputs, chunksize=chunksize)
+            total = n_calcs
 
         # If our function expects chunks, then we have to unpack our inputs
         # appropriately
         else:
             iterator = pool.imap(function, _chunk(inputs, n=chunksize))
-        outputs = list(tqdm(iterator, total=n_calcs))
+            total = n_calcs / chunksize
+        outputs = list(tqdm(iterator, total=total))
 
     return outputs
 
