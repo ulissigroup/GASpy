@@ -73,7 +73,7 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     if len(docs) > 0:
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
-        print('[%s] Just created %i new entries in the adsorption collection'
+        print('[%s] Just created %i new entries in the atoms collection'
               % (datetime.now(), len(docs)))
 
 
