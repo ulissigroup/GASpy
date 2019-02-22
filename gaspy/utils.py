@@ -3,9 +3,12 @@
 __authors__ = ['Kevin Tran', 'Zack Ulissi']
 __emails__ = ['ktran@andrew.cmu.edu', 'zulissi@andrew.cmu.edu']
 
+import gc
 import os
 import json
+from multiprocess import Pool
 from collections import OrderedDict, Iterable, Mapping
+from tqdm import tqdm
 
 
 def print_dict(dict_, indent=0):
@@ -130,3 +133,120 @@ def unfreeze_dict(frozen_dict):
         unfrozen_dict = frozen_dict
 
     return unfrozen_dict
+
+
+def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
+             chunksize=1, n_calcs=None):
+    '''
+    This function is a wrapper to parallelize a function.
+
+    Args:
+        function            The function you want to execute
+        inputs              An iterable that yields proper arguments to the
+                            function
+        chunked             A Boolean indicating whether your function expects
+                            single arguments or "chunked" iterables, e.g.,
+                            lists.
+        processes           The number of threads/processes you want to be using
+        maxtasksperchild    The maximum number of tasks that a child process
+                            may do before terminating (and therefore clearing
+                            its memory cache to avoid memory overload).
+        chunksize           How many calculations you want to have each single
+                            processor do per task. Smaller chunks means more
+                            memory shuffling. Bigger chunks means more RAM
+                            requirements.
+        n_calcs             How many calculations you have. Only necessary for
+                            adding a percentage timer to the progress bar.
+    Returns:
+        outputs     A list of the inputs mapped through the function
+    '''
+    # Collect garbage before we begin multiprocessing to make sure we don't
+    # pass things we don't need to
+    gc.collect()
+
+    with Pool(processes=processes, maxtasksperchild=maxtasksperchild) as pool:
+        # Use multiprocessing to perform the calculations. We use imap instead
+        # of map so that we get an iterator, which we need for tqdm (the
+        # progress bar) to work. imap also requires less disk memory, which
+        # can be an issue for some of our large systems.
+        if not chunked:
+            iterator = pool.imap(function, inputs, chunksize=chunksize)
+
+        # If our function expects chunks, then we have to unpack our inputs
+        # appropriately
+        else:
+            iterator = pool.imap(function, _chunk(inputs, n=chunksize))
+        outputs = list(tqdm(iterator, total=n_calcs))
+
+    return outputs
+
+
+def _chunk(iterable, n):
+    '''
+    Takes an iterable and then gives you a generator that yields chunked lists
+    of the iterable.
+
+    Args:
+        iterable    Any iterable object
+        n           An integer indicating the size of the lists you want
+                    returned
+    Returns:
+        generator   Python generator that yields lists of size `n` with the
+                    same contents as the `iterable` you passed in.
+    '''
+    for i in range(0, len(iterable), n):
+        yield iterable[i:i+n]
+
+
+def multimap_method(instance, method, inputs, chunked=False, processes=32,
+                    maxtasksperchild=1, chunksize=1, n_calcs=None, **kwargs):
+    '''
+    This function pools and maps methods of class instances. It does so by
+    putting the class instance into the global space so that each worker can
+    pull it. This prevents the multiprocessor from pickling/depickling the
+    instance for each worker, thus saving time. This is especially needed for
+    lazy learning models like GP.
+
+    Args:
+        instance            An instance of a class
+        method              A string indicating the method of the class that
+                            you want to map
+        function            The function you want to execute
+        inputs              An iterable that yields proper arguments to the
+                            function
+        chunked             A Boolean indicating whether your function expects
+                            single arguments or "chunked" iterables, e.g.,
+                            lists.
+        processes           The number of threads/processes you want to be using
+        maxtasksperchild    The maximum number of tasks that a child process
+                            may do before terminating (and therefore clearing
+                            its memory cache to avoid memory overload).
+        chunksize           How many calculations you want to have each single
+                            processor do per task. Smaller chunks means more
+                            memory shuffling. Bigger chunks means more RAM
+                            requirements.
+        n_calcs             How many calculations you have. Only necessary for
+                            adding a percentage timer to the progress bar.
+        kwargs              Any arguments that you should be passing to the
+                            method
+    Returns:
+        outputs     A list of the inputs mapped through the function
+    '''
+    # Push the class instance to global space for process sharing.
+    global module_instance
+    module_instance = instance
+
+    # Full the method out of the class instance
+    def function(arg):  # noqa: E306
+        return getattr(module_instance, method)(arg, **kwargs)
+
+    # Call the `multimap` function for the rest of the work
+    outputs = multimap(function, inputs, chunked=chunked,
+                       processes=processes,
+                       maxtasksperchild=maxtasksperchild,
+                       chunksize=chunksize,
+                       n_calcs=n_calcs)
+
+    # Clean up and output
+    del globals()['module_instance']
+    return outputs
