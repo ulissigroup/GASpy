@@ -33,8 +33,5 @@ while [ ! -z "$our_error" ]; do
     our_error=$(echo $error | grep "detect_lostruns")
 done
 
-# Remove duplicate entries from GASdb
-python -c "from gaspy import gasdb; gasdb.remove_duplicates_in_adsorption_collection(); gasdb.remove_duplicates_in_atoms_collection()"
-
 # Defuse any lost runs
 python -c "from gaspy.fireworks_helper_scripts import defuse_lost_runs; defuse_lost_runs()"
