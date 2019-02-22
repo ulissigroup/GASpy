@@ -73,7 +73,7 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
     if len(docs) > 0:
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
-        print('[%s] Just created %i new entries in the atoms collection'
+        print('[%s] Created %i new entries in the atoms collection'
               % (datetime.now(), len(docs)))
 
 
@@ -123,7 +123,7 @@ def _make_atoms_doc_from_fwid(fwid):
     except ValueError as error:
         fwid = fw.fw_id
         lpad.defuse_fw(fwid)
-        warnings.warn('Just defused FireWork %i because the number of initial '
+        warnings.warn('Defused FireWork %i because the number of initial '
                       'and final atoms differed.' % fwid)
         return None
 

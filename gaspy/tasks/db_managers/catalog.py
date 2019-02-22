@@ -246,7 +246,7 @@ class _InsertSitesToCatalog(luigi.Task):
             # Add the documents to the catalog
             if not _testing and len(inserted_docs) > 0:
                 collection.insert_many(inserted_docs)
-                print('[%s] Just created %i new entries in the catalog collection'
+                print('[%s] Created %i new entries in the catalog collection'
                       % (datetime.now(), len(inserted_docs)))
         save_task_output(self, incumbent_docs + inserted_docs)
 
