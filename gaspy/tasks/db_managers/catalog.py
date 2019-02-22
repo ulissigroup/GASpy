@@ -213,10 +213,16 @@ class _InsertSitesToCatalog(luigi.Task):
                          'slab_generator_settings': unfreeze_dict(self.slab_generator_settings),
                          'get_slab_settings': unfreeze_dict(self.get_slab_settings),
                          'bulk_vasp_settings': unfreeze_dict(self.bulk_vasp_settings),
-                         'shift': site_doc['shift'],
+                         'shift': {'$gt': site_doc['shift'] - 0.01,
+                                   '$lt': site_doc['shift'] + 0.01},
                          'top': site_doc['top'],
                          'slab_repeat': site_doc['slab_repeat'],
-                         'adsorption_site': tuple(site_doc['adsorption_site'])}
+                         'adsorption_site.0': {'$gt': site_doc['adsorption_site'][0] - 0.01,
+                                               '$lt': site_doc['adsorption_site'][0] + 0.01},
+                         'adsorption_site.1': {'$gt': site_doc['adsorption_site'][1] - 0.01,
+                                               '$lt': site_doc['adsorption_site'][1] + 0.01},
+                         'adsorption_site.2': {'$gt': site_doc['adsorption_site'][2] - 0.01,
+                                               '$lt': site_doc['adsorption_site'][2] + 0.01}}
                 docs_in_catalog = list(collection.find(query))
 
                 # If a site is in the catalog, then we don't need to add it
