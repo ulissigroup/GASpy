@@ -9,4 +9,4 @@ __email__ = 'ktran@andrew.cmu.edu'
 from gaspy.tasks.db_managers import update_all_collections
 
 
-update_all_collections(n_processes=32)
+update_all_collections(n_processes=4)
