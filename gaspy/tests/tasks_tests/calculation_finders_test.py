@@ -10,13 +10,11 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.calculation_finders import (FindCalculation,
-                                          CalculationNotFoundError,
                                           FindGas,
                                           FindBulk,
                                           FindAdslab)
 
 # Things we need to do the tests
-import pytest
 import warnings
 import math
 import luigi
@@ -45,10 +43,6 @@ def test_FindCalculation():
     assert hasattr(finder, 'output')
 
 
-def test_CalculationNotFoundError():
-    assert isinstance(CalculationNotFoundError(), ValueError)
-
-
 def test__remove_old_docs():
     '''
     This could be three tests, but I bunched them into one.
@@ -70,12 +64,9 @@ def test__remove_old_docs():
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We will be using the latest one, 3' in str(warning_manager[-1].message)
 
-    # If there's nothing, make sure we get an error
+    # If there's nothing, make sure we get nothing
     docs = []
-    with pytest.raises(CalculationNotFoundError) as exc_info:
-        doc = remove_old_docs(docs)
-        assert ('You tried to parse out old documents, but did not pass any'
-                in str(exc_info.value))
+    assert remove_old_docs(docs) == {}
 
 
 def _assert_vasp_settings(doc, vasp_settings):

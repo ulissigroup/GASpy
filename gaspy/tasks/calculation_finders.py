@@ -63,11 +63,11 @@ class FindCalculation(luigi.Task):
             _testing    Boolean indicating whether or not you are doing a unit
                         test. You probably shouldn't touch this.
         '''
-        try:
-            self._find_and_save_calculation()
+        calc_found = self._find_and_save_calculation()
+
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
-        except CalculationNotFoundError:
+        if calc_found is False:
             # If we are running, then just wait
             if is_rocket_running(self.fw_query,
                                  self.vasp_settings,
@@ -80,6 +80,10 @@ class FindCalculation(luigi.Task):
     def _find_and_save_calculation(self):
         '''
         Find and save the calculations (if they're in our `atoms` collection)
+
+        Returns:
+            bool    Boolean indicating whether or not we've successfully found
+                    and saved the calculation
         '''
         # Find the document in our `atoms` Mongo collection
         try:
@@ -95,12 +99,17 @@ class FindCalculation(luigi.Task):
 
         # Save the match
         doc = self._remove_old_docs(docs)
-        try:
-            save_task_output(self, doc)
+        if doc != {}:
+            try:
+                save_task_output(self, doc)
+            # If we've already saved the output, then move on
+            except luigi.target.FileAlreadyExists:
+                pass
+            return True
 
-        # If we've already saved the output, then move on
-        except luigi.target.FileAlreadyExists:
-            pass
+        # If there is no match, then tell us so
+        else:
+            return False
 
     @staticmethod
     def _remove_old_docs(docs):
@@ -114,7 +123,7 @@ class FindCalculation(luigi.Task):
             doc     The one document/dictionary in the input that has the
                     highest 'fw_id' value
         '''
-        # If there's only 1 document, then just return it
+        # If there's one document, just pass it along
         if len(docs) == 1:
             return docs[0]
         # Warn the user if they have more than one match, then pass the newest one
@@ -127,11 +136,9 @@ class FindCalculation(luigi.Task):
                        % (', '.join(fwids), doc_latest['fwid']))
             warnings.warn(message, RuntimeWarning)
             return doc_latest
-        # If there's nothing, then assume that we did not find any calculation
-        elif len(docs) == 0:
-            raise CalculationNotFoundError('You tried to parse out old documents, '
-                                           'but did not pass any documents at '
-                                           'all.')
+        # If there's nothing, then just give an empty document back
+        else:
+            return {}
 
     def complete(self):
         '''
@@ -147,24 +154,10 @@ class FindCalculation(luigi.Task):
 
         # If it's not pickled, then check Mongo
         except FileNotFoundError:
-            try:
-                self._find_and_save_calculation()
-                return True
-
-            # If it's not pickled and not in Mongo, then this task is not done
-            except CalculationNotFoundError:
-                return False
+            return self._find_and_save_calculation()
 
     def output(self):
         return make_task_output_object(self)
-
-
-class CalculationNotFoundError(ValueError):
-    '''
-    This custom exception is meant to signify that we failed to find a
-    calculation in our `atoms` Mongo collection.
-    '''
-    pass
 
 
 class FindGas(FindCalculation):
