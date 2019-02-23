@@ -41,6 +41,7 @@ import copy
 import pickle
 import random
 import hashlib
+from datetime import datetime
 from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -209,7 +210,19 @@ def test__pull_catalog_from_mongo():
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test_get_catalog_docs_with_predictions(latest_predictions):
-    assert False
+    docs = get_catalog_docs_with_predictions(latest_predictions=latest_predictions)
+
+    for doc in docs:
+        assert 'adsorption_energy' in doc['predictions']
+        assert 'orr_onset_potential_4e' in doc['predictions']
+
+        if latest_predictions is True:
+            energy_prediction = doc['predictions']['adsorption_energy']['CO']['model0']
+            assert isinstance(energy_prediction[0], datetime)
+            assert isinstance(energy_prediction[1], float)
+            orr_prediction = doc['predictions']['orr_onset_potential_4e']['model0']
+            assert isinstance(orr_prediction[0], datetime)
+            assert isinstance(orr_prediction[1], float)
 
 
 @pytest.mark.parametrize('latest_predictions', [True, False])
@@ -437,8 +450,8 @@ def test_get_surface_from_doc():
 
 
 @pytest.mark.parametrize('adsorbate, model_tag',
-                         [(['H'], 'model0'),
-                          (['CO'], 'model0')])
+                         [('H', 'model0'),
+                          ('CO', 'model0')])
 def test_get_low_coverage_ml_docs(adsorbate, model_tag):
     '''
     For each surface, verify that every single document in
