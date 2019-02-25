@@ -11,6 +11,7 @@ import traceback
 import warnings
 from datetime import datetime
 import multiprocess
+import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
@@ -122,8 +123,9 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
         return energy_doc
 
     # If a task has failed and not produced an output, we don't want that to
-    # stop us from updating the successful runs
-    except FileNotFoundError:
+    # stop us from updating the successful runs. And if we have multiple tasks
+    # things trying to write to the same pickle, we also want to just move on.
+    except (FileNotFoundError, luigi.target.FileAlreadyExists):
         pass
 
     # If some other error pops up, then we want to report it, but move on so
