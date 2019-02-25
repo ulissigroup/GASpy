@@ -14,3 +14,4 @@ from .core import (schedule_tasks,
                    save_task_output,
                    get_task_output,
                    DumpFWToTraj)
+from .db_managers import update_all_collections
