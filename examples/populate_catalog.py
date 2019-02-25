@@ -10,11 +10,11 @@ __email__ = 'ktran@andrew.cmu.edu'
 from gaspy.tasks.db_managers.catalog import update_catalog_collection
 
 
-elements = ['Ag', 'Al', 'As', 'Au', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs', 'Cu',
-            'Fe', 'Ga', 'Ge', 'H', 'Hf', 'Hg', 'In', 'Ir', 'K', 'Mn', 'Mo',
-            'N', 'Na', 'Nb', 'Os', 'P', 'Pb', 'Pd', 'Pt', 'Rh', 'Ru', 'S',
-            'Sb', 'Sc', 'Se', 'Si', 'Sn', 'Sr', 'Ta', 'Tc', 'Te', 'Ti', 'V',
-            'W', 'Y', 'Zn', 'Zr']
+elements = ['Ag', 'Al', 'As', 'Au', 'Bi', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs',
+            'Cu', 'Fe', 'Ga', 'Ge', 'H', 'Hf', 'Hg', 'In', 'Ir', 'K', 'Mn',
+            'Mo', 'N', 'Na', 'Nb', 'Os', 'P', 'Pb', 'Pd', 'Pt', 'Rh', 'Ru',
+            'S', 'Sb', 'Sc', 'Se', 'Si', 'Sn', 'Sr', 'Ta', 'Tc', 'Te', 'Ti',
+            'V', 'W', 'Y', 'Zn', 'Zr']
 max_miller = 2
 
 update_catalog_collection(elements=elements, max_miller=max_miller, n_processes=32)
