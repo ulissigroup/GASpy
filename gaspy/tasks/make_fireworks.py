@@ -1,4 +1,3 @@
-
 '''
 This module houses the functions needed to make and submit FireWorks rockets.
 
@@ -214,7 +213,7 @@ class MakeAdslabFW(FireworkMaker):
         vasp_settings = unfreeze_dict(self.vasp_settings)
         fw_name = {'calculation_type': 'slab+adsorbate optimization',
                    'adsorbate': self.adsorbate_name,
-                   'adsorbate_rotation': self.rotation,
+                   'adsorbate_rotation': dict(self.rotation),
                    'adsorption_site': self.adsorption_site,
                    'mpid': self.mpid,
                    'miller': self.miller_indices,

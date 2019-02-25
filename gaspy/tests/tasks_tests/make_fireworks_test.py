@@ -147,6 +147,7 @@ def test_MakeAdslabFW():
         assert fwork.name['calculation_type'] == 'slab+adsorbate optimization'
         assert fwork.name['adsorbate'] == adsorbate_name
         assert fwork.name['adsorbate_rotation'] == rotation
+        assert isinstance(fwork.name['adsorbate_rotation'], dict)
         assert fwork.name['adsorption_site'] == adsorption_site
         assert fwork.name['mpid'] == mpid
         assert fwork.name['miller'] == miller_indices
