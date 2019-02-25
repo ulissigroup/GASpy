@@ -6,6 +6,7 @@ __emails__ = ['ktran@andrew.cmu.edu', 'zulissi@andrew.cmu.edu']
 import gc
 import os
 import json
+import numpy as np
 from multiprocess import Pool
 from collections import OrderedDict, Iterable, Mapping
 from tqdm import tqdm
@@ -172,13 +173,14 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
         if not chunked:
             iterator = pool.imap(function, inputs, chunksize=chunksize)
             total = n_calcs
+            outputs = list(tqdm(iterator, total=total))
 
         # If our function expects chunks, then we have to unpack our inputs
         # appropriately
         else:
             iterator = pool.imap(function, _chunk(inputs, n=chunksize))
             total = n_calcs / chunksize
-        outputs = list(tqdm(iterator, total=total))
+            outputs = list(np.concatenate(tqdm(iterator, total=total)))
 
     return outputs
 
