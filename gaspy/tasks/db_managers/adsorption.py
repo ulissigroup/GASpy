@@ -140,7 +140,11 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
         warnings.warn('We caught the exception reported just above and moved on '
                       'with updating the adsorption updating. Here is the '
                       'offending document:')
-        print_dict(atoms_doc, indent=1)
+        print_dict({'fwname': atoms_doc['fwname'],
+                    'fwid': atoms_doc['fwid'],
+                    'directory': atoms_doc['directory'],
+                    'calculation_date': atoms_doc['calculation_date']},
+                    indent=1)
 
 
 def __create_adsorption_doc(energy_doc):
