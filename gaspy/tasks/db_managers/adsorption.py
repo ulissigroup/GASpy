@@ -14,6 +14,7 @@ import multiprocess
 import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
+from ...utils import print_dict
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab, find_max_movement
@@ -123,18 +124,23 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
         return energy_doc
 
     # If a task has failed and not produced an output, we don't want that to
-    # stop us from updating the successful runs. And if we have multiple tasks
-    # things trying to write to the same pickle, we also want to just move on.
-    except (FileNotFoundError, luigi.target.FileAlreadyExists):
+    # stop us from updating the successful runs.
+    except FileNotFoundError:
         pass
 
-    # If some other error pops up, then we want to report it, but move on so
-    # that we can still update other things.
-    except RuntimeError:
+    # If the output already exists, then load and return it
+    except luigi.target.FileAlreadyExists:
+        energy_doc = get_task_output(task)
+        return energy_doc
+
+    # If some other error pops up, then we want to report it. But we also want
+    # to move on so that we can still update other things.
+    except:     # noqa: E722
         traceback.print_exc()
         warnings.warn('We caught the exception reported just above and moved on '
                       'with updating the adsorption updating. Here is the '
-                      'offending document:\n%s' % atoms_doc)
+                      'offending document:')
+        print_dict(atoms_doc, indent=1)
 
 
 def __create_adsorption_doc(energy_doc):
