@@ -180,7 +180,7 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
         else:
             iterator = pool.imap(function, _chunk(inputs, n=chunksize))
             total = n_calcs / chunksize
-            outputs = list(np.concatenate(tqdm(iterator, total=total)))
+            outputs = list(np.concatenate(list(tqdm(iterator, total=total))))
 
     return outputs
 
