@@ -37,7 +37,7 @@ def update_adsorption_collection(n_processes=1):
     # Figure out what we need to dump
     missing_docs = _find_atoms_docs_not_in_adsorption_collection()
 
-    # Multi-thread calculations for adsorption energies
+    # Calculate adsorption energies
     if n_processes > 1:
         calc_energy_docs = multimap(__run_calculate_adsorption_energy_task,
                                     missing_docs, processes=n_processes,
@@ -46,33 +46,21 @@ def update_adsorption_collection(n_processes=1):
     else:
         calc_energy_docs = [__run_calculate_adsorption_energy_task(doc)
                             for doc in missing_docs]
-
-    # If a calculation fails, our helper function will return `None`. Let's
-    # take those out here.
-    calc_energy_docs = [doc for doc in calc_energy_docs if doc is not None]
-    # Here's another case:  sometimes we have duplicate calculations. When
-    # we go to calculate the adsorption energy of the older FWID, GASpy
-    # will pull the information of the newer FWID instead. So we'll just
-    # keep redumping newer FWID duplicates. Stop that here.
-    missing_fwids = set(doc['fwid'] for doc in missing_docs)
-    unique_calc_energy_docs = []
-    for doc in calc_energy_docs:
-        fwid = doc['fwids']['adslab']
-        if fwid in missing_fwids:
-            unique_calc_energy_docs.append(doc)
-            missing_fwids.remove(fwid)
+    # Clean up
+    cleaned_calc_energy_docs = __clean_calc_energy_docs(calc_energy_docs,
+                                                        missing_docs)
 
     # Turn the adsorption energies into `adsorption` documents, then save them
     if n_processes > 1:
         adsorption_docs = multimap(__create_adsorption_doc,
-                                   unique_calc_energy_docs,
+                                   cleaned_calc_energy_docs,
                                    processes=n_processes,
                                    maxtasksperchild=1,
                                    chunksize=100,
-                                   n_calcs=len(unique_calc_energy_docs))
+                                   n_calcs=len(cleaned_calc_energy_docs))
     else:
         adsorption_docs = [__create_adsorption_doc(doc)
-                           for doc in unique_calc_energy_docs]
+                           for doc in cleaned_calc_energy_docs]
 
     # Now write the documents
     if len(adsorption_docs) > 0:
@@ -118,26 +106,26 @@ def update_adsorption_collection_verbose(n_processes=1):
     # will pull the information of the newer FWID instead. So we'll just
     # keep redumping newer FWID duplicates. Stop that here.
     missing_fwids = set(doc['fwid'] for doc in missing_docs)
-    unique_calc_energy_docs = []
+    cleaned_calc_energy_docs = []
     for doc in calc_energy_docs:
         fwid = doc['fwids']['adslab']
         if fwid in missing_fwids:
-            unique_calc_energy_docs.append(doc)
+            cleaned_calc_energy_docs.append(doc)
             missing_fwids.remove(fwid)
 
     # Turn the adsorption energies into `adsorption` documents, then save them
     print('[%s] Creating adsorption documents...' % datetime.now())
     if n_processes > 1:
         adsorption_docs = multimap(__create_adsorption_doc,
-                                   unique_calc_energy_docs,
+                                   cleaned_calc_energy_docs,
                                    processes=n_processes,
                                    maxtasksperchild=1,
                                    chunksize=100,
-                                   n_calcs=len(unique_calc_energy_docs))
+                                   n_calcs=len(cleaned_calc_energy_docs))
     else:
         adsorption_docs = [__create_adsorption_doc(doc)
-                           for doc in tqdm(unique_calc_energy_docs,
-                                           total=len(unique_calc_energy_docs))]
+                           for doc in tqdm(cleaned_calc_energy_docs,
+                                           total=len(cleaned_calc_energy_docs))]
 
     # Now write the documents
     if len(adsorption_docs) > 0:
@@ -233,6 +221,36 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                     'directory': atoms_doc['directory'],
                     'calculation_date': atoms_doc['calculation_date']},
                     indent=1)
+
+
+def __clean_calc_energy_docs(docs, missing_docs):
+    '''
+    If a calculation fails, our helper function will return `None`. Let's
+    take those out here.
+
+    Also, sometimes we have duplicate calculations. When we go to calculate the
+    adsorption energy of the older FWID, GASpy will pull the information of the
+    newer FWID instead. So we'll just keep redumping newer FWID duplicates.
+    This function will parse out any repeat documents to avoid this.
+
+    Arg:
+        docs            A list of dictionaries obtained from the output of the
+                        `CalculateAdsorptionEnergy` task
+        missing_docs    The output of the
+                        `_find_atoms_docs_not_in_adsorption_collection`
+    Returns:
+        cleaned_docs    The `docs` arguments, but with empty and duplicate
+                        documents removed
+    '''
+    missing_fwids = set(doc['fwid'] for doc in missing_docs)
+    cleaned_docs = []
+    for doc in docs:
+        if doc is not None:
+            fwid = doc['fwids']['adslab']
+            if fwid in missing_fwids:
+                cleaned_docs.append(doc)
+                missing_fwids.remove(fwid)
+    return cleaned_docs
 
 
 def __create_adsorption_doc(energy_doc):

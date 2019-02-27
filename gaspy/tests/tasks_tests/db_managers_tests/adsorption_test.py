@@ -12,6 +12,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ....tasks.db_managers.adsorption import (update_adsorption_collection,
                                               _find_atoms_docs_not_in_adsorption_collection,
                                               __run_calculate_adsorption_energy_task,
+                                              __clean_calc_energy_docs,
                                               __create_adsorption_doc)
 
 # Things we need to do the tests
@@ -82,6 +83,16 @@ def test___run_calculate_adsorption_energy_task():
             adslab_fwid = doc['fwids']['adslab']
             assert len(list(collection.find({'fwid': slab_fwid}))) == 1
             assert len(list(collection.find({'fwid': adslab_fwid}))) == 1
+
+
+def test___clean_calc_energy_docs():
+    docs = [None,
+            {'fwids': {'adslab': 2}},
+            {'fwids': {'adslab': 3}},
+            {'fwids': {'adslab': 2}}]
+    missing_docs = [{'fwid': 2}, {'fwid': 3}]
+    clean_docs = __clean_calc_energy_docs(docs, missing_docs)
+    assert clean_docs == docs[1:3]
 
 
 def test___create_adsorption_doc():
