@@ -110,7 +110,7 @@ def test_FindGas_successfully():
     '''
     gas = 'H2'
     vasp_settings = GAS_SETTINGS['vasp']
-    task = FindGas(gas, vasp_settings)
+    task = FindGas(gas_name=gas, vasp_settings=vasp_settings)
 
     try:
         _run_task_with_dynamic_dependencies(task)
@@ -145,7 +145,7 @@ def test_FindGas_unsuccessfully():
     the correct dependency
     '''
     gas = 'CHO'
-    task = FindGas(gas, GAS_SETTINGS['vasp'])
+    task = FindGas(gas_name=gas, vasp_settings=GAS_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -163,7 +163,7 @@ def test_FindBulk_successfully():
     '''
     mpid = 'mp-2'
     vasp_settings = BULK_SETTINGS['vasp']
-    task = FindBulk(mpid, vasp_settings)
+    task = FindBulk(mpid=mpid, vasp_settings=vasp_settings)
 
     try:
         _run_task_with_dynamic_dependencies(task)
@@ -186,7 +186,7 @@ def test_FindBulk_unsuccessfully():
     the correct dependency
     '''
     mpid = 'mp-120'
-    task = FindBulk(mpid, BULK_SETTINGS['vasp'])
+    task = FindBulk(mpid=mpid, vasp_settings=BULK_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)

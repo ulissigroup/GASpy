@@ -10,7 +10,7 @@ import warnings
 import luigi
 from .. import defaults
 from ..gasdb import get_mongo_collection
-from ..fireworks_helper_scripts import is_rocket_running
+from ..fireworks_helper_scripts import find_n_rockets
 from .core import save_task_output, make_task_output_object, get_task_output
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
@@ -56,6 +56,7 @@ class FindCalculation(luigi.Task):
                             attributes to the class. This method will be
                             called automatically at the start of `run`.
     '''
+    max_fizzles = luigi.IntParameter(5)
 
     def run(self, _testing=False):
         '''
@@ -68,14 +69,23 @@ class FindCalculation(luigi.Task):
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
         if calc_found is False:
-            # If we are running, then just wait
-            if is_rocket_running(self.fw_query,
-                                 self.vasp_settings,
-                                 _testing=_testing) is True:
-                pass
-            # If we're not running, then submit the job
+            n_running, n_fizzles = find_n_rockets(self.fw_query,
+                                                  self.vasp_settings,
+                                                  _testing=_testing)
+            # If we aren't running yet, then start running
+            if n_running == 0:
+                if n_fizzles < self.max_fizzles:
+                    yield self.dependency
+                # If we've failed too often, then don't bother running.
+                else:
+                    warnings.warn('Since we have fizzled a calculation %i '
+                                  'times, which is more than the specified '
+                                  'threshold of %i, we will not be submitting '
+                                  'this calculation again.'
+                                  % (n_fizzles, self.max_fizzels))
+            # If we're already running, then just move on
             else:
-                yield self.dependency
+                pass
 
     def _find_and_save_calculation(self):
         '''

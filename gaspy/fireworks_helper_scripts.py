@@ -32,7 +32,7 @@ def get_launchpad():
     return lpad
 
 
-def is_rocket_running(query, vasp_settings, _testing=False):
+def find_n_rockets(query, vasp_settings, _testing=False):
     '''
     This function will check if we have something currently running in our
     FireWorks launcher. It will also warn you if we have a lot of fizzles.
@@ -46,8 +46,10 @@ def is_rocket_running(query, vasp_settings, _testing=False):
                         doing a unit test. You should probably not be
                         changing the default from False.
     Returns:
-        A boolean indicating whether or not we are currently running any
-        FireWorks rockets that match the query and VASP settings
+        n_running   An integer for how many FireWorks are running that match
+                    the query
+        n_fizzles   An integer for how many FireWorks have fizzled that match
+                    the query
     '''
     # Parse the VASP settings into the FireWorks query, then grab the docs
     for key, value in vasp_settings.items():
@@ -55,17 +57,16 @@ def is_rocket_running(query, vasp_settings, _testing=False):
     docs = _get_firework_docs(query=query, _testing=_testing)
 
     # Warn the user if there are a bunch of fizzles
-    __warn_about_fizzles(docs)
+    n_fizzles = __get_n_fizzles(docs)
 
     # Check if we are running currently. 'COMPLETED' is considered running
     # because it's offically done when it's in our atoms collection, not
     # when it's done in FireWorks
     running_states = set(['COMPLETED', 'READY', 'RESERVED', 'RUNNING', 'PAUSED'])
     docs_running = [doc for doc in docs if doc['state'] in running_states]
-    if len(docs_running) > 0:
-        return True
-    else:
-        return False
+    n_running = len(docs_running)
+
+    return n_running, n_fizzles
 
 
 def _get_firework_docs(query, _testing):
@@ -98,13 +99,14 @@ def _get_firework_docs(query, _testing):
     return docs
 
 
-def __warn_about_fizzles(docs):
+def __get_n_fizzles(docs):
     '''
-    If we've tried a bunch of times before and kept failing, then let the user
-    know.
+    Get the number of times a FireWork has fizzled.
 
     Arg:
         docs    A list of dictionaries that we got from our FireWorks database
+    Returns:
+        An integer for how many times this FireWork has fizzled.
     '''
     docs_fizzled = [doc for doc in docs if doc['state'] == 'FIZZLED']
     fwids_fizzled = [str(doc['fw_id']) for doc in docs_fizzled]
@@ -113,6 +115,7 @@ def __warn_about_fizzles(docs):
                    'The FireWork IDs are:  %s'
                    % (len(docs_fizzled), ', '.join(fwids_fizzled)))
         warnings.warn(message, RuntimeWarning)
+    return len(fwids_fizzled)
 
 
 def make_firework(atoms, fw_name, vasp_settings):

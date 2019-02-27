@@ -12,9 +12,9 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we are testing
 from ..fireworks_helper_scripts import (get_launchpad,
-                                        is_rocket_running,
+                                        find_n_rockets,
                                         _get_firework_docs,
-                                        __warn_about_fizzles,
+                                        __get_n_fizzles,
                                         make_firework,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
@@ -55,14 +55,14 @@ def test_get_launchpad():
         assert getattr(lpad, key) == value
 
 
-def test_is_rocket_running():
+def test_find_n_rockets():
     '''
     This test assumes that you have your FireWorks Mongo set up with a very
     specific set of documents inside a collection made strictly for unit
     testing. I am currently too lazy to document what those documents are
     in a systematic way. I figured the chances of someone like you actually
     caring were near-zero. If you do care, then email the code managers and
-    we things up for you so you can run this test.
+    we can set things up for you so you can run this test.
     '''
     # Let's test three things at once:
     # (1) can the function parse vasp settings correctly,
@@ -83,14 +83,16 @@ def test_is_rocket_running():
                      'lreal': 'Auto'}
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
-        assert is_rocket_running(query, vasp_settings) is False
+        n_running, _ = find_n_rockets(query, vasp_settings)
+        assert n_running == 0
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
 
     # Test if it can correctly flag a bunch of running rockets
     for fwid in [365912, 355429, 369302, 355479, 365912]:
-        assert is_rocket_running({'fw_id': fwid}, {}) is True
+        n_running, _ = find_n_rockets({'fw_id': fwid}, {})
+        assert n_running == 1
 
 
 def test__get_firework_docs():
@@ -107,12 +109,12 @@ def test___warn_about_fizzles():
 
         # When things are not fizzled, make sure it says nothing
         docs = [{'state': 'COMPLETED', 'fw_id': 0}]
-        __warn_about_fizzles(docs)
+        assert __get_n_fizzles(docs) == 0
         assert len(warning_manager) == 0
 
         # When things are fizzled, make sure it warns us
         docs = [{'state': 'FIZZLED', 'fw_id': 1}]
-        __warn_about_fizzles(docs)
+        assert __get_n_fizzles(docs) >= 1
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
