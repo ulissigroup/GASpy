@@ -165,6 +165,11 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
     # pass things we don't need to
     gc.collect()
 
+    # If we have one thread, there's no use multiprocessing
+    if processes == 1:
+        output = [function(input_) for input_ in tqdm(inputs, total=n_calcs)]
+        return output
+
     with Pool(processes=processes, maxtasksperchild=maxtasksperchild) as pool:
         # Use multiprocessing to perform the calculations. We use imap instead
         # of map so that we get an iterator, which we need for tqdm (the
