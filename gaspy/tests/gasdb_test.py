@@ -305,7 +305,15 @@ def test_get_unsimulated_catalog_docs(adsorbate, adsorbate_rotation_list):
 
     docs = get_unsimulated_catalog_docs(adsorbate=adsorbate,
                                         adsorbate_rotation_list=adsorbate_rotation_list)
-    assert docs == expected_docs
+
+    # Do some fancy assertion to compare two lists of unhashable dictionaries
+    # without regard for order. Credit goes to CrowbarKZ on StackExchange.
+    try:
+        for doc in docs:
+            expected_docs.remove(doc)
+    except ValueError:
+        assert False
+    assert len(expected_docs) == 0
 
 
 def test__duplicate_docs_per_rotation():
