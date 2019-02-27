@@ -11,19 +11,17 @@ from datetime import datetime
 import warnings
 import uuid
 import subprocess
-import multiprocess
-from tqdm import tqdm
 import ase
 import ase.io
 from ase.calculators.vasp import Vasp2
 from ... import defaults
-from ...utils import read_rc
+from ...utils import read_rc, multimap
 from ...mongo import make_doc_from_atoms
 from ...gasdb import get_mongo_collection
 from ...fireworks_helper_scripts import get_launchpad, get_atoms_from_fw
 
 
-def update_atoms_collection(n_processes=1, progress_bar=False):
+def update_atoms_collection(n_processes=1):
     '''
     This function will dump all of the completed FireWorks into our `atoms` Mongo
     collection. It will not dump anything that is already there.
@@ -39,38 +37,22 @@ def update_atoms_collection(n_processes=1, progress_bar=False):
                         If you are re-creating your collection from a full
                         FireWorks database, you may want to increase this
                         argument.
-        progress_bar    A Booliean indicating whether or not you want to show
-                        a progress bar when converting FireWorks into Mongo
-                        documents. Useful when re-populating an empty
-                        `atoms` collection with a big FireWorks database,
-                        but not useful for small, periodic updates.
     '''
     fwids_missing = _find_fwids_missing_from_atoms_collection()
 
-    # Multithread in case we have a lot of things to update
-    if n_processes > 1:
-        with multiprocess.Pool(n_processes) as pool:
-            doc_generator = pool.imap(func=_make_atoms_doc_from_fwid,
-                                      iterable=fwids_missing,
-                                      chunksize=100)
-            # Show a progress bar only if you asked for it
-            if progress_bar is True:
-                docs = list(tqdm(doc_generator, total=len(fwids_missing)))
-            else:
-                docs = list(doc_generator)
-
-    # Keep it simple if we're not multithreading
-    else:
-        if progress_bar is True:
-            doc_generator = (_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing)
-            docs = list(tqdm(doc_generator, total=len(fwids_missing)))
-        else:
-            docs = [_make_atoms_doc_from_fwid(fwid) for fwid in fwids_missing]
-
-    # Sometimes `_make_atoms_doc_from_fwid` fails. Parse out the failures here.
+    # Make the documents
+    print('[%s] Creating atoms documents...'
+          % (datetime.now(), len(fwids_missing)))
+    docs = multimap(_make_atoms_doc_from_fwid, fwids_missing,
+                    processes=n_processes, chunksize=100,
+                    n_calcs=len(fwids_missing))
+    # Clean up `_make_atoms_doc_from_fwid` failures
     docs = [doc for doc in docs if doc is not None]
 
+    # Now write the documents
     if len(docs) > 0:
+        print('[%s] Creating %i new entries in the atoms collection...'
+              % (datetime.now(), len(docs)))
         with get_mongo_collection('atoms') as collection:
             collection.insert_many(docs)
         print('[%s] Created %i new entries in the atoms collection'
