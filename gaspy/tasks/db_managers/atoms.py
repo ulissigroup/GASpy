@@ -41,7 +41,7 @@ def update_atoms_collection(n_processes=1):
     fwids_missing = _find_fwids_missing_from_atoms_collection()
 
     # Make the documents
-    print('[%s] Creating atoms documents...'
+    print('[%s] Creating %i atoms documents...'
           % (datetime.now(), len(fwids_missing)))
     docs = multimap(_make_atoms_doc_from_fwid, fwids_missing,
                     processes=n_processes, chunksize=100,
