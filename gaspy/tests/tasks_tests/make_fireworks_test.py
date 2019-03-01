@@ -89,6 +89,24 @@ def test_MakeBulkFW():
         clean_up_tasks()
 
 
+def test_MakeBulkFW_max_size():
+    mpid = 'mp-30'
+    task = MakeBulkFW(mpid, BULK_SETTINGS['vasp'], max_atoms=0)
+
+    try:
+        # Need to make sure our requirement is run before testing our task
+        req = task.requires()
+        req.run()
+
+        # Manually call the `run` method with the unit testing flag to trigger
+        # the error
+        with pytest.raises(ValueError, match='The size of the bulk'):
+            _ = task.run(_testing=True)     # noqa: F841
+
+    finally:
+        clean_up_tasks()
+
+
 def test_MakeAdslabFW():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of

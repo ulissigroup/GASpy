@@ -89,6 +89,7 @@ class MakeBulkFW(FireworkMaker):
     '''
     mpid = luigi.Parameter()
     vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    max_atoms = luigi.IntParameter(50)
 
     def requires(self):
         return GenerateBulk(mpid=self.mpid)
@@ -99,6 +100,13 @@ class MakeBulkFW(FireworkMaker):
         with open(self.input().path, 'rb') as file_handle:
             doc = pickle.load(file_handle)
         atoms = make_atoms_from_doc(doc)
+
+        # Don't make a bulk that is too big
+        if len(atoms) > self.max_atoms:
+            raise ValueError('The size of the bulk, %i, is larger than the '
+                             'specified limit, %i. We will not be making this '
+                             'bulk FireWork (%s)'
+                             % (len(atoms), self.max_atoms, self.mpid))
 
         # Create, package, and submit the FireWork
         vasp_settings = unfreeze_dict(self.vasp_settings)
