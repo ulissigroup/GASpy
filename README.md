@@ -62,7 +62,7 @@ execute the classes that you made. For example:
                                        miller_indices=doc['miller'],
                                        shift=doc['shift'],
                                        top=doc['top'])
-             for doc in docs]
+             for doc in site_documents_to_calc]
     
     # Schedule/run all of the tasks
     schedule_tasks(tasks)
