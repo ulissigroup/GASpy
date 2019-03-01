@@ -15,6 +15,7 @@ from ...tasks.calculation_finders import (FindCalculation,
                                           FindAdslab)
 
 # Things we need to do the tests
+import pytest
 import warnings
 import math
 import luigi
@@ -41,6 +42,17 @@ def test_FindCalculation():
     assert isinstance(finder, luigi.Task)
     assert hasattr(finder, 'run')
     assert hasattr(finder, 'output')
+    assert hasattr(finder, 'max_fizzles')
+
+    # Ok, let's pick one of the child tasks to test the max_fizzles feature.
+    mpid = 'mp-120'
+    vasp_settings = BULK_SETTINGS['vasp']
+    task = FindBulk(mpid=mpid, vasp_settings=vasp_settings, max_fizzles=0)
+    try:
+        with pytest.raises(ValueError, match='Since we have fizzled'):
+            _ = list(task.run(_testing=True))     # noqa: F841
+    finally:
+        clean_up_tasks()
 
 
 def test__remove_old_docs():

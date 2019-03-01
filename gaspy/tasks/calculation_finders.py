@@ -72,17 +72,21 @@ class FindCalculation(luigi.Task):
             n_running, n_fizzles = find_n_rockets(self.fw_query,
                                                   self.vasp_settings,
                                                   _testing=_testing)
+
             # If we aren't running yet, then start running
             if n_running == 0:
                 if n_fizzles < self.max_fizzles:
                     yield self.dependency
+
                 # If we've failed too often, then don't bother running.
                 else:
-                    warnings.warn('Since we have fizzled a calculation %i '
-                                  'times, which is more than the specified '
-                                  'threshold of %i, we will not be submitting '
-                                  'this calculation again.'
-                                  % (n_fizzles, self.max_fizzels))
+                    raise ValueError('Since we have fizzled a calculation %i '
+                                     'times, which is more than the '
+                                     'specified threshold of %i, we will '
+                                     'not be submitting this calculation '
+                                     'again.'
+                                     % (n_fizzles, self.max_fizzles))
+
             # If we're already running, then just move on
             else:
                 pass
