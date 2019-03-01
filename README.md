@@ -39,25 +39,36 @@ relax; then calculate the adsorption energy).
 
 To submit calculations, we create wrapper tasks that call on the appropriate
 sub-tasks, and then use either Luigi or our Python wrapping functions to
-execute the classes that you made. For
-[example](https://github.com/ulissigroup/GASpy/blob/master/examples/calculate_all_adsorptions_on_surfaces.py):
+execute the classes that you made. For example:
 
-    from gaspy.tasks import run_tasks
-    from gaspy.tasks.submit_calculations.adsorption_calculations import AllSitesOnSurfaces
+    from gaspy.tasks import schedule_tasks
+    from gaspy.gasdb import get_catalog_docs
+    from gaspy.tasks.metadata_calculators import CalculateAdsorptionEnergy
     
     
-    rocket_builder = AllSitesOnSurfaces(adsorbates_list=[['CO'], ['H']],
-                                        mpid_list=['mp-2', 'mp-30'],
-                                        miller_list=[[1, 1, 1], [1, 0, 0]],
-                                        max_rockets=20)
-    tasks = [rocket_builder]
+    # Get all of the sites that we have enumerated
+    all_site_documents = get_catalog_docs()
     
-    run_tasks(tasks)
+    # Pick the sites that we want to run. In this case, it'll be sites on
+    # palladium (as per Materials Project ID 2, mp-2) on (111) facets.
+    site_documents_to_calc = [doc for doc in all_site_documents
+                              if (doc['mpid'] == 'mp-2' and
+                                  doc['miller'] == [1, 1, 1])]
+    
+    # Turn the sites into GASpy/Luigi tasks
+    tasks = [CalculateAdsorptionEnergy(adsorbate_name='CO',
+                                       adsorption_site=doc['adsorption_site'],
+                                       mpid=doc['mpid'],
+                                       miller_indices=doc['miller'],
+                                       shift=doc['shift'],
+                                       top=doc['top'])
+             for doc in docs]
+    
+    # Schedule/run all of the tasks
+    schedule_tasks(tasks)
 
-This snippet will calculate up to 20 CO and H adsorption energies of sites on
-the (1, 1, 1) and (1, 0, 0) facets of
-[Pt](https://materialsproject.org/materials/mp-2/) and
-[Cu](https://materialsproject.org/materials/mp-30/).
+This snippet will calculate CO adsorption energies of all sites on
+the (1, 1, 1) facet of [Pd](https://materialsproject.org/materials/mp-2/).
 
 # Installation
 
