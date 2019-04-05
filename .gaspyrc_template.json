@@ -3,7 +3,10 @@
     "luigi_host": "999.99.999.99",
     "gasdb_path": "/path/to/gasdb",
     "matproj_api_key": "ABC123",
-    "plotly_api_key": "123ABC",
+    "plotly_login_info":{
+        "username": "user",
+        "api_key": "123ABC"
+        },
     "gasdb_server":{
         "username": "user",
         "password": "pw"},
