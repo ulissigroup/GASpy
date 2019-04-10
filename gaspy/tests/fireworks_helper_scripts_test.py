@@ -91,7 +91,7 @@ def test_find_n_rockets():
 
     # Test if it can correctly flag a bunch of running rockets
     for fwid in [365912, 355429, 369302, 355479, 365912]:
-        n_running, _ = find_n_rockets({'fw_id': fwid}, {})
+        n_running, _ = find_n_rockets({'fw_id': fwid}, vasp_settings={}, _testing=True)
         assert n_running == 1
 
 
