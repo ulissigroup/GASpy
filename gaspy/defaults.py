@@ -7,6 +7,8 @@ accidentally affect the setting in a different location.
 
 import warnings
 from collections import OrderedDict
+from copy import deepcopy
+from datetime import datetime
 from ase import Atoms
 import ase.constraints
 
@@ -158,11 +160,12 @@ def adsorbates():
     # Uranium is a place-holder for an adsorbate
     adsorbates['U'] = Atoms('U')
 
-    # Put the hydrogen half an angstrom below the origin to help in adsorb onto the surface
+    # We put some of these adsorbates closer to the slab to help them adsorb
+    # onto the surface
     adsorbates['H'] = Atoms('H', positions=[[0., 0., -0.5]])
+    adsorbates['N'] = Atoms('N', positions=[[0., 0., -2.]])
     adsorbates['O'] = Atoms('O')
     adsorbates['C'] = Atoms('C')
-    adsorbates['N'] = Atoms('N')
 
     # For diatomics (and above), it's a good practice to manually relax the gases
     # and then see how far apart they are. Then put first atom at the origin, and
@@ -255,7 +258,7 @@ def adsorption_filters(adsorbate=None):
     elif adsorbate == 'OOH':
         energy_range = (0., 9.)
     elif adsorbate == 'N':
-        energy_range = (-10, 10)
+        energy_range = (-5, 5)
     else:
         energy_range = (-50., 50.)
         warnings.warn('You are using adsorption document filters for an '
@@ -273,7 +276,42 @@ def adsorption_filters(adsorbate=None):
     filters['movement_data.max_slab_movement'] = {'$lt': slab_move_max}
     filters['vasp_settings.gga'] = xc_settings()['gga']
 
+    # Adjust/patch the filters for old N calculations
+    if adsorbate == 'N':
+        filters = __patch_nitrogen_filters(filters)
+
     return filters
+
+
+def __patch_nitrogen_filters(filters):
+    '''
+    We had about 3,000 N calculations done before we moved it downwards 2
+    Angstroms to help adsorption. With this setup, ~2,000 of them fail the
+    `max_adsorbate_movement` criterion. Let's hack a fix for that, where we
+    accept these old calculations.
+
+    Arg:
+        filters     The dictionary returned by the `adsorption_filters`
+                    function
+    Returns:
+        patched_filters     A dictionary to replace `filters`
+    '''
+    cutoff_date = datetime(2019, 4, 15)
+
+    # Only use the current filter for newer calculations
+    old_filters = deepcopy(filters)
+    old_filters['calculation_dates.slab+adsorbate'] = {'$gt': cutoff_date}
+
+    # Create a different filter for older calculations
+    new_filters = deepcopy(filters)
+    ads_move_max = filters['movement_data.max_adsorbate_movement']['$lt']
+    new_filters['calculation_dates.slab+adsorbate'] = {'$lte': cutoff_date}
+    new_filters['movement_data.max_adsorbate_movement'] = {'$lt': 2 + ads_move_max,
+                                                           '$gt': 2 - ads_move_max}
+
+    # Combine the old and new filters
+    patched_filters = {'$or': [old_filters, new_filters]}
+    return patched_filters
 
 
 def catalog_projection():
