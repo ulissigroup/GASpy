@@ -36,25 +36,35 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-def update_catalog_collection(elements, max_miller, n_processes=1):
+def update_catalog_collection(elements, max_miller, n_processes=1, mp_query=None):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
 
     Args:
-        elements            A list of strings indicating the elements you
-                            are looking for, e.g., ['Cu', 'Al']
-        max_miller          An integer indicating the maximum Miller index
-                            to be enumerated
-        n_processes         An integer indicating how many threads you want to
-                            use when running the tasks. If you do not expect
-                            many updates, stick to the default of 1, or go up
-                            to 4. If you are re-creating your collection from
-                            scratch, you may want to want to increase this
-                            argument as high as you can.
+        elements        A list of strings indicating the elements you are
+                        looking for, e.g., ['Cu', 'Al']
+        max_miller      An integer indicating the maximum Miller index to be
+                        enumerated
+        n_processes     An integer indicating how many threads you want to use
+                        when running the tasks. If you do not expect many
+                        updates, stick to the default of 1, or go up to 4. If
+                        you are re-creating your collection from scratch, you
+                        may want to want to increase this argument as high as
+                        you can.
+        mp_query        We get our bulks from The Materials Project. This
+                        dictionary argument is used as a Mongo query to The
+                        Materials Project Database. If you do not supply this
+                        argument, then it will automatically filter out bulks
+                        whose energies above the hull are greater than 0.1 eV
+                        and whose formation energy per atom are above 0 eV.
     '''
+    # Python doesn't like mutable arguments
+    if mp_query is None:
+        mp_query = {}
+
     # Figure out the MPIDs we need to enumerate
-    get_mpid_task = _GetMpids(elements=elements)
+    get_mpid_task = _GetMpids(elements=elements, mp_query=mp_query)
     schedule_tasks([get_mpid_task])
     mpids = get_task_output(get_mpid_task)
 
@@ -86,6 +96,7 @@ class _GetMpids(luigi.Task):
                 e.g., `{'mp-2'}`
     '''
     elements = luigi.ListParameter()
+    mp_query = luigi.DictParameter({})
 
     def run(self):
         '''
@@ -110,15 +121,20 @@ class _GetMpids(luigi.Task):
         elements_allowed = set(self.elements)
         elements_restricted = all_elements - elements_allowed
 
+        # Instantiate the Mongo query to the Materials Project database, and
+        # then attach defaults
+        query = {'elements': {'$nin': list(elements_restricted)},
+                 'e_above_hull': {'$lt': 0.1},
+                 'formation_energy_per_atom': {'$lte': 0.}}
+        for key, value in unfreeze_dict(self.mp_query).items():
+            query[key] = value
+
         # Ask Materials Project for any matches
         with MPRester(read_rc('matproj_api_key')) as rester:
-            results = rester.query({'elements': {'$nin': list(elements_restricted)},
-                                    'e_above_hull': {'$lt': 0.1},
-                                    'formation_energy_per_atom': {'$lte': 0.}},
-                                   ['task_id'])
+            results = rester.query(query, ['task_id'])
 
         # Save
-        mpids = set(result['task_id'] for result in results)
+        mpids = {result['task_id'] for result in results}
         save_task_output(self, mpids)
 
     def output(self):

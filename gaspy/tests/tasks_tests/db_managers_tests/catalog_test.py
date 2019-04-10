@@ -70,6 +70,39 @@ def test__GetMpids():
         clean_up_tasks()
 
 
+def test_catalog_update_with_custom_mp_query():
+    '''
+    We added a GASpy feature to let the user supply a custom Mongo query to The
+    Materials Project. This functions tests that feature.
+    '''
+    elements = ['Pd']
+    max_miller = 1
+    mpid = 'mp-2'
+    mp_query = {'e_above_hull': {'$exists': True},
+                'formation_energy_per_atom': {'$exists': True}}
+
+    try:
+        # Clear out the catalog so we know that anything new was added by this
+        # function
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+
+            # Add some sites and check that they're there
+            update_catalog_collection(elements=elements,
+                                      max_miller=max_miller,
+                                      mp_query=mp_query)
+            docs = list(collection.find({'mpid': mpid}))
+        assert len(docs) > 0
+
+    # Reset the unit testing catalog and clear any pickles we made
+    finally:
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+        populate_unit_testing_collection('catalog')
+        clean_up_tasks()
+
+
+
 def test__InsertAllSitesFromBulkToCatalog():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
