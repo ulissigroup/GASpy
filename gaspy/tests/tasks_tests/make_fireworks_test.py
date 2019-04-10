@@ -40,6 +40,7 @@ def test_FireworkMaker():
 
 
 def test_MakeGasFW():
+    clean_up_tasks()
     gas_name = 'CO'
     task = MakeGasFW(gas_name, GAS_SETTINGS['vasp'])
 
@@ -65,6 +66,7 @@ def test_MakeGasFW():
 
 
 def test_MakeBulkFW():
+    clean_up_tasks()
     mpid = 'mp-30'
     task = MakeBulkFW(mpid, BULK_SETTINGS['vasp'])
 
@@ -90,6 +92,7 @@ def test_MakeBulkFW():
 
 
 def test_MakeBulkFW_max_size():
+    clean_up_tasks()
     mpid = 'mp-30'
     task = MakeBulkFW(mpid, BULK_SETTINGS['vasp'], max_atoms=0)
 
@@ -115,6 +118,7 @@ def test_MakeAdslabFW():
     collection. If you copy/paste this test into somewhere else, make sure
     that you use `run_task_locally` appropriately.
     '''
+    clean_up_tasks()
     adsorption_site = (1.48564485e-23, 1.40646118e+00, 2.08958465e+01)
     shift = 0.25
     top = False
