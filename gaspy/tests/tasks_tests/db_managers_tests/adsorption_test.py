@@ -36,7 +36,7 @@ def test_update_adsorption_collection():
         # See if we can actually add anything
         update_adsorption_collection()
         with get_mongo_collection('adsorption') as collection:
-            assert collection.count() > 0
+            assert collection.count_documents({}) > 0
 
     # Reset the adsorption collection behind us
     finally:
