@@ -72,34 +72,40 @@ def _make_atoms_dict(atoms):
     Returns:
         atoms_dict  A dictionary with various atoms information stored
     '''
+    # If the atoms object is relaxed, then get the magnetic moments from the
+    # calculator. We do this because magnetic moments of individual atoms
+    # within a structure are mutable and actually change when the atom is
+    # pulled from the structure (even inside a list comprehension).
     try:
-        magmom = atoms.get_magnetic_moments()
-        atoms_dict = OrderedDict(atoms=[{'symbol': atoms[i].symbol,
-                                     'position': json.loads(encode(atoms[i].position)),
-                                     'tag': atoms[i].tag,
-                                     'index': atoms[i].index,
-                                     'charge': atoms[i].charge,
-                                     'momentum': json.loads(encode(atomx[i].momentum)),
-                                     'magmom': atoms[i].magmom}
-                                    for i in range(len(atoms))],
-                             cell=atoms.cell,
-                             pbc=atoms.pbc,
-                             info=atoms.info,
-                             constraints=[c.todict() for c in atoms.constraints])
-    except:
+        magmoms = atoms.get_magnetic_moments()
         atoms_dict = OrderedDict(atoms=[{'symbol': atom.symbol,
-                                     'position': json.loads(encode(atom.position)),
-                                     'tag': atom.tag,
-                                     'index': atom.index,
-                                     'charge': atom.charge,
-                                     'momentum': json.loads(encode(atom.momentum)),
-                                     'magmom': atom.magmom}
-                                    for atom in atoms],
-                             cell=atoms.cell,
-                             pbc=atoms.pbc,
-                             info=atoms.info,
-                             constraints=[c.todict() for c in atoms.constraints])
+                                         'position': json.loads(encode(atom.position)),
+                                         'tag': atom.tag,
+                                         'index': atom.index,
+                                         'charge': atom.charge,
+                                         'momentum': json.loads(encode(atom.momentum)),
+                                         'magmom': magmoms[i]}
+                                        for i, atom in enumerate(atoms)],
+                                 cell=atoms.cell,
+                                 pbc=atoms.pbc,
+                                 info=atoms.info,
+                                 constraints=[c.todict() for c in atoms.constraints])
 
+    # If the atoms object is unrelaxed, then get the magnetic moment from the
+    # individual atom
+    except RuntimeError:
+        atoms_dict = OrderedDict(atoms=[{'symbol': atom.symbol,
+                                         'position': json.loads(encode(atom.position)),
+                                         'tag': atom.tag,
+                                         'index': atom.index,
+                                         'charge': atom.charge,
+                                         'momentum': json.loads(encode(atom.momentum)),
+                                         'magmom': atom.magmom}
+                                        for atom in atoms],
+                                 cell=atoms.cell,
+                                 pbc=atoms.pbc,
+                                 info=atoms.info,
+                                 constraints=[c.todict() for c in atoms.constraints])
 
     # Redundant information for search convenience.
     atoms_dict['natoms'] = len(atoms)

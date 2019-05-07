@@ -19,6 +19,7 @@ import datetime
 import pickle
 import numpy as np
 import numpy.testing as npt
+import ase.io
 from . import test_cases
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/mongo/'
@@ -74,30 +75,34 @@ def test_make_doc_from_atoms_population(bulk_atoms_name):
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
-def test_to_create_atoms_dict(bulk_atoms_name):
-    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
-    atoms_dict = _make_atoms_dict(atoms)
-
-    file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(atoms_dict, file_handle)
-    assert True
-
-
-@pytest.mark.parametrize('bulk_atoms_name', ['Cu_FCC.traj'])
-def test__make_atoms_dict(bulk_atoms_name):
+def test_to_create_atoms_dict():
     '''
-    Note that this is currently hard-coded to test only bulks.
-    Feel free to change it if you care enough.
+    Make sure we test at least one relaxed and one unrelaxed
     '''
-    atoms = test_cases.get_bulk_atoms(bulk_atoms_name)
-    atoms_dict = _make_atoms_dict(atoms)
+    for filename in ['bulks/Cu_FCC.traj', 'relaxed/Pt_slab.traj']:
+        atoms_name = filename.split('/')[-1]
+        atoms = ase.io.read('/home/GASpy/gaspy/tests/test_cases/' + filename)
+        atoms_dict = _make_atoms_dict(atoms)
 
-    file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + bulk_atoms_name.split('.')[0] + '.pkl'
-    with open(file_name, 'rb') as file_handle:
-        expected_atoms_dict = pickle.load(file_handle)
-    assert atoms_dict == expected_atoms_dict
+        file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + atoms_name.split('.')[0] + '.pkl'
+        with open(file_name, 'wb') as file_handle:
+            pickle.dump(atoms_dict, file_handle)
+        assert True
+
+
+def test__make_atoms_dict():
+    '''
+    Make sure we test at least one relaxed and one unrelaxed
+    '''
+    for filename in ['bulks/Cu_FCC.traj', 'relaxed/Pt_slab.traj']:
+        atoms_name = filename.split('/')[-1]
+        atoms = ase.io.read('/home/GASpy/gaspy/tests/test_cases/' + filename)
+        atoms_dict = _make_atoms_dict(atoms)
+
+        file_name = REGRESSION_BASELINES_LOCATION + 'atoms_dict_for_' + atoms_name.split('.')[0] + '.pkl'
+        with open(file_name, 'rb') as file_handle:
+            expected_atoms_dict = pickle.load(file_handle)
+        assert atoms_dict == expected_atoms_dict
 
 
 def test_make_spglib_cell_from_atoms():
