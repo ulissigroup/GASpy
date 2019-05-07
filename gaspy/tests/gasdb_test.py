@@ -24,7 +24,7 @@ from ..gasdb import (get_mongo_collection,
                      get_catalog_docs_with_predictions,
                      _add_adsorption_energy_predictions_to_projection,
                      _add_orr_predictions_to_projection,
-                     #get_surface_docs,
+                     get_surface_docs,
                      get_unsimulated_catalog_docs,
                      _get_attempted_adsorption_docs,
                      _duplicate_docs_per_rotations,
@@ -169,6 +169,40 @@ def __make_documents_dirty(docs):
     # Make the dirty documents
     dirty_docs = docs.copy() + [doc_partial, doc_empty0, doc_empty1, doc_empty2]
     return dirty_docs
+
+
+@pytest.mark.baseline
+@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+def test_to_create_aggregated_surface_documents(extra_fingerprints):
+    try:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
+            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
+    except AttributeError:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+
+    docs = get_surface_docs(extra_fingerprints)
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(docs, file_handle)
+    assert True
+
+
+@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
+def test_get_surface_docs(extra_fingerprints):
+    '''
+    Currently not testing the "filters" argument because, well, I am being lazy.
+    Feel free to change that yourself.
+    '''
+    # EAFP to set the file name; depends on whether or not there are extra fingerprints
+    try:
+        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
+                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
+    except AttributeError:
+        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
+
+    with open(file_name, 'rb') as file_handle:
+        expected_docs = pickle.load(file_handle)
+    docs = get_surface_docs(extra_fingerprints)
+    assert docs == expected_docs
 
 
 def test_get_catalog_docs():
@@ -476,37 +510,3 @@ def test_get_low_coverage_ml_docs(adsorbate, model_tag):
         surface = get_surface_from_doc(doc)
         low_cov_energy = low_coverage_docs_by_surface[surface]['energy']
         assert low_cov_energy <= energy
-
-
-#@pytest.mark.baseline
-#@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-#def test_to_create_aggregated_surface_documents(extra_fingerprints):
-#    try:
-#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
-#            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
-#    except AttributeError:
-#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-#
-#    docs = get_surface_docs(extra_fingerprints)
-#    with open(file_name, 'wb') as file_handle:
-#        pickle.dump(docs, file_handle)
-#    assert True
-#
-#
-#@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-#def test_get_surface_docs(extra_fingerprints):
-#    '''
-#    Currently not testing the "filters" argument because, well, I am being lazy.
-#    Feel free to change that yourself.
-#    '''
-#    # EAFP to set the file name; depends on whether or not there are extra fingerprints
-#    try:
-#        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
-#                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
-#    except AttributeError:
-#        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-#
-#    with open(file_name, 'rb') as file_handle:
-#        expected_docs = pickle.load(file_handle)
-#    docs = get_surface_docs(extra_fingerprints)
-#    assert docs == expected_docs

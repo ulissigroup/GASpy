@@ -170,6 +170,54 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
+def get_surface_docs(extra_projections=None, filters=None):
+    '''
+    A wrapper for `collection.aggregate` that is tailored specifically for the
+    collection that's tagged `surface_energy`.
+
+    Args:
+        extra_projections   A dictionary with key/value pairings that
+                            correspond to a new projection you want to fetch
+                            and its location in the Mongo docs, respectively.
+                            Refer to `gaspy.defaults.surface_projection` for
+                            examples, or to the `$project` MongoDB operation.
+        filters             A dictionary whose keys are the locations of
+                            elements in the Mongo collection and whose values
+                            are Mongo matching commands. For examples, look up
+                            Mongo `match` commands. If this argument is `None`,
+                            then it will fetch the default filters from
+                            `gaspy.defaults.surface_filters`. If you want to
+                            modify them, we suggest simply fetching that
+                            object, modifying it, and then passing it here.
+    Returns:
+        docs    A list of dictionaries whose key/value pairings are the
+                ones given by `gaspy.defaults.adsorption_projection` and who
+                meet the filtering criteria of `gaspy.defaults.surface_filters`
+    '''
+    # Set the filtering criteria of the documents we'll be getting
+    if filters is None:
+        filters = defaults.surface_filters()
+    match = {'$match': filters}
+
+    # Establish the information that'll be contained in the documents we'll be getting
+    # Also add anything the user asked for.
+    projection = defaults.surface_projection()
+    if extra_projections:
+        for key, value in extra_projections.items():
+            projection[key] = value
+    project = {'$project': projection}
+
+    # Get the documents and clean them up
+    pipeline = [match, project]
+    with get_mongo_collection(collection_tag='surface_energy') as collection:
+        print('Now pulling surface documents...')
+        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
+        docs = [doc for doc in tqdm(cursor)]
+    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
+
+    return cleaned_docs
+
+
 def get_catalog_docs():
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
@@ -758,52 +806,3 @@ def purge_adslabs(fwids):
     print('Removing FWs from adsorption collection...')
     with get_mongo_collection('adsorption') as collection:
         collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})
-
-
-#def get_surface_docs(extra_projections=None, filters=None):
-#    '''
-#    A wrapper for `collection.aggregate` that is tailored specifically for the
-#    collection that's tagged `surface_energy`.
-#
-#    Args:
-#        extra_projections   A dictionary with key/value pairings that
-#                            correspond to a new projection you want to fetch
-#                            and its location in the Mongo docs, respectively.
-#                            Refer to `gaspy.defaults.surface_projection` for
-#                            examples, or to the `$project` MongoDB operation.
-#        filters             A dictionary whose keys are the locations of elements
-#                            in the Mongo collection and whose values are Mongo
-#                            matching commands. For examples, look up Mongo `match`
-#                            commands. If this argument is `None`, then it will
-#                            fetch the default filters from
-#                            `gaspy.defaults.surface_filters`. If you want to modify
-#                            them, we suggest simply fetching that object, modifying it,
-#                            and then passing it here.
-#    Returns:
-#        docs    A list of dictionaries whose key/value pairings are the
-#                ones given by `gaspy.defaults.adsorption_projection`
-#                and who meet the filtering criteria of
-#                `gaspy.defaults.surface_filters`
-#    '''
-#    # Set the filtering criteria of the documents we'll be getting
-#    if filters is None:
-#        filters = defaults.surface_filters()
-#    match = {'$match': filters}
-#
-#    # Establish the information that'll be contained in the documents we'll be getting
-#    # Also add anything the user asked for.
-#    projection = defaults.surface_projection()
-#    if extra_projections:
-#        for key, value in extra_projections.items():
-#            projection[key] = value
-#    project = {'$project': projection}
-#
-#    # Get the documents and clean them up
-#    pipeline = [match, project]
-#    with get_mongo_collection(collection_tag='surface_energy') as collection:
-#        print('Now pulling surface documents...')
-#        cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-#        docs = [doc for doc in tqdm(cursor)]
-#    cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
-#
-#    return cleaned_docs
