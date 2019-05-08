@@ -394,37 +394,25 @@ def __get_coordination_string(nn_info):
     return coordination
 
 
-def calculate_minimum_surface_repeats(atoms, miller_indices,
-                                      min_thickness=None,
-                                      slab_generate_settings=None):
+def calculate_unit_slab_height(atoms, miller_indices, slab_generate_settings=None):
     '''
-    When creating surfaces, we often want a minimum thickness for the
-    slab/surface. We can only increase thickness by repeating a unit slab in
-    the z-direction. This function will calculate the minimum number of
-    repeats you need in order to create a slab that meets the specified minimum
-    thickness.
+    Calculates the height of the smallest unit slab from a given bulk and
+    Miller cut
 
     Args:
         atoms                   An `ase.Atoms` object of the bulk you want to
                                 make a surface out of
         miller_indices          A 3-tuple of integers representing the Miller
                                 indices of the surface you want to make
-        min_thickness           A float indicating the minimum slab thickness
-                                you want (in Angstroms). Defaults to the
-                                settings in `gaspy.defaults.slab_settings`.
         slab_generate_settings  A dictionary that can be passed as kwargs to
                                 instantiate the
                                 `pymatgen.core.surface.SlabGenerator` class.
                                 Defaults to the settings in
                                 `gaspy.defaults.slab_settings`.
     Returns:
-        min_repeats     An integer that is the minimum number of times you need
-                        to repeat the unit slab in order to meet the specified
-                        thickness
+        height  A float corresponding the height (in Angstroms) of the smallest
+                unit slab
     '''
-    # Pull default arguments
-    if min_thickness is None:
-        min_thickness = slab_settings()['slab_generator_settings']['min_slab_size']
     if slab_generate_settings is None:
         slab_generate_settings = slab_settings()['slab_generator_settings']
         del slab_generate_settings['min_vacuum_size']
@@ -440,10 +428,9 @@ def calculate_minimum_surface_repeats(atoms, miller_indices,
                         min_slab_size=0.,
                         **slab_generate_settings)
 
-    # Get the number of layers necessary to satisfy the required min_slab_size
-    thickness = gen._proj_height
-    min_repeats = int(np.ceil(min_thickness/thickness))
-    return min_repeats
+    # Get and return the height
+    height = gen._proj_height
+    return height
 
 
 def find_max_movement(atoms_initial, atoms_final):

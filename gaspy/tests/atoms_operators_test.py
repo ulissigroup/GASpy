@@ -19,7 +19,7 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                add_adsorbate_onto_slab,
                                fingerprint_adslab,
                                remove_adsorbate,
-                               calculate_minimum_surface_repeats,
+                               calculate_unit_slab_height,
                                find_max_movement)
 
 # Things we need to do the tests
@@ -381,7 +381,7 @@ def test_remove_adsorbate():
         assert slab == constrain_slab(slab)
 
 
-def test_calculate_minimum_surface_repeats():
+def test_calculate_unit_slab_height():
     '''
     Test all the Miller indices for one bulk
     '''
@@ -391,12 +391,20 @@ def test_calculate_minimum_surface_repeats():
     distinct_millers = get_symmetrically_distinct_miller_indices(structure, 3)
 
     # These are the hard-coded answers
-    expected_repeats = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2]
+    expected_heights = [6.252703415323648, 6.1572366883500305,
+                        4.969144795636368, 5.105310960166873,
+                        4.969144795636368, 6.15723668835003, 6.252703415323648,
+                        6.128875244668134, 4.824065416519261,
+                        4.824065416519261, 6.128875244668133,
+                        6.157236688350029, 3.26536786177718, 4.824065416519261,
+                        4.969144795636368, 3.4247467059623546,
+                        5.006169270932693, 5.105310960166873, 3.26536786177718,
+                        4.824065416519261, 6.128875244668134]
 
     # Test our function
-    for miller_indices, expected_min_repeats in zip(distinct_millers, expected_repeats):
-        min_repeats = calculate_minimum_surface_repeats(atoms, miller_indices)
-        assert min_repeats == expected_min_repeats
+    for miller_indices, expected_height in zip(distinct_millers, expected_heights):
+        height = calculate_unit_slab_height(atoms, miller_indices)
+        assert height == expected_height
 
 
 def test_find_max_movement():
