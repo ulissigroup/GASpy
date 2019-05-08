@@ -18,7 +18,9 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                find_adsorption_sites,
                                add_adsorbate_onto_slab,
                                fingerprint_adslab,
-                               remove_adsorbate)
+                               remove_adsorbate,
+                               calculate_minimum_surface_repeats,
+                               find_max_movement)
 
 # Things we need to do the tests
 import pytest
@@ -30,6 +32,7 @@ import numpy.testing as npt
 import ase.io
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from . import test_cases
 from .tasks_tests.utils import clean_up_tasks
 from .. import defaults
@@ -376,3 +379,26 @@ def test_remove_adsorbate():
 
         # Make sure the slab is still constrained
         assert slab == constrain_slab(slab)
+
+
+def test_calculate_minimum_surface_repeats():
+    '''
+    Test all the Miller indices for one bulk
+    '''
+    # Find all the Miller indices we can use
+    atoms = ase.io.read(TEST_CASE_LOCATION + 'bulks/Cu_FCC.traj')
+    structure = AseAtomsAdaptor.get_structure(atoms)
+    distinct_millers = get_symmetrically_distinct_miller_indices(structure, 3)
+
+    # These are the hard-coded answers
+    expected_repeats = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2]
+
+    # Test our function
+    for miller_indices, expected_min_repeats in zip(distinct_millers, expected_repeats):
+        min_repeats = calculate_minimum_surface_repeats(atoms, miller_indices)
+        assert min_repeats == expected_min_repeats
+
+
+def test_find_max_movement():
+    find_max_movement()
+    assert False
