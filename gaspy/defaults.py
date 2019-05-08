@@ -323,12 +323,12 @@ def surface_filters():
     # Easy-to-read (and change) filters before we distribute them
     # into harder-to-read (but mongo-readable) structures
     f_max = 0.5                 # Maximum atomic force [eV/Ang]
-    max_surface_movement = 0.5  # Maximum distance that any atom can move [Ang]
+    max_surface_movement = 1.   # Maximum distance that any atom can move [Ang]
 
     # Distribute filters into mongo-readable form
     filters['results.fmax'] = {'$lt': f_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    filters['processed_data.vasp_settings.gga'] = xc_settings()['gga']
+    filters['processed_data.vasp_settings.gga'] = xc_settings()['pbesol']
 
     return filters
 
