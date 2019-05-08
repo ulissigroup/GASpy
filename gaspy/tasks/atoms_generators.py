@@ -131,7 +131,7 @@ class GenerateSlabs(luigi.Task):
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors
-        return FindBulk(mpid=self.mpid)
+        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
