@@ -394,7 +394,7 @@ def __get_coordination_string(nn_info):
     return coordination
 
 
-def calculate_unit_slab_height(atoms, miller_indices, slab_generate_settings=None):
+def calculate_unit_slab_height(atoms, miller_indices, slab_generator_settings=None):
     '''
     Calculates the height of the smallest unit slab from a given bulk and
     Miller cut
@@ -404,7 +404,7 @@ def calculate_unit_slab_height(atoms, miller_indices, slab_generate_settings=Non
                                 make a surface out of
         miller_indices          A 3-tuple of integers representing the Miller
                                 indices of the surface you want to make
-        slab_generate_settings  A dictionary that can be passed as kwargs to
+        slab_generator_settings A dictionary that can be passed as kwargs to
                                 instantiate the
                                 `pymatgen.core.surface.SlabGenerator` class.
                                 Defaults to the settings in
@@ -413,10 +413,11 @@ def calculate_unit_slab_height(atoms, miller_indices, slab_generate_settings=Non
         height  A float corresponding the height (in Angstroms) of the smallest
                 unit slab
     '''
-    if slab_generate_settings is None:
-        slab_generate_settings = slab_settings()['slab_generator_settings']
-        del slab_generate_settings['min_vacuum_size']
-        del slab_generate_settings['min_slab_size']
+    if slab_generator_settings is None:
+        slab_generator_settings = slab_settings()['slab_generator_settings']
+        # We don't care about these things
+        del slab_generator_settings['min_vacuum_size']
+        del slab_generator_settings['min_slab_size']
 
     # Instantiate a pymatgen `SlabGenerator`
     structure = AseAtomsAdaptor.get_structure(atoms)
@@ -426,7 +427,7 @@ def calculate_unit_slab_height(atoms, miller_indices, slab_generate_settings=Non
                         miller_index=miller_indices,
                         min_vacuum_size=0.,
                         min_slab_size=0.,
-                        **slab_generate_settings)
+                        **slab_generator_settings)
 
     # Get and return the height
     height = gen._proj_height
