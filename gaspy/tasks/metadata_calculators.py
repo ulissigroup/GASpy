@@ -7,9 +7,15 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import sys
 import pickle
+from copy import deepcopy
+import numpy as np
 import luigi
+import statsmodel.api as statsmodels
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core.surface import SlabGenerator
 from .core import save_task_output, make_task_output_object
-from .calculation_finders import FindGas, FindAdslab
+from .calculation_finders import FindBulk, FindGas, FindAdslab, FindSurface
 from ..mongo import make_atoms_from_doc
 from .. import utils
 from .. import defaults
@@ -223,122 +229,233 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
         return make_task_output_object(self)
 
 
-#class CalculateSlabSurfaceEnergy(luigi.Task):
-#    '''
-#    This function attempts to calculate the surface energy of a slab using the
-#    linear interpolation method. First, we have to find the minimum depth of the slab
-#    and then figure out which three slabs we want to ask for. This logic makes the requires
-#    function a little more complicated than it otherwise would be
-#    '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#
-#        # check if bulk exists, and if so pull it.
-#        bulk_task = SubmitToFW(calctype='bulk', parameters={'bulk': self.parameters['bulk']})
-#        if not(bulk_task.output().exists()):
-#            bulk_task.requires()
-#            bulk_task.run()
-#
-#            #If running the SubmitToFW task does not yield an output, then we probably
-#            # need to actually require it and let it work through more logic to generate
-#            # the necessary bulk structure. We will have to re-run this function after the
-#            # the bulk is generated to get the surface energy calculations submitted
-#            if not(bulk_task.output().exists):
-#                return bulk_task
-#
-#        # Preparation work with ASE and PyMatGen before we start creating the slabs
-#        bulk_doc = pickle.load(open(bulk_task.output().fn, 'rb'))[0]
-#
-#        # Generate the minimum slab depth slab we can
-#        bulk = make_atoms_from_doc(bulk_doc)
-#        structure = AseAtomsAdaptor.get_structure(bulk)
-#        sga = SpacegroupAnalyzer(structure, symprec=0.1)
-#        structure = sga.get_conventional_standard_structure()
-#        slab_generate_settings = utils.unfreeze_dict(copy.deepcopy(self.parameters['slab']['slab_generate_settings']))
-#        del slab_generate_settings['min_vacuum_size']
-#        del slab_generate_settings['min_slab_size']
-#        gen = SlabGenerator(structure,
-#                            self.parameters['slab']['miller'],
-#                            min_vacuum_size=0.,
-#                            min_slab_size=0., **slab_generate_settings)
-#
-#        # Get the number of layers necessary to satisfy the required min_slab_size
-#        h = gen._proj_height
-#        min_slabs = int(np.ceil(self.parameters['slab']['slab_generate_settings']['min_slab_size']/h))
-#
-#        # generate the necessary slabs (base thickness + some number of additional layers)
-#        req_list = []
-#        for nslabs in range(min_slabs, min_slabs+int(self.parameters['slab']['slab_surface_energy_num_layers'])):
-#            cur_min_slab_size = h*nslabs
-#            gen = SlabGenerator(structure,
-#                                self.parameters['slab']['miller'],
-#                                min_vacuum_size=self.parameters['slab']['slab_generate_settings']['min_vacuum_size'],
-#                                min_slab_size=cur_min_slab_size, **slab_generate_settings)
-#            gen.min_slab_size = cur_min_slab_size
-#            slab = gen.get_slab(self.parameters['slab']['shift'], tol=self.parameters['slab']['get_slab_settings']['tol'])
-#            param_to_submit = utils.unfreeze_dict(copy.deepcopy(dict(self.parameters)))
-#            param_to_submit['type'] = 'slab_surface_energy'
-#            param_to_submit['slab']['natoms'] = len(slab)
-#
-#            # Print a warning if the slab is thicker than 80, which means it may not run
-#            if len(slab) > self.parameters['bulk']['max_atoms']:
-#                print('Surface energy %s %s %s is going to require more than 80 atoms, I hope you know what you are doing!'
-#                      % (self.parameters['bulk']['mpid'], self.parameters['slab']['miller'], self.parameters['slab']['shift']))
-#                print('aborting!')
-#                return
-#
-#            # Generate the SubmitToFW that will trigger the necessary calculation
-#            del param_to_submit['slab']['top']
-#            param_to_submit['slab']['slab_generate_settings']['min_slab_size'] = cur_min_slab_size
-#            req_list.append(SubmitToFW(calctype='slab_surface_energy', parameters=copy.deepcopy(param_to_submit)))
-#
-#        # Submit all of the the required slabs
-#        return req_list
-#
-#    def run(self):
-#
-#        # Load all of the slabs and turn them into atoms objects
-#        requirements = self.input()
-#
-#        doc_list = [pickle.load(open(req.fn, 'rb'))[0] for req in requirements]
-#        atoms_list = [make_atoms_from_doc(doc) for doc in doc_list]
-#
-#        # Pull the number of atoms of each slab
-#        number_atoms = [len(atoms) for atoms in atoms_list]
-#
-#        # Get the energy per cross sectional area for each slab (averaged for top/bottom)
-#        energies = [atoms.get_potential_energy() for atoms in atoms_list]
-#        energies = energies/np.linalg.norm(np.cross(atoms_list[0].cell[0], atoms_list[0].cell[1]))
-#        energies = energies/2
-#
-#        # Define how to do a linear regression using statsmodel
-#        def OLSfit(X, y):
-#            data = sm.add_constant(X)
-#            mod = sm.OLS(y, data)
-#            res = mod.fit()
-#            # Return the intercept and the error estimate on the intercept
-#            return res.params[0], res.bse[0]
-#
-#        # Do the linear fit
-#        fit = OLSfit(number_atoms, energies)
-#
-#        # formulate the dictionary and save it as output
-#        towrite = copy.deepcopy(doc_list)
-#        towrite[0]['processed_data'] = {}
-#        towrite[0]['processed_data']['FW_info'] = {}
-#        for i in range(len(atoms_list)):
-#            towrite[i]['atoms'] = atoms_list[i]
-#            towrite[0]['processed_data']['FW_info'][str(len(atoms_list[i]))] = doc_list[i]['fwid']
-#        towrite[0]['processed_data']['surface_energy_info'] = {}
-#        towrite[0]['processed_data']['surface_energy_info']['intercept'] = fit[0]
-#        towrite[0]['processed_data']['surface_energy_info']['intercept_uncertainty'] = fit[1]
-#        towrite[0]['processed_data']['surface_energy_info']['num_points'] = len(atoms_list)
-#        towrite[0]['processed_data']['surface_energy_info']['energies'] = [atoms.get_potential_energy() for atoms in atoms_list]
-#        towrite[0]['processed_data']['surface_energy_info']['num_atoms'] = [len(atoms) for atoms in atoms_list]
-#
-#        with self.output().temporary_path() as self.temp_output_path:
-#            pickle.dump(towrite, open(self.temp_output_path, 'wb'))
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+class CalculateSurfaceEnergy(luigi.Task):
+    '''
+    Calculate the surface energy of a slab
+
+    Args:
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to get a surface from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the surface you want to find
+        shift                   A float indicating the shift of the
+                                surface---i.e., the termination that pymatgen
+                                finds
+        max_atoms               The maximum number of atoms you're willing to
+                                run a DFT calculation on
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here
+                                as a dictionary.
+        vasp_settings           A dictionary containing your VASP settings for
+                                the surface relaxation
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate surfaces from
+    Returns::
+        doc A dictionary with the following keys:
+                surface_energy  A float indicating the surface energy in
+                                eV/Angstrom**2
+                fwids           A subdictionary whose keys are 'adslab' and
+                                'slab', and whose values are the FireWork
+                                IDs of the respective calculations.
+    '''
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    max_atoms = luigi.IntParameter(SLAB_SETTINGS['max_atoms'])
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+
+    def _static_requires(self):
+        '''
+        We have both static and dynamic depenencies, and Luigi expects us to
+        yield them in the `run` method. We put the code for the static
+        depenenices here in `_static_requires` for organizational purposes, and
+        then just call it first in `run`.
+        '''
+        # Define our static dependency, the bulk relaxation
+        bulk_target = FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+
+        # If our dependency is done, then save the relaxed bulk atoms object as
+        # an attribute for use by the other methods
+        try:
+            with open(bulk_target.path, 'rb') as file_handle:
+                bulk_doc = pickle.load(file_handle)
+            self.bulk_atoms = make_atoms_from_doc(bulk_doc)
+
+            # Let's not calculate the surface energy if it requires us to relax a
+            # slab that's too big
+            self.__terminate_if_too_large()
+
+        # If the dependency is not done, then Luigi expects us to yield/return
+        # the dependency task anyway
+        except FileNotFoundError:
+            pass
+        return bulk_target
+
+    def __terminate_if_too_large(self):
+        '''
+        Surface energy calculations require us to relax three slabs of varying
+        thicknesses. If the thickest slab is too big, then we shouldn't bother
+        with the other two. This method will figure that out for us and return
+        an error if this happens.
+
+        Saved Attribute:
+            min_repeats A integer for the minimum number of times we need to
+                        repeat a unit slab in order for the height to exceed
+                        the minimum slab height
+        '''
+        self.__calculate_unit_slab()
+
+        # Calculate how many atoms are in the biggest slab/surface that we'd
+        # need to calculate
+        min_slab_size = self.slab_generator_settings['min_slab_size']
+        min_unit_slab_repeats = int(np.ceil(min_slab_size/self.unit_slab_height))
+        max_slab_size = (min_unit_slab_repeats+2) * len(self.unit_slab)
+
+        # Throw an error if it's too big
+        if max_slab_size > self.max_atoms:
+            raise RuntimeError('Cannot calculate surface energy of %s %s '
+                               'because we would need to perform a relaxation on '
+                               'a slab with %i atoms, which exceeds the limit of '
+                               '%i. Increase the `max_atoms` argument if you '
+                               'really want to run it anyway.'
+                               % (self.mpid, self.miller_indices,
+                                  max_slab_size, self.max_atoms))
+
+        self.min_repeats = min_unit_slab_repeats
+
+    def __calculate_unit_slab(self):
+        '''
+        Calculates the height of the smallest unit slab from a given bulk and
+        Miller cut
+
+        Saved attributes:
+            unit                A `pymatgen.Structure` instance for the unit
+                                slab
+            unit_slab_height    The height of the unit slab in Angstroms
+        '''
+        # Luigi will probably call this method multiple times. We only need to
+        # do it once though.
+        if not hasattr(self, 'unit_slab_height'):
+
+            # Delete some slab generator settings that we don't care about for a
+            # unit slab
+            slab_generator_settings = deepcopy(self.slab_generator_settings)
+            del slab_generator_settings['min_vacuum_size']
+            del slab_generator_settings['min_slab_size']
+
+            # Instantiate a pymatgen `SlabGenerator`
+            bulk_structure = AseAtomsAdaptor.get_structure(self.bulk_atoms)
+            sga = SpacegroupAnalyzer(bulk_structure, symprec=0.1)
+            bulk_structure = sga.get_conventional_standard_structure()
+            gen = SlabGenerator(initial_structure=bulk_structure,
+                                miller_index=self.miller_indices,
+                                min_vacuum_size=0.,
+                                min_slab_size=1.,
+                                **slab_generator_settings)
+
+            # Generate the unit slab and find its height
+            self.unit_slab = gen.get_slab(self.shift, tol=self.get_slab_settings['tol'])
+            self.unit_slab_height = gen._proj_height
+
+    def _dynamic_requires(self):
+        '''
+        We have both static and dynamic depenencies, and Luigi expects us to
+        yield them in the `run` method. We put the code for the dynamic
+        depenenices here in `_dynamic_requires` for organizational purposes, and
+        then just call it first in `run`.
+        '''
+        # Calculate the height of each slab
+        surface_relaxation_tasks = []
+        for n_repeats in range(self.min_repeats, self.min_repeats+3):
+            min_height = self.unit_slab_height * n_repeats
+
+            # Instantiate and return each task
+            task = FindSurface(mpid=self.mpid,
+                               miller_indices=self.miller_indices,
+                               shift=self.shift,
+                               min_height=min_height,
+                               vasp_settings=self.vasp_settings)
+            surface_relaxation_tasks.append(task)
+        return surface_relaxation_tasks
+
+    def run(self):
+        '''
+        We have both static and dynamic dependencies. Luigi only accepts
+        dynamic ones though, so we treat our static dependency (bulk
+        relaxation) as a "first dynamic depenency".
+
+        After we finish the dependencies, we then calculate the surface energy.
+        '''
+        # Run the dependencies first
+        yield self._static_requires()
+        surface_relaxation_targets = yield self._dynamic_requires()
+
+        # Fetch the results of the surface relaxations
+        surface_docs = []
+        for target in surface_relaxation_targets:
+            with open(target.path, 'rb') as file_handle:
+                surface_doc = pickle.load(file_handle)
+            surface_docs.append(surface_doc)
+
+        # Use the results of the surface relaxations to calculate the surface
+        # energy
+        surface_energy, surface_energy_se = self._calculate_surface_energy(surface_docs)
+
+        # Parse the results into a document to save
+        doc = {'surfaces': {n_layers: doc
+                            for n_layers, doc in zip(range(self.min_repeats,
+                                                           self.min_repeats+3),
+                                                     surface_docs)}}
+        doc['surface_energy'] = surface_energy
+        doc['surface_energy_standard_error'] = surface_energy_se
+        save_task_output(self, doc)
+
+    def _calculate_surface_energy(self, docs):
+        '''
+        Given three Mongo documents/dictionaries for each of the surfaces,
+        calculates the surface energy by performing a linear regression on the
+        energies of slabs with varying numbers of atoms, and then extrapolating
+        that linear model down to zero atoms.
+
+        Arg:
+            docs    A list of Mongo documents/dictionaries that can be turned
+                    into `ase.Atoms` objects via
+                    `gaspy.mongo.make_atoms_from_doc`. These documents should
+                    be created from relaxed atoms objects.
+        Returns:
+            surface_energy                  The surface energy prediction
+                                            (eV/Angstrom**2)
+            surface_energy_standard_error   The standard error of our estimate
+                                            on the surface energy
+                                            (eV/Angstrom**2)
+        '''
+        # Load each surface
+        atoms_list = [make_atoms_from_doc(doc) for doc in docs]
+
+        # Count the number of atoms in each surface
+        n_atoms = [len(atoms) for atoms in atoms_list]
+
+        # Pull the energies from each slab
+        slab_energies = [atoms.get_potential_energy() for atoms in atoms_list]
+        # We multiply the area by two because there's a top and bottom side of
+        # each slab
+        area = 2 * np.linalg.norm(np.cross(atoms_list[0].cell[0], atoms_list[0].cell[1]))
+        slab_energies_per_area = slab_energies/area
+
+        # Perform the linear regression to get the surface energy and uncertainty
+        data = statsmodels.add_constant(n_atoms)
+        mod = statsmodels.OLS(slab_energies_per_area, data)
+        res = mod.fit()
+        surface_energy = res.params[0]
+        surface_energy_standard_error = res.bse[0]
+        return surface_energy, surface_energy_standard_error
+
+    def output(self):
+        return make_task_output_object(self)

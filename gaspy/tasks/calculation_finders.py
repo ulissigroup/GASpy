@@ -14,7 +14,8 @@ from ..fireworks_helper_scripts import find_n_rockets
 from .core import save_task_output, make_task_output_object, get_task_output
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
-                             MakeAdslabFW)
+                             MakeAdslabFW,
+                             MakeSurfaceFW)
 
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
@@ -391,16 +392,67 @@ class FindAdslab(FindCalculation):
                                        bulk_vasp_settings=self.bulk_vasp_settings)
 
 
-#class FindSurface(luigi.Task):
-#    elif self.calctype == 'slab_surface_energy':
-#        # pretty much identical to "slab" above, except no top since top/bottom
-#        # surfaces are both relaxed
-#        search_strings = {'type': 'slab_surface_energy',
-#                          'fwname.miller': list(self.parameters['slab']['miller']),
-#                          'fwname.num_slab_atoms': self.parameters['slab']['natoms'],
-#                          'fwname.shift': self.parameters['slab']['shift'],
-#                          'fwname.mpid': self.parameters['bulk']['mpid']}
-#        for key in self.parameters['slab']['vasp_settings']:
-#            if key not in ['isym']:
-#                search_strings['fwname.vasp_settings.%s' % key] = \
-#                    self.parameters['slab']['vasp_settings'][key]
+class FindSurface(FindCalculation):
+    '''
+    This task will try to find a surface calculation in either our auxiliary
+    Mongo database or our FireWorks database. If the calculation is complete,
+    then it will return the results. If the calculation is pending, it will
+    wait. If the calculation has not yet been submitted, then it will start the
+    calculation.
+
+    Args:
+        mpid            A string indicating the Materials Project ID of the
+                        bulk you want to get a surface from
+        miller_indices  A 3-tuple containing the three Miller indices of the
+                        surface you want to find
+        shift           A float indicating the shift of the surface---i.e., the
+                        termination that pymatgen finds
+        n_repeats       An integer indicating how many times the unit slab is
+                        repeated in the z-direction
+        min_height      A float indicating the minimum height of the surface
+                        you want to find
+        vasp_settings   A dictionary containing your VASP settings for the
+                        surface relaxation
+    saved output:
+        doc     When the calculation is found in our auxiliary Mongo database
+                successfully, then this task's output will be the matching
+                Mongo document (i.e., dictionary) with various information
+                about the system. Some import keys include 'fwid', 'fwname', or
+                'results'. This document should  also be able to be turned an
+                `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
+    '''
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    min_height = luigi.FloatParameter()
+    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+
+    def _load_attributes(self):
+        '''
+        Parses and saves Luigi parameters into various class attributes
+        required to run this task, as per the parent class `FindCalculation`
+        '''
+        self.gasdb_query = {'fwname.calculation_type': 'slab_surface_energy optimization',
+                            'fwname.mpid': self.mpid,
+                            'fwname.miller': self.miller_indices,
+                            'fwname.shift': {'$gte': self.shift - 1e-4,
+                                             '$lte': self.shift + 1e-4},
+                            'fwname.n_repeats': self.n_repeats}
+        self.fw_query = {'name.calculation_type': 'slab_surface_energy optimization',
+                         'name.mpid': self.mpid,
+                         'name.miller': self.miller_indices,
+                         'name.shift': {'$gte': self.shift - 1e-4,
+                                        '$lte': self.shift + 1e-4},
+                         'name.n_repeats': self.n_repeats}
+
+        for key, value in self.vasp_settings.items():
+            # We don't care if these VASP settings change
+            if key != 'isym':
+                self.gasdb_query['fwname.vasp_settings.%s' % key] = value
+                self.fw_query['name.vasp_settings.%s' % key] = value
+
+        self.dependency = MakeSurfaceFW(self.mpid,
+                                        self.miller_indices,
+                                        self.shift,
+                                        self.n_repeats,
+                                        self.vasp_settings)

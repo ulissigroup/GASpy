@@ -15,7 +15,11 @@ import pickle
 import math
 import numpy as np
 import luigi
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core.surface import SlabGenerator
 from .atoms_generators import GenerateGas, GenerateBulk, GenerateAdslabs
+from .calculation_finders import FindBulk
 from .. import defaults
 from ..mongo import make_atoms_from_doc
 from ..utils import unfreeze_dict
@@ -196,7 +200,6 @@ class MakeAdslabFW(FireworkMaker):
                                get_slab_settings=self.get_slab_settings,
                                bulk_vasp_settings=self.bulk_vasp_settings)
 
-
     def run(self, _testing=False):
         ''' Do not use `_testing=True` unless you are unit testing '''
         # Parse the possible adslab structures and find the one that matches
@@ -241,7 +244,6 @@ class MakeAdslabFW(FireworkMaker):
         if _testing is True:
             return fwork
 
-
     @staticmethod
     def _find_matching_adslab_doc(adslab_docs, adsorption_site, shift, top):
         '''
@@ -274,7 +276,6 @@ class MakeAdslabFW(FireworkMaker):
                            'that we could not enumerate. Try changing the '
                            'adsorption site, shift, top, or miller.')
 
-
     @staticmethod
     def _find_matching_adslab_doc_for_slab(adslab_docs, shift, top):
         '''
@@ -301,3 +302,91 @@ class MakeAdslabFW(FireworkMaker):
         raise RuntimeError('You just tried to make an adslab FireWork rocket '
                            'that we could not enumerate. Try changing the '
                            'shift, top, or miller.')
+
+
+class MakeSurfaceFW(FireworkMaker):
+    '''
+    This task will create and submit a surface calculation meant for surface
+    energy calculations
+
+    Args:
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to get a surface from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the surface you want to find
+        shift                   A float indicating the shift of the
+                                surface---i.e., the termination that pymatgen
+                                finds
+        min_height              A float indicating the minimum height of the
+                                surface you want to relax
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here as a
+                                dictionary.
+        vasp_settings           A dictionary containing your VASP settings for
+                                the surface relaxation
+    '''
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    min_height = luigi.FloatParameter()
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+
+    def requires(self):
+        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+
+    def run(self, _testing=False):
+        ''' Do not use `_testing=True` unless you are unit testing '''
+        atoms = self._create_surface()
+
+        # Create, package, and submit the FireWork
+        vasp_settings = unfreeze_dict(self.vasp_settings)
+        fw_name = {'calculation_type': 'surface energy',
+                   'mpid': self.mpid,
+                   'miller': self.miller_indices,
+                   'shift': self.shift,
+                   'n_repeats': self.n_repeats,
+                   'vasp_settings': vasp_settings}
+        fwork = make_firework(atoms=atoms,
+                              fw_name=fw_name,
+                              vasp_settings=vasp_settings)
+        _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
+
+        # Let Luigi know that we've made the FireWork
+        self._complete = True
+
+        # Pass out the firework for testing, if necessary
+        if _testing is True:
+            return fwork
+
+    def _create_surface(self):
+        '''
+        This method will create the surface structure to relax
+
+        Returns:
+            surface_atoms   `ase.Atoms` object of the surface to submit to
+                            Fireworks for relaxation
+        '''
+        # Get the bulk and convert to `pymatgen.Structure` object
+        with open(self.input().path, 'rb') as file_handle:
+            bulk_doc = pickle.load(file_handle)
+        bulk_atoms = make_atoms_from_doc(bulk_doc)
+        bulk_structure = AseAtomsAdaptor.get_structure(bulk_atoms)
+
+        # Use pymatgen to turn the bulk into a surface
+        sga = SpacegroupAnalyzer(bulk_structure, symprec=0.1)
+        bulk_structure = sga.get_conventional_standard_structure()
+        gen = SlabGenerator(initial_structure=bulk_structure,
+                            miller_index=self.miller_indices,
+                            **self.slab_generator_settings)
+        surface_structure = gen.get_slab(self.shift, **self.get_slab_settings)
+
+        # Convert the surface back to an `ase.Atoms` object
+        surface_atoms = AseAtomsAdaptor.get_atoms(surface_structure)
+        return surface_atoms

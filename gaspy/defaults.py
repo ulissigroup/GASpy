@@ -100,6 +100,7 @@ def slab_settings():
     to the `get_slab` method of that class.
     '''
     slab_settings = OrderedDict(max_miller=2,
+                                max_atoms=80,
                                 vasp=OrderedDict(ibrion=2,
                                                  nsw=100,
                                                  isif=0,
@@ -328,7 +329,7 @@ def surface_filters():
     # Distribute filters into mongo-readable form
     filters['results.fmax'] = {'$lt': f_max}
     filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    filters['processed_data.vasp_settings.gga'] = xc_settings()['pbesol']
+    filters['processed_data.vasp_settings.gga'] = xc_settings('pbesol')['gga']
 
     return filters
 
