@@ -142,7 +142,7 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     except:     # noqa: E722
         traceback.print_exc()
         warnings.warn('We caught the exception reported just above and moved on '
-                      'with updating the adsorption updating. Here is the '
+                      'without updating the adsorption collection. Here is the '
                       'offending document:')
         print_dict({'fwname': atoms_doc['fwname'],
                     'fwid': atoms_doc['fwid'],
