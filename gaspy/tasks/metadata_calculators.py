@@ -409,10 +409,8 @@ class CalculateSurfaceEnergy(luigi.Task):
         surface_energy, surface_energy_se = self._calculate_surface_energy(surface_docs)
 
         # Parse the results into a document to save
-        doc = {'surfaces': {n_layers: doc
-                            for n_layers, doc in zip(range(self.min_repeats,
-                                                           self.min_repeats+3),
-                                                     surface_docs)}}
+        doc = {'surface_structures': {doc['atoms']['atoms']['natoms'] + ' atoms': doc
+                                      for doc in surface_docs}}
         doc['surface_energy'] = surface_energy
         doc['surface_energy_standard_error'] = surface_energy_se
         save_task_output(self, doc)

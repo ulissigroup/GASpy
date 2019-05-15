@@ -7,61 +7,175 @@ information.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+import traceback
+import warnings
+import luigi
+from ..metadata_calculators import CalculateSurfaceEnergy
+from ..core import get_task_output, run_task
+from ...utils import unfreeze_dict
+from ...gasdb import get_mongo_collection
+from ...mongo import make_atoms_from_doc
+from ...atoms_operators import find_max_movement
 
-#class DumpToSurfaceEnergyDB(luigi.Task):
-#    ''' This class dumps the surface energies from our pickles to our tertiary databases '''
-#    parameters = luigi.DictParameter()
-#
-#    def requires(self):
-#        '''
-#        We want the slabs at various thicknessed from CalculateSlabSurfaceEnergy and
-#        the relevant bulk relaxation
-#        '''
-#        return [CalculateSlabSurfaceEnergy(self.parameters),
-#                SubmitToFW(calctype='bulk',
-#                           parameters={'bulk': self.parameters['bulk']})]
-#
-#    def run(self):
-#
-#        # Load the structures
-#        surface_energy_pkl = pickle.load(open(self.input()[0].fn, 'rb'))
-#
-#        # Extract the atoms object
-#        surface_energy_atoms = surface_energy_pkl[0]['atoms']
-#
-#        # Get the lowest energy bulk structure
-#        bulk = pickle.load(open(self.input()[1].fn, 'rb'))
-#        bulkmin = np.argmin([x['results']['energy'] for x in bulk])
-#
-#        # Calculate the movement for each relaxed slab
-#        max_surface_movement = [utils.find_max_movement(doc['atoms'], make_atoms_from_doc(doc['initial_configuration']))
-#                                for doc in surface_energy_pkl]
-#
-#        # Make a dictionary of tags to add to the database
-#        processed_data = {'vasp_settings': self.parameters['slab']['vasp_settings'],
-#                          'calculation_info': {'type': 'slab_surface_energy',
-#                                               'formula': surface_energy_atoms.get_chemical_formula('hill'),
-#                                               'mpid': self.parameters['bulk']['mpid'],
-#                                               'miller': self.parameters['slab']['miller'],
-#                                               'num_slab_atoms': len(surface_energy_atoms),
-#                                               'relaxed': True,
-#                                               'shift': surface_energy_pkl[0]['fwname']['shift']},
-#                          'FW_info': surface_energy_pkl[0]['processed_data']['FW_info'],
-#                          'surface_energy_info': surface_energy_pkl[0]['processed_data']['surface_energy_info'],
-#                          'movement_data': {'max_surface_movement': max_surface_movement}}
-#        processed_data['FW_info']['bulk'] = bulk[bulkmin]['fwid']
-#        surface_energy_pkl_slab = make_doc_from_atoms(surface_energy_atoms)
-#        surface_energy_pkl_slab['initial_configuration'] = surface_energy_pkl[0]['initial_configuration']
-#        surface_energy_pkl_slab['processed_data'] = processed_data
-#
-#        # Write the entry into the database
-#        with gasdb.get_mongo_collection('surface_energy') as collection:
-#            collection.insert_one(surface_energy_pkl_slab)
-#
-#        # Write a blank token file to indicate this was done so that the entry is not written again
-#        with self.output().temporary_path() as self.temp_output_path:
-#            with open(self.temp_output_path, 'w') as fhandle:
-#                fhandle.write(' ')
-#
-#    def output(self):
-#        return luigi.LocalTarget(GASDB_PATH+'/pickles/%s/%s.pkl' % (type(self).__name__, self.task_id))
+
+def update_surface_energy_collection():
+    '''
+    This function will parse and dump all of the completed surface energy
+    calculations in our `atoms` Mongo collection into our `surface_energy`
+    collection. It will not dump anything that is already there.
+
+    Args:
+        n_processes     An integer indicating how many threads you want to use
+                        when running the tasks. If you do not expect many
+                        updates, stick to the default of 1, or go up to 4. If
+                        you are re-creating your collection from scratch, you
+                        may want to want to increase this argument as high as
+                        you can.
+    '''
+    # Identify the surfaces that have been at least partially calculated, but
+    # not yet added to the surface energy collection
+    atoms_docs = _find_atoms_docs_not_in_surface_energy_collection()
+    surfaces = set()
+    for doc in atoms_docs:
+        mpid = doc['fwname']['mpid']
+        miller_indices = doc['fwname']['miller']
+        shift = round(doc['fwname']['shift'], 2)
+        vasp_settings = doc['fwname']['vasp_settings']
+        surface = (mpid, miller_indices, shift, vasp_settings)
+        surfaces.add(surface)
+
+    # Create a `CalculateSurfaceEnergy` task for each surface energy
+    # calculation that is in-progress. Then find which ones are done.
+    tasks = [CalculateSurfaceEnergy(mpid=mpid,
+                                    miller_indices=miller_indices,
+                                    shift=miller,
+                                    vasp_settings=vasp_settings)
+             for mpid, miller, shift, vasp_settings in surfaces]
+    completed_tasks = __run_calculate_surface_energy_tasks(tasks)
+
+    # Parse the tasks into documents for us to save
+    surface_energy_docs = [__create_surface_energy_doc(task)
+                           for task in completed_tasks]
+    with get_mongo_collection('surface_energy') as collection:
+        collection.insert_many(surface_energy_docs)
+
+
+def _find_atoms_docs_not_in_surface_energy_collection():
+    '''
+    This function will get the Mongo documents of surface energy calculations
+    that are inside our `atoms` collection, but not inside our `surface_energy`
+    collection.
+
+    Returns:
+        missing_docs    A list of surface energy documents from the `atoms`
+                        collection that have not yet been added to the
+                        `surface_energy` collection.
+    '''
+    # Find the FWIDs of the documents inside our surface energy collection
+    with get_mongo_collection('surface_energy') as collection:
+        surface_energy_docs = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
+    fwids_in_se = {fwid for doc in surface_energy_docs for fwid in doc['fwids']}
+
+    # Find the FWIDs of the documents inside our atoms collection
+    with get_mongo_collection('atoms') as collection:
+        query = {'fwname.calculation_type': 'surface energy optimization'}
+        projection = {'fwid': 'fwid', '_id': 0}
+        docs_atoms = list(collection.find(query, projection))
+        fwids_in_atoms = {doc['fwid'] for doc in docs_atoms}
+
+        # Pull the atoms documents of everything that's missing from our
+        # adsorption collection. Although we use `find` a second time, this
+        # time we are getting the whole document (not just the FWID), so we
+        # only want to do this for the things we need.
+        fwids_missing = fwids_in_atoms - fwids_in_se
+        missing_docs = list(collection.find({'fwid': {'$in': list(fwids_missing)}}))
+    return missing_docs
+
+
+def __run_calculate_surface_energy_tasks(tasks):
+    '''
+    This function will run some tasks for you and return the ones that
+    successfully completed.
+
+    Args:
+        tasks   A list of `luigi.Task` objects, preferably ones from
+                `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy`
+    Returns:
+        completed_tasks     A list of the `tasks` arguments containing only
+                            tasks that were completed successfully.
+    '''
+    completed_tasks = []
+    for task in tasks:
+
+        # Run each task again in case the relaxations are all done, but we just
+        # haven't calculated the surface energy yet
+        try:
+            run_task(task)
+
+        # If a task has failed and not produced an output, we don't want that to
+        # stop us from updating the successful runs.
+        except FileNotFoundError:
+            continue
+
+        # If the output already exists, then load and return it
+        except luigi.target.FileAlreadyExists:
+            completed_tasks.append(task)
+
+        # If some other error pops up, then we want to report it. But we also want
+        # to move on so that we can still update other things.
+        except:     # noqa: E722
+            traceback.print_exc()
+            warnings.warn('We caught the exception reported just above and '
+                          'moved on without updating the collection. Here is '
+                          'the offending surface energy calculation information: '
+                          ' (%s, %s, %s, %s)'
+                          % (task.mpid, task.mpid, task.shift,
+                             unfreeze_dict(task.vasp_settings)))
+    return completed_tasks
+
+
+def __create_surface_energy_doc(surface_energy_task):
+    '''
+    This function will create a Mongo document for the `surface_energy`
+    collection given the output of the `CalculateSurfaceEnergy` task.
+
+    Arg:
+        surface_energy_task     An instance of a completed
+                                `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy`
+                                task
+    Returns:
+        doc     A modified form of the dictionary created by the
+                `CalculateSurfaceEnergy` task
+    '''
+    # The output of the task to calculate surface energies will provide the
+    # template for the document in our Mongo collection
+    doc = get_task_output(surface_energy_task)
+    doc['movement_data'] = {}
+    doc['fwids'] = {}
+    doc['calculation_dates'] = {}
+    doc['fw_directories'] = {}
+
+    # Figure out how far each of the structures moved during relaxation.
+    for n_atoms, surface_doc in doc['surface_structures'].items():
+        initial_atoms = make_atoms_from_doc(surface_doc['initial_configuration'])
+        final_atoms = make_atoms_from_doc(surface_doc)
+        max_movement = find_max_movement(initial_atoms, final_atoms)
+        doc['movement_data'][n_atoms] = max_movement
+
+        # Move some information from the individual surface documents to the
+        # higher-level surface energy document
+        doc['fwids'][n_atoms] = surface_doc['fwid']
+        doc['calculation_dates'][n_atoms] = surface_doc['calculation_date']
+        doc['fw_directories'][n_atoms] = surface_doc['directory']
+        del surface_doc['fwid']
+        del surface_doc['calculation_date']
+        del surface_doc['directory']
+        del surface_doc['fwname']   # This is just redundant information
+
+    # Record the calculation settings
+    doc['mpid'] = surface_energy_task.mpid
+    doc['miller'] = surface_energy_task.miller
+    doc['shift'] = surface_energy_task.shift
+    doc['vasp_settings'] = unfreeze_dict(surface_energy_task.vasp_settings)
+
+    return doc

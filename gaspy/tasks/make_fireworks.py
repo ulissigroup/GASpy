@@ -347,7 +347,7 @@ class MakeSurfaceFW(FireworkMaker):
 
         # Create, package, and submit the FireWork
         vasp_settings = unfreeze_dict(self.vasp_settings)
-        fw_name = {'calculation_type': 'surface energy',
+        fw_name = {'calculation_type': 'surface energy optimization',
                    'mpid': self.mpid,
                    'miller': self.miller_indices,
                    'shift': self.shift,
@@ -385,7 +385,7 @@ class MakeSurfaceFW(FireworkMaker):
         gen = SlabGenerator(initial_structure=bulk_structure,
                             miller_index=self.miller_indices,
                             **self.slab_generator_settings)
-        surface_structure = gen.get_slab(self.shift, **self.get_slab_settings)
+        surface_structure = gen.get_slab(self.shift, tol=self.get_slab_settings['tol'])
 
         # Convert the surface back to an `ase.Atoms` object
         surface_atoms = AseAtomsAdaptor.get_atoms(surface_structure)
