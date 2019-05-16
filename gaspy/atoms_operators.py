@@ -101,6 +101,9 @@ def constrain_slab(atoms, z_cutoff=3.):
                     any adsorbate atom is tagged with a positive integer.
         z_cutoff    The threshold to see if slab atoms are in the same plane as
                     the highest atom in the slab
+    Returns:
+        atoms   A deep copy of the `atoms` argument, but where the appropriate
+                atoms are constrained
     '''
     # Work on a copy so that we don't modify the original
     atoms = atoms.copy()
