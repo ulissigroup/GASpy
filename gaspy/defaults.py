@@ -110,7 +110,7 @@ def slab_settings():
                                                  ediffg=-0.03,
                                                  encut=350.,
                                                  pp_version=pp_version(),
-                                                 **xc_settings()),
+                                                 **xc_settings('pbesol')),
                                 slab_generator_settings=OrderedDict(min_slab_size=7.,
                                                                     min_vacuum_size=20.,
                                                                     lll_reduce=False,

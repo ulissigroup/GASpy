@@ -9,16 +9,17 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import traceback
 import warnings
+from datetime import datetime
 import luigi
-from ..metadata_calculators import CalculateSurfaceEnergy
 from ..core import get_task_output, run_task
-from ...utils import unfreeze_dict
+from ..metadata_calculators import CalculateSurfaceEnergy
+from ...utils import unfreeze_dict, multimap
 from ...gasdb import get_mongo_collection
 from ...mongo import make_atoms_from_doc
 from ...atoms_operators import find_max_movement
 
 
-def update_surface_energy_collection():
+def update_surface_energy_collection(n_processes=1):
     '''
     This function will parse and dump all of the completed surface energy
     calculations in our `atoms` Mongo collection into our `surface_energy`
@@ -38,24 +39,41 @@ def update_surface_energy_collection():
     surfaces = set()
     for doc in atoms_docs:
         mpid = doc['fwname']['mpid']
-        miller_indices = doc['fwname']['miller']
-        shift = round(doc['fwname']['shift'], 2)
+        miller_indices = tuple(doc['fwname']['miller'])
+        shift = round(doc['fwname']['shift'], 3)
+        # We'll need to make the vasp_settings hashable
         vasp_settings = doc['fwname']['vasp_settings']
+        vasp_settings['kpts'] = tuple(vasp_settings['kpts'])  # make hashable
+        vasp_settings = tuple((key, value) for key, value in vasp_settings.items())
+        # Define a surface according to mpid, miller, shift, and calculation
+        # settings
         surface = (mpid, miller_indices, shift, vasp_settings)
         surfaces.add(surface)
 
     # Create a `CalculateSurfaceEnergy` task for each surface energy
-    # calculation that is in-progress. Then find which ones are done.
+    # calculation that is in-progress.
     tasks = [CalculateSurfaceEnergy(mpid=mpid,
                                     miller_indices=miller_indices,
-                                    shift=miller,
-                                    vasp_settings=vasp_settings)
-             for mpid, miller, shift, vasp_settings in surfaces]
-    completed_tasks = __run_calculate_surface_energy_tasks(tasks)
+                                    shift=shift,
+                                    vasp_settings={key: value for key, value in vasp_settings})
+             for mpid, miller_indices, shift, vasp_settings in surfaces]
 
-    # Parse the tasks into documents for us to save
-    surface_energy_docs = [__create_surface_energy_doc(task)
-                           for task in completed_tasks]
+    # Run each task and then see which ones are done
+    print('[%s] Calculating adsorption energies...' % datetime.now())
+    multimap(__run_calculate_surface_energy_task, tasks,
+             processes=n_processes, maxtasksperchild=10, chunksize=100,
+             n_calcs=len(tasks))
+    completed_tasks = [task for task in tasks if task.complete()]
+
+    # Parse the completed tasks into documents for us to save
+    print('[%s] Creating adsorption documents...' % datetime.now())
+    surface_energy_docs = multimap(__create_surface_energy_doc,
+                                   completed_tasks,
+                                   processes=n_processes,
+                                   maxtasksperchild=1,
+                                   chunksize=100,
+                                   n_calcs=len(completed_tasks))
+
     with get_mongo_collection('surface_energy') as collection:
         collection.insert_many(surface_energy_docs)
 
@@ -92,46 +110,40 @@ def _find_atoms_docs_not_in_surface_energy_collection():
     return missing_docs
 
 
-def __run_calculate_surface_energy_tasks(tasks):
+def __run_calculate_surface_energy_task(task):
     '''
     This function will run some tasks for you and return the ones that
     successfully completed.
 
     Args:
-        tasks   A list of `luigi.Task` objects, preferably ones from
+        task    A list of `luigi.Task` objects, preferably ones from
                 `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy`
-    Returns:
-        completed_tasks     A list of the `tasks` arguments containing only
-                            tasks that were completed successfully.
     '''
-    completed_tasks = []
-    for task in tasks:
+    # Run each task again in case the relaxations are all done, but we just
+    # haven't calculated the surface energy yet
+    try:
+        run_task(task)
 
-        # Run each task again in case the relaxations are all done, but we just
-        # haven't calculated the surface energy yet
-        try:
-            run_task(task)
+    # If a task has failed and not produced an output, we don't want that to
+    # stop us from updating the successful runs.
+    except FileNotFoundError:
+        pass
 
-        # If a task has failed and not produced an output, we don't want that to
-        # stop us from updating the successful runs.
-        except FileNotFoundError:
-            continue
+    # If the output already exists, then move on
+    except luigi.target.FileAlreadyExists:
+        pass
 
-        # If the output already exists, then load and return it
-        except luigi.target.FileAlreadyExists:
-            completed_tasks.append(task)
-
-        # If some other error pops up, then we want to report it. But we also want
-        # to move on so that we can still update other things.
-        except:     # noqa: E722
-            traceback.print_exc()
-            warnings.warn('We caught the exception reported just above and '
-                          'moved on without updating the collection. Here is '
-                          'the offending surface energy calculation information: '
-                          ' (%s, %s, %s, %s)'
-                          % (task.mpid, task.mpid, task.shift,
-                             unfreeze_dict(task.vasp_settings)))
-    return completed_tasks
+    # If some other error pops up, then we want to report it. But we also want
+    # to move on so that we can still update other things.
+    except:     # noqa: E722
+        traceback.print_exc()
+        warnings.warn('We caught the exception reported just above and '
+                      'moved on without updating the collection. Here is '
+                      'the offending surface energy calculation information: '
+                      ' (%s, %s, %s, %s)'
+                      % (task.mpid, task.miller_indices, task.shift,
+                         unfreeze_dict(task.vasp_settings)))
+        raise
 
 
 def __create_surface_energy_doc(surface_energy_task):
@@ -145,7 +157,43 @@ def __create_surface_energy_doc(surface_energy_task):
                                 task
     Returns:
         doc     A modified form of the dictionary created by the
-                `CalculateSurfaceEnergy` task
+                `CalculateSurfaceEnergy` task. Will have the following keys:
+                    surface_structures              Dictionaries for each of
+                                                    the surfaces whose keys
+                                                    indicate the number of
+                                                    atoms and whose values are
+                                                    the corresponding documents
+                                                    found in the `atoms`
+                                                    collection
+                                                    `gaspy.mongo.make_doc_from_atoms`.
+                    surface_energy                  A float indicating the
+                                                    surface energy in
+                                                    eV/Angstrom**2
+                    surface_energy_standard_error   A float indicating the
+                                                    standard error of our
+                                                    estimate of the surface
+                                                    energy
+                    movement_data                   A dictionary whose keys are
+                                                    the number of atoms of each
+                                                    surface and whose values
+                                                    are the maximum distance a
+                                                    single atom moved during
+                                                    relaxation.
+                    fwids                           A dictionary whose keys are
+                                                    the number of atoms of each
+                                                    surface and whose values
+                                                    are the FWID
+                    calculation_dates               A dictionary whose keys are
+                                                    the number of atoms of each
+                                                    surface and whose values
+                                                    are the date the calculation
+                                                    finished.
+                    fw_directories                  A dictionary whose keys are
+                                                    the number of atoms of each
+                                                    surface and whose values
+                                                    are the directories where
+                                                    the corresponding FireWork
+                                                    ran
     '''
     # The output of the task to calculate surface energies will provide the
     # template for the document in our Mongo collection

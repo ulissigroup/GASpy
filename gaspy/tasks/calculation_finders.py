@@ -7,8 +7,15 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import warnings
+from copy import deepcopy
+import pickle
 import luigi
+from ase.constraints import FixAtoms
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core.surface import SlabGenerator
 from .. import defaults
+from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import find_n_rockets
 from .core import save_task_output, make_task_output_object, get_task_output
@@ -331,7 +338,7 @@ class FindAdslab(FindCalculation):
                                                          '$lte': self.adsorption_site[2] + 1e-2},
                             'fwname.mpid': self.mpid,
                             'fwname.miller': self.miller_indices,
-                            'fwname.shift': {'$gte': self.shift - 1e-4,
+                            'fwname.shift': {'$gte': self.shift - 1e-3,
                                              '$lte': self.shift + 1e-4},
                             'fwname.top': self.top,
                             'fwname.adsorbate_rotation.phi': self.rotation['phi'],
@@ -347,8 +354,8 @@ class FindAdslab(FindCalculation):
                                                     '$lte': self.adsorption_site[2] + 1e-2},
                          'name.mpid': self.mpid,
                          'name.miller': self.miller_indices,
-                         'name.shift': {'$gte': self.shift - 1e-4,
-                                        '$lte': self.shift + 1e-4},
+                         'name.shift': {'$gte': self.shift - 1e-3,
+                                        '$lte': self.shift + 1e-3},
                          'name.top': self.top,
                          'name.adsorbate_rotation.phi': self.rotation['phi'],
                          'name.adsorbate_rotation.theta': self.rotation['theta'],
@@ -401,18 +408,26 @@ class FindSurface(FindCalculation):
     calculation.
 
     Args:
-        mpid            A string indicating the Materials Project ID of the
-                        bulk you want to get a surface from
-        miller_indices  A 3-tuple containing the three Miller indices of the
-                        surface you want to find
-        shift           A float indicating the shift of the surface---i.e., the
-                        termination that pymatgen finds
-        n_repeats       An integer indicating how many times the unit slab is
-                        repeated in the z-direction
-        min_height      A float indicating the minimum height of the surface
-                        you want to find
-        vasp_settings   A dictionary containing your VASP settings for the
-                        surface relaxation
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to get a surface from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the surface you want to find
+        shift                   A float indicating the shift of the
+                                surface---i.e., the termination that pymatgen
+                                finds
+        min_height              A float indicating the minimum height of the
+                                surface you want to find
+        vasp_settings           A dictionary containing your VASP settings for
+                                the surface relaxation
+        bulk_vasp_settings      A dictionary containing the VASP settings of
+                                the relaxed bulk to enumerate slabs from
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here as a
+                                dictionary.
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
@@ -426,33 +441,130 @@ class FindSurface(FindCalculation):
     shift = luigi.FloatParameter()
     min_height = luigi.FloatParameter()
     vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    # Should explicitly remove the `min_slab_size` key/value from here, because
+    # it will be overridden
+    slab_generator_settings = deepcopy(SLAB_SETTINGS['slab_generator_settings'])
+    del slab_generator_settings['min_slab_size']
+    slab_generator_settings = luigi.DictParameter(slab_generator_settings)
+
+    def requires(self):
+        '''
+        This calculation finder is different because we need to create the
+        `ase.Atoms` objects BEFORE performing the queries, because the queries
+        will contain the number of atoms. And we don't know the number of atoms
+        until we make the `ase.Atoms` object.
+        '''
+        from .calculation_finders import FindBulk
+        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
 
     def _load_attributes(self):
         '''
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
-        self.gasdb_query = {'fwname.calculation_type': 'slab_surface_energy optimization',
+        # Need to create the slab in order to figure out how many atoms it has,
+        # which we'll be using in the queries
+        atoms = self._create_surface()
+        n_atoms = len(atoms)
+
+        # Required of all `FindCalculation` classes
+        self.gasdb_query = {'fwname.calculation_type': 'surface energy optimization',
                             'fwname.mpid': self.mpid,
                             'fwname.miller': self.miller_indices,
-                            'fwname.shift': {'$gte': self.shift - 1e-4,
-                                             '$lte': self.shift + 1e-4},
-                            'fwname.n_repeats': self.n_repeats}
-        self.fw_query = {'name.calculation_type': 'slab_surface_energy optimization',
+                            'fwname.shift': {'$gte': self.shift - 1e-3,
+                                             '$lte': self.shift + 1e-3},
+                            'atoms.natoms': n_atoms}
+        self.fw_query = {'name.calculation_type': 'surface energy optimization',
                          'name.mpid': self.mpid,
                          'name.miller': self.miller_indices,
-                         'name.shift': {'$gte': self.shift - 1e-4,
-                                        '$lte': self.shift + 1e-4},
-                         'name.n_repeats': self.n_repeats}
-
+                         'name.shift': {'$gte': self.shift - 1e-3,
+                                        '$lte': self.shift + 1e-3},
+                         'name.num_slab_atoms': n_atoms}
+        # Parse the VASP settings
         for key, value in self.vasp_settings.items():
             # We don't care if these VASP settings change
             if key != 'isym':
                 self.gasdb_query['fwname.vasp_settings.%s' % key] = value
                 self.fw_query['name.vasp_settings.%s' % key] = value
 
-        self.dependency = MakeSurfaceFW(self.mpid,
-                                        self.miller_indices,
-                                        self.shift,
-                                        self.n_repeats,
-                                        self.vasp_settings)
+        # We want to pass the atoms object to the `MakeSurfaceFW` task, but
+        # Luigi doesn't accept `ase.Atoms` arguments. So we package it into a
+        # dictionary/document.
+        atoms_doc = make_doc_from_atoms(atoms)
+        # Delete some keys that Luigi doesn't like
+        del atoms_doc['ctime']
+        del atoms_doc['mtime']
+
+        self.dependency = MakeSurfaceFW(atoms_doc=atoms_doc,
+                                        mpid=self.mpid,
+                                        miller_indices=self.miller_indices,
+                                        shift=self.shift,
+                                        vasp_settings=self.vasp_settings)
+
+    def _create_surface(self):
+        '''
+        This method will create the surface structure to relax
+
+        Returns:
+            surface_atoms_constrained   `ase.Atoms` object of the surface to
+                                        submit to Fireworks for relaxation
+        '''
+        # Get the bulk and convert to `pymatgen.Structure` object
+        with open(self.input().path, 'rb') as file_handle:
+            bulk_doc = pickle.load(file_handle)
+        bulk_atoms = make_atoms_from_doc(bulk_doc)
+        bulk_structure = AseAtomsAdaptor.get_structure(bulk_atoms)
+
+        # Use pymatgen to turn the bulk into a surface
+        sga = SpacegroupAnalyzer(bulk_structure, symprec=0.1)
+        bulk_structure = sga.get_conventional_standard_structure()
+        gen = SlabGenerator(initial_structure=bulk_structure,
+                            miller_index=self.miller_indices,
+                            min_slab_size=self.min_height,
+                            **self.slab_generator_settings)
+        surface_structure = gen.get_slab(self.shift, tol=self.get_slab_settings['tol'])
+
+        # Convert the surface back to an `ase.Atoms` object and constrain
+        # subsurface atoms
+        surface_atoms = AseAtomsAdaptor.get_atoms(surface_structure)
+        surface_atoms_constrained = self.__constrain_surface(surface_atoms)
+        return surface_atoms_constrained
+
+    @staticmethod
+    def __constrain_surface(atoms, z_cutoff=3.):
+        '''
+        Constrains the sub-surface atoms of a surface energy slab. This differs
+        from `gaspy.atoms_operators.constrain_slab` in that it allows both the
+        top and bottom atoms of the slab to be free, not just the top.
+
+        Arg:
+            atoms       ASE-atoms class of the slab system
+            z_cutoff    The threshold to see if slab atoms are in the same
+                        plane as the highest atom in the slab
+        Returns:
+            atoms   A deep copy of the `atoms` argument, but where the
+                    appropriate atoms are constrained
+        '''
+        # Work on a copy so that we don't modify the original
+        atoms = atoms.copy()
+
+        # We'll be making a `mask` list to feed to the `FixAtoms` class. This
+        # list should contain a `True` if we want an atom to be constrained,
+        # and `False` otherwise
+        mask = []
+
+        # Fix any atoms that are `z_cutoff` Angstroms higher than the lowest
+        # atom or `z_cutoff` atoms lower than the highest atom.
+        z_positions = [atom.position[2] for atom in atoms]
+        upper_cutoff = max(z_positions) - z_cutoff
+        lower_cutoff = min(z_positions) + z_cutoff
+        for atom in atoms:
+            if lower_cutoff < atom.position[2] < upper_cutoff:
+                mask.append(True)
+            else:
+                mask.append(False)
+
+        atoms.constraints += [FixAtoms(mask=mask)]
+        return atoms

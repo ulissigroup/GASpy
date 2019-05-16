@@ -7,14 +7,13 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import sys
 import pickle
-from copy import deepcopy
 import numpy as np
 import luigi
-import statsmodel.api as statsmodels
+import statsmodels.api as statsmodels
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
-from .core import save_task_output, make_task_output_object
+from .core import save_task_output, make_task_output_object, get_task_output
 from .calculation_finders import FindBulk, FindGas, FindAdslab, FindSurface
 from ..mongo import make_atoms_from_doc
 from .. import utils
@@ -256,11 +255,18 @@ class CalculateSurfaceEnergy(luigi.Task):
                                 the relaxed bulk to enumerate surfaces from
     Returns::
         doc A dictionary with the following keys:
-                surface_energy  A float indicating the surface energy in
-                                eV/Angstrom**2
-                fwids           A subdictionary whose keys are 'adslab' and
-                                'slab', and whose values are the FireWork
-                                IDs of the respective calculations.
+                surface_structures              Dictionaries for each of the
+                                                surfaces whose keys indicate
+                                                the number of atoms and whose
+                                                values are the corresponding
+                                                documents found in the `atoms`
+                                                collection
+                                                `gaspy.mongo.make_doc_from_atoms`.
+                surface_energy                  A float indicating the surface
+                                                energy in eV/Angstrom**2
+                surface_energy_standard_error   A float indicating the standard
+                                                error of our estimate of the
+                                                surface energy
     '''
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
@@ -279,13 +285,12 @@ class CalculateSurfaceEnergy(luigi.Task):
         then just call it first in `run`.
         '''
         # Define our static dependency, the bulk relaxation
-        bulk_target = FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+        find_bulk_task = FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
 
         # If our dependency is done, then save the relaxed bulk atoms object as
         # an attribute for use by the other methods
         try:
-            with open(bulk_target.path, 'rb') as file_handle:
-                bulk_doc = pickle.load(file_handle)
+            bulk_doc = get_task_output(find_bulk_task)
             self.bulk_atoms = make_atoms_from_doc(bulk_doc)
 
             # Let's not calculate the surface energy if it requires us to relax a
@@ -296,7 +301,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         # the dependency task anyway
         except FileNotFoundError:
             pass
-        return bulk_target
+        return find_bulk_task
 
     def __terminate_if_too_large(self):
         '''
@@ -320,12 +325,12 @@ class CalculateSurfaceEnergy(luigi.Task):
 
         # Throw an error if it's too big
         if max_slab_size > self.max_atoms:
-            raise RuntimeError('Cannot calculate surface energy of %s %s '
+            raise RuntimeError('Cannot calculate surface energy of (%s, %s, %s) '
                                'because we would need to perform a relaxation on '
                                'a slab with %i atoms, which exceeds the limit of '
                                '%i. Increase the `max_atoms` argument if you '
                                'really want to run it anyway.'
-                               % (self.mpid, self.miller_indices,
+                               % (self.mpid, self.miller_indices, self.shift,
                                   max_slab_size, self.max_atoms))
 
         self.min_repeats = min_unit_slab_repeats
@@ -346,7 +351,7 @@ class CalculateSurfaceEnergy(luigi.Task):
 
             # Delete some slab generator settings that we don't care about for a
             # unit slab
-            slab_generator_settings = deepcopy(self.slab_generator_settings)
+            slab_generator_settings = utils.unfreeze_dict(self.slab_generator_settings)
             del slab_generator_settings['min_vacuum_size']
             del slab_generator_settings['min_slab_size']
 
@@ -374,7 +379,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         # Calculate the height of each slab
         surface_relaxation_tasks = []
         for n_repeats in range(self.min_repeats, self.min_repeats+3):
-            min_height = self.unit_slab_height * n_repeats
+            min_height = n_repeats * self.unit_slab_height
 
             # Instantiate and return each task
             task = FindSurface(mpid=self.mpid,
@@ -383,6 +388,15 @@ class CalculateSurfaceEnergy(luigi.Task):
                                min_height=min_height,
                                vasp_settings=self.vasp_settings)
             surface_relaxation_tasks.append(task)
+
+        # Save these tasks as an attribute so we can use the actual tasks later.
+        # We do this because we need to hack Luigi by using
+        # `gaspy.tasks.core.run_task` instead of
+        # `gaspy.tasks.core.schedule_tasks`, but `run_task` doesn't play well
+        # with dynamic dependencies.
+        self.surface_relaxation_tasks = surface_relaxation_tasks
+
+        # Need to return/yield it anyway for Luigi's sake
         return surface_relaxation_tasks
 
     def run(self):
@@ -395,12 +409,12 @@ class CalculateSurfaceEnergy(luigi.Task):
         '''
         # Run the dependencies first
         yield self._static_requires()
-        surface_relaxation_targets = yield self._dynamic_requires()
+        yield self._dynamic_requires()
 
         # Fetch the results of the surface relaxations
         surface_docs = []
-        for target in surface_relaxation_targets:
-            with open(target.path, 'rb') as file_handle:
+        for task in self.surface_relaxation_tasks:
+            with open(task.output().path, 'rb') as file_handle:
                 surface_doc = pickle.load(file_handle)
             surface_docs.append(surface_doc)
 
@@ -409,7 +423,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         surface_energy, surface_energy_se = self._calculate_surface_energy(surface_docs)
 
         # Parse the results into a document to save
-        doc = {'surface_structures': {doc['atoms']['atoms']['natoms'] + ' atoms': doc
+        doc = {'surface_structures': {str(doc['atoms']['natoms']) + ' atoms': doc
                                       for doc in surface_docs}}
         doc['surface_energy'] = surface_energy
         doc['surface_energy_standard_error'] = surface_energy_se
