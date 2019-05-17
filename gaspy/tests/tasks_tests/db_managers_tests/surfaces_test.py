@@ -15,18 +15,42 @@ from ....tasks.db_managers.surfaces import (update_surface_energy_collection,
                                             __create_surface_energy_doc)
 
 # Things we need to do the testing
+import warnings
 import datetime
 import ase
-from gaspy.gasdb import get_mongo_collection
-from gaspy.mongo import make_atoms_from_doc
-from gaspy.tasks.core import get_task_output, schedule_tasks
-from gaspy.tasks.calculation_finders import FindBulk
-from gaspy.tasks.metadata_calculators import CalculateSurfaceEnergy
 from ..utils import clean_up_tasks
+from ...test_cases.mongo_test_collections.mongo_utils import populate_unit_testing_collection
+from ....gasdb import get_mongo_collection
+from ....mongo import make_atoms_from_doc
+from ....tasks.core import get_task_output, schedule_tasks
+from ....tasks.calculation_finders import FindBulk
+from ....tasks.metadata_calculators import CalculateSurfaceEnergy
 
 
 def test_update_surface_energy_collection():
-    assert False
+    '''
+    This may seem like a crappy test, but we really rely on unit testing of the
+    sub-functions for integrity testing.
+    '''
+    try:
+        # Clear out the surface energy collection before testing
+        with get_mongo_collection('surface_energy') as collection:
+            collection.delete_many({})
+
+        # Try to add documents to the collection
+        with warnings.catch_warnings():  # Ignore warnings for now
+            warnings.simplefilter('ignore')
+            update_surface_energy_collection()
+
+        # Test if we did add anything
+        with get_mongo_collection('surface_energy') as collection:
+            assert collection.count_documents({}) > 0
+
+    # Reset the surface energy collection behind us
+    finally:
+        with get_mongo_collection('surface_energy') as collection:
+            collection.delete_many({})
+        populate_unit_testing_collection('surface_energy')
 
 
 def test__find_atoms_docs_not_in_surface_energy_collection():
