@@ -74,8 +74,12 @@ def update_surface_energy_collection(n_processes=1):
                                    chunksize=100,
                                    n_calcs=len(completed_tasks))
 
+    print('[%s] Creating %i new entries in the surface energy collection...'
+          % (datetime.now(), len(surface_energy_docs)))
     with get_mongo_collection('surface_energy') as collection:
         collection.insert_many(surface_energy_docs)
+    print('[%s] Created %i new entries in the surface energy collection'
+          % (datetime.now(), len(surface_energy_docs)))
 
 
 def _find_atoms_docs_not_in_surface_energy_collection():
@@ -143,7 +147,6 @@ def __run_calculate_surface_energy_task(task):
                       ' (%s, %s, %s, %s)'
                       % (task.mpid, task.miller_indices, task.shift,
                          unfreeze_dict(task.vasp_settings)))
-        raise
 
 
 def __create_surface_energy_doc(surface_energy_task):
@@ -222,7 +225,7 @@ def __create_surface_energy_doc(surface_energy_task):
 
     # Record the calculation settings
     doc['mpid'] = surface_energy_task.mpid
-    doc['miller'] = surface_energy_task.miller
+    doc['miller'] = surface_energy_task.miller_indices
     doc['shift'] = surface_energy_task.shift
     doc['vasp_settings'] = unfreeze_dict(surface_energy_task.vasp_settings)
 
