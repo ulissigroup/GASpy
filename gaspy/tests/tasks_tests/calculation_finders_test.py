@@ -12,13 +12,15 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 from ...tasks.calculation_finders import (FindCalculation,
                                           FindGas,
                                           FindBulk,
-                                          FindAdslab)
+                                          FindAdslab,
+                                          FindSurface)
 
 # Things we need to do the tests
 import pytest
 import warnings
 import math
 import luigi
+import ase
 from .utils import clean_up_tasks
 from ... import defaults
 from ...utils import unfreeze_dict
@@ -26,10 +28,12 @@ from ...mongo import make_atoms_from_doc
 from ...tasks.core import get_task_output
 from ...tasks.make_fireworks import (MakeGasFW,
                                      MakeBulkFW,
-                                     MakeAdslabFW)
+                                     MakeAdslabFW,
+                                     MakeSurfaceFW)
 
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
+SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
@@ -282,7 +286,70 @@ def test_FindAdslab_unsuccessfully():
         assert dependency.top == top
         assert dependency.adsorbate_name == adsorbate_name
         assert unfreeze_dict(dependency.rotation) == rotation
+        assert dependency.miller_indices == miller_indices
+        assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
+
+    finally:
+        clean_up_tasks()
+
+
+def test_FindSurface_successfully():
+    '''
+    If we ask this task to find something that is there, it should return
+    the correct Mongo document/dictionary
+    '''
+    mpid = 'mp-1018129'
+    miller_indices = (0, 1, 1)
+    shift = 0.5
+    min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
+    vasp_settings = SLAB_SETTINGS['vasp']
+    task = FindSurface(mpid=mpid,
+                       miller_indices=miller_indices,
+                       shift=shift,
+                       min_height=min_height,
+                       vasp_settings=vasp_settings)
+
+    try:
+        _run_task_with_dynamic_dependencies(task.requires())
+        _run_task_with_dynamic_dependencies(task)
+        doc = get_task_output(task)
+        assert doc['fwname']['calculation_type'] == 'surface energy optimization'
+        assert doc['fwname']['mpid'] == mpid
+        assert math.isclose(doc['fwname']['shift'], shift)
+        assert tuple(doc['fwname']['miller']) == miller_indices
+        assert task.min_height == min_height
+        _assert_vasp_settings(doc, vasp_settings)
+
+        # Make sure we can turn it into an atoms object
+        assert isinstance(make_atoms_from_doc(doc), ase.Atoms)
+
+    finally:
+        clean_up_tasks()
+
+
+def test_FindSurface_unsuccessfully():
+    '''
+    If we ask this task to find something that is not there, it should return
+    the correct dependency
+    '''
+    mpid = 'mp-1018129'
+    miller_indices = (0, 1, 1)
+    shift = 90001.
+    min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
+    vasp_settings = SLAB_SETTINGS['vasp']
+    task = FindSurface(mpid=mpid,
+                       miller_indices=miller_indices,
+                       shift=shift,
+                       min_height=min_height,
+                       vasp_settings=vasp_settings)
+
+    try:
+        _run_task_with_dynamic_dependencies(task.requires())
+        dependency = _run_task_with_dynamic_dependencies(task)
+        assert isinstance(dependency, MakeSurfaceFW)
         assert dependency.mpid == mpid
+        assert dependency.miller_indices == miller_indices
+        assert dependency.shift == shift
         assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
 
     finally:
