@@ -175,7 +175,7 @@ def __create_surface_energy_doc(surface_energy_task):
                                                     standard error of our
                                                     estimate of the surface
                                                     energy
-                    movement_data                   A list containing three
+                    max_atom_movement               A list containing three
                                                     floats, where each float is
                                                     the maximum distance a
                                                     single atom moved during

@@ -15,6 +15,9 @@ from ....tasks.db_managers.surfaces import (update_surface_energy_collection,
                                             __create_surface_energy_doc)
 
 # Things we need to do the testing
+import datetime
+import ase
+from gaspy.mongo import make_atoms_from_doc
 from gaspy.tasks.core import get_task_output, schedule_tasks
 from gaspy.tasks.calculation_finders import FindBulk
 from gaspy.tasks.metadata_calculators import CalculateSurfaceEnergy
@@ -63,4 +66,26 @@ def test___run_calculate_surface_energy_task():
 
 
 def test___create_surface_energy_doc():
-    assert False
+    try:
+        # We need to run the task before making a document for it
+        bulk_task = FindBulk(mpid='mp-1018129')
+        schedule_tasks([bulk_task], local_scheduler=True)
+        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081)
+        __run_calculate_surface_energy_task(task)
+
+        doc = __create_surface_energy_doc(task)
+        for structure_doc in doc['surface_structures']:
+            assert isinstance(make_atoms_from_doc(structure_doc), ase.Atoms)
+        assert isinstance(doc['surface_energy'], float)
+        assert isinstance(doc['surface_energy_standard_error'], float)
+        for movement in doc['max_atom_movement']:
+            assert isinstance(movement, float)
+        for fwid in doc['fwids']:
+            assert isinstance(fwid, int)
+        for date in doc['calculation_dates']:
+            assert isinstance(date, datetime.datetime)
+        for directory in doc['fw_directories']:
+            assert isinstance(directory, str)
+
+    finally:
+        clean_up_tasks()
