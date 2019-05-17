@@ -255,12 +255,10 @@ class CalculateSurfaceEnergy(luigi.Task):
                                 the relaxed bulk to enumerate surfaces from
     Returns::
         doc A dictionary with the following keys:
-                surface_structures              Dictionaries for each of the
-                                                surfaces whose keys indicate
-                                                the number of atoms and whose
-                                                values are the corresponding
-                                                documents found in the `atoms`
-                                                collection
+                surface_structures              A list of three dictionaries
+                                                for each of the surfaces. These
+                                                dictionaries are the documents
+                                                found in the `atoms` collection
                                                 `gaspy.mongo.make_doc_from_atoms`.
                 surface_energy                  A float indicating the surface
                                                 energy in eV/Angstrom**2
@@ -423,8 +421,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         surface_energy, surface_energy_se = self._calculate_surface_energy(surface_docs)
 
         # Parse the results into a document to save
-        doc = {'surface_structures': {str(doc['atoms']['natoms']) + ' atoms': doc
-                                      for doc in surface_docs}}
+        doc = {'surface_structures': surface_docs}
         doc['surface_energy'] = surface_energy
         doc['surface_energy_standard_error'] = surface_energy_se
         save_task_output(self, doc)

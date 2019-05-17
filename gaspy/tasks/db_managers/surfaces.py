@@ -59,14 +59,14 @@ def update_surface_energy_collection(n_processes=1):
              for mpid, miller_indices, shift, vasp_settings in surfaces]
 
     # Run each task and then see which ones are done
-    print('[%s] Calculating adsorption energies...' % datetime.now())
+    print('[%s] Calculating surface energies...' % datetime.now())
     multimap(__run_calculate_surface_energy_task, tasks,
              processes=n_processes, maxtasksperchild=10, chunksize=100,
              n_calcs=len(tasks))
     completed_tasks = [task for task in tasks if task.complete()]
 
     # Parse the completed tasks into documents for us to save
-    print('[%s] Creating adsorption documents...' % datetime.now())
+    print('[%s] Creating surface energy documents...' % datetime.now())
     surface_energy_docs = multimap(__create_surface_energy_doc,
                                    completed_tasks,
                                    processes=n_processes,
@@ -161,13 +161,12 @@ def __create_surface_energy_doc(surface_energy_task):
     Returns:
         doc     A modified form of the dictionary created by the
                 `CalculateSurfaceEnergy` task. Will have the following keys:
-                    surface_structures              Dictionaries for each of
-                                                    the surfaces whose keys
-                                                    indicate the number of
-                                                    atoms and whose values are
-                                                    the corresponding documents
-                                                    found in the `atoms`
-                                                    collection
+                    surface_structures              A list of three
+                                                    dictionaries for each of
+                                                    the surfaces. These
+                                                    dictionaries are the
+                                                    documents found in the
+                                                    `atoms` collection
                                                     `gaspy.mongo.make_doc_from_atoms`.
                     surface_energy                  A float indicating the
                                                     surface energy in
@@ -176,48 +175,50 @@ def __create_surface_energy_doc(surface_energy_task):
                                                     standard error of our
                                                     estimate of the surface
                                                     energy
-                    movement_data                   A dictionary whose keys are
-                                                    the number of atoms of each
-                                                    surface and whose values
-                                                    are the maximum distance a
+                    movement_data                   A list containing three
+                                                    floats, where each float is
+                                                    the maximum distance a
                                                     single atom moved during
-                                                    relaxation.
-                    fwids                           A dictionary whose keys are
-                                                    the number of atoms of each
-                                                    surface and whose values
-                                                    are the FWID
-                    calculation_dates               A dictionary whose keys are
-                                                    the number of atoms of each
-                                                    surface and whose values
-                                                    are the date the calculation
-                                                    finished.
-                    fw_directories                  A dictionary whose keys are
-                                                    the number of atoms of each
-                                                    surface and whose values
-                                                    are the directories where
-                                                    the corresponding FireWork
-                                                    ran
+                                                    relaxation for each of the
+                                                    three surfaces.
+                    fwids                           A list containing three
+                                                    integers, where each
+                                                    integer is the FireWork ID
+                                                    of each of the three
+                                                    surfaces.
+                    calculation_dates               A list containing three
+                                                    `datetime.datetime`
+                                                    objects, where each
+                                                    datetime is the date that
+                                                    each of the three surface
+                                                    calculations were
+                                                    completed.
+                    fw_directories                  A list containing three
+                                                    strings corresponding to
+                                                    the FireWorks directories
+                                                    where each of the surface
+                                                    relaxations were performed.
     '''
     # The output of the task to calculate surface energies will provide the
     # template for the document in our Mongo collection
     doc = get_task_output(surface_energy_task)
-    doc['movement_data'] = {}
-    doc['fwids'] = {}
-    doc['calculation_dates'] = {}
-    doc['fw_directories'] = {}
+    doc['max_atom_movement'] = []
+    doc['fwids'] = []
+    doc['calculation_dates'] = []
+    doc['fw_directories'] = []
 
     # Figure out how far each of the structures moved during relaxation.
-    for n_atoms, surface_doc in doc['surface_structures'].items():
+    for surface_doc in doc['surface_structures']:
         initial_atoms = make_atoms_from_doc(surface_doc['initial_configuration'])
         final_atoms = make_atoms_from_doc(surface_doc)
         max_movement = find_max_movement(initial_atoms, final_atoms)
-        doc['movement_data'][n_atoms] = max_movement
+        doc['max_atom_movement'].append(max_movement)
 
         # Move some information from the individual surface documents to the
         # higher-level surface energy document
-        doc['fwids'][n_atoms] = surface_doc['fwid']
-        doc['calculation_dates'][n_atoms] = surface_doc['calculation_date']
-        doc['fw_directories'][n_atoms] = surface_doc['directory']
+        doc['fwids'].append(surface_doc['fwid'])
+        doc['calculation_dates'].append(surface_doc['calculation_date'])
+        doc['fw_directories'].append(surface_doc['directory'])
         del surface_doc['fwid']
         del surface_doc['calculation_date']
         del surface_doc['directory']
