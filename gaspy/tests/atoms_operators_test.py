@@ -37,6 +37,7 @@ from . import test_cases
 from .tasks_tests.utils import clean_up_tasks
 from .. import defaults
 from ..tasks import get_task_output, schedule_tasks
+from ..gasdb import get_mongo_collection
 from ..mongo import make_atoms_from_doc
 from ..tasks.atoms_generators import GenerateBulk
 
@@ -408,5 +409,13 @@ def test_calculate_unit_slab_height():
 
 
 def test_find_max_movement():
-    find_max_movement()
-    assert False
+    with get_mongo_collection('atoms') as collection:
+        doc = collection.find_one()
+    atoms_initial = make_atoms_from_doc(doc['initial_configuration'])
+    atoms_final = make_atoms_from_doc(doc)
+    max_movement = find_max_movement(atoms_initial, atoms_final)
+
+    # I can't really think of a way to test this function without doing the
+    # same exact thing the function did. So let's just "test" that it ran and
+    # returned a float.
+    assert isinstance(max_movement, float)
