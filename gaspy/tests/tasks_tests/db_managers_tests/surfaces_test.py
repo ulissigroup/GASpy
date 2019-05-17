@@ -17,6 +17,7 @@ from ....tasks.db_managers.surfaces import (update_surface_energy_collection,
 # Things we need to do the testing
 import datetime
 import ase
+from gaspy.gasdb import get_mongo_collection
 from gaspy.mongo import make_atoms_from_doc
 from gaspy.tasks.core import get_task_output, schedule_tasks
 from gaspy.tasks.calculation_finders import FindBulk
@@ -29,7 +30,21 @@ def test_update_surface_energy_collection():
 
 
 def test__find_atoms_docs_not_in_surface_energy_collection():
-    assert False
+    docs = _find_atoms_docs_not_in_surface_energy_collection()
+
+    # Make sure these "documents" are actually `atoms` docs that can be turned
+    # into `ase.Atoms` objects
+    for doc in docs:
+        atoms = make_atoms_from_doc(doc)
+        assert isinstance(atoms, ase.Atoms)
+
+    # Make sure that everything we found actually isn't in our `surface_energy`
+    # collection
+    fwids_in_atoms = {doc['fwid'] for doc in docs}
+    with get_mongo_collection('surface_energy') as collection:
+        surf_docs = list(collection.find({}, {'fwids': 1, '_id': 0}))
+    fwids_in_surf = {fwid for doc in surf_docs for fwid in doc['fwids']}
+    assert fwids_in_atoms.isdisjoint(fwids_in_surf)
 
 
 def test___run_calculate_surface_energy_task():
