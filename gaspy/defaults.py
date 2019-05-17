@@ -297,13 +297,12 @@ def surface_projection():
     '''
     fingerprints = {'_id': 0,
                     'mongo_id': '$_id',
-                    'mpid': '$processed_data.calculation_info.mpid',
-                    'formula': '$processed_data.calculation_info.formula',
-                    'miller': '$processed_data.calculation_info.miller',
-                    'intercept': '$processed_data.surface_energy_info.intercept',
-                    'intercept_uncertainty': '$processed_data.surface_energy_info.intercept_uncertainty',
-                    'initial_configuration': '$initial_configuration',
-                    'FW_info': '$processed_data.FW_info'}
+                    'mpid': '$mpid',
+                    'miller': '$miller',
+                    'intercept': '$surface_energy',
+                    'intercept_uncertainty': '$surface_energy_standard_error',
+                    'structure': {'$arrayElemAt': ['$surface_structures', 0]},
+                    'FW_info': '$fwids'}
     return fingerprints
 
 
@@ -327,9 +326,13 @@ def surface_filters():
     max_surface_movement = 1.   # Maximum distance that any atom can move [Ang]
 
     # Distribute filters into mongo-readable form
-    filters['results.fmax'] = {'$lt': f_max}
-    filters['processed_data.movement_data.max_surface_movement'] = {'$lt': max_surface_movement}
-    filters['processed_data.vasp_settings.gga'] = xc_settings('pbesol')['gga']
+    filters['surface_structures.0.results.fmax'] = {'$lt': f_max}
+    filters['surface_structures.1.results.fmax'] = {'$lt': f_max}
+    filters['surface_structures.2.results.fmax'] = {'$lt': f_max}
+    filters['max_atom_movement.0'] = {'$lt': max_surface_movement}
+    filters['max_atom_movement.1'] = {'$lt': max_surface_movement}
+    filters['max_atom_movement.2'] = {'$lt': max_surface_movement}
+    filters['vasp_settings.gga'] = xc_settings('pbesol')['gga']
 
     return filters
 

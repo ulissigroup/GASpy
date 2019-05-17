@@ -5,7 +5,7 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 import warnings
 import math
-import copy
+from copy import deepcopy
 import json
 from tqdm import tqdm
 from pymongo import MongoClient
@@ -214,6 +214,13 @@ def get_surface_docs(extra_projections=None, filters=None):
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
         docs = [doc for doc in tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
+
+    # Some of our old code assumes that 'initial_configuration' is at the root
+    # of each dictionary/document. But right now, it's buried in the
+    # 'structure' key/value. Let's move it out and clean it up.
+    for doc in docs:
+        doc['initial_configuration'] = deepcopy(doc['structure']['initial_configuration'])
+        del doc['structure']
 
     return cleaned_docs
 
@@ -440,7 +447,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
         for i, adsorbate_rotation in enumerate(adsorbate_rotation_list):
             print('Making catalog copy number %i of %i...'
                   % (i+1, len(adsorbate_rotation_list)))
-            docs_copy = copy.deepcopy(docs)     # To make sure we don't modify the parent docs
+            docs_copy = deepcopy(docs)  # To make sure we don't modify the parent docs
             for doc in tqdm(docs_copy):
                 doc['adsorbate_rotation'] = adsorbate_rotation
             docs_with_rotation += docs_copy
@@ -532,7 +539,7 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
     doc = doc.copy()
 
     # Remove the keys we want to ignore
-    ignore_keys = copy.deepcopy(ignore_keys)
+    ignore_keys = deepcopy(ignore_keys)
     ignore_keys.append('mongo_id')  # Because no two things will ever share a Mongo ID
     for key in ignore_keys:
         doc.pop(key, None)
@@ -584,7 +591,7 @@ def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
     docs_ml_by_surface = {get_surface_from_doc(doc): doc for doc in docs_ml}
 
     # For each ML-predicted surface, figure out if DFT supersedes it
-    docs_by_surface = copy.deepcopy(docs_ml_by_surface)
+    docs_by_surface = deepcopy(docs_ml_by_surface)
     for surface, doc_ml in docs_by_surface.items():
 
         try:

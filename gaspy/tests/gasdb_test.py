@@ -172,22 +172,22 @@ def __make_documents_dirty(docs):
 
 
 @pytest.mark.baseline
-@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-def test_to_create_aggregated_surface_documents(extra_fingerprints):
+@pytest.mark.parametrize('extra_projections', [None, {'dates': '$calculation_dates'}])
+def test_to_create_aggregated_surface_documents(extra_projections):
     try:
         file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
-            '_'.join(list(extra_fingerprints.keys())) + '.pkl'
-    except AttributeError:
+            '_'.join(list(extra_projections)) + '.pkl'
+    except TypeError:
         file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
 
-    docs = get_surface_docs(extra_fingerprints)
+    docs = get_surface_docs(extra_projections)
     with open(file_name, 'wb') as file_handle:
         pickle.dump(docs, file_handle)
     assert True
 
 
-@pytest.mark.parametrize('extra_fingerprints', [None, {'user': 'user'}])
-def test_get_surface_docs(extra_fingerprints):
+@pytest.mark.parametrize('extra_projections', [None, {'dates': '$calculation_dates'}])
+def test_get_surface_docs(extra_projections):
     '''
     Currently not testing the "filters" argument because, well, I am being lazy.
     Feel free to change that yourself.
@@ -195,13 +195,13 @@ def test_get_surface_docs(extra_fingerprints):
     # EAFP to set the file name; depends on whether or not there are extra fingerprints
     try:
         file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
-                     '_'.join(list(extra_fingerprints.keys())) + '.pkl')
+                     '_'.join(list(extra_projections.keys())) + '.pkl')
     except AttributeError:
         file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
 
     with open(file_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
-    docs = get_surface_docs(extra_fingerprints)
+    docs = get_surface_docs(extra_projections)
     assert docs == expected_docs
 
 
