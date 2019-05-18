@@ -74,12 +74,13 @@ def update_surface_energy_collection(n_processes=1):
                                    chunksize=100,
                                    n_calcs=len(completed_tasks))
 
-    print('[%s] Creating %i new entries in the surface energy collection...'
-          % (datetime.now(), len(surface_energy_docs)))
-    with get_mongo_collection('surface_energy') as collection:
-        collection.insert_many(surface_energy_docs)
-    print('[%s] Created %i new entries in the surface energy collection'
-          % (datetime.now(), len(surface_energy_docs)))
+    if len(surface_energy_docs) > 0:
+        print('[%s] Creating %i new entries in the surface energy collection...'
+              % (datetime.now(), len(surface_energy_docs)))
+        with get_mongo_collection('surface_energy') as collection:
+            collection.insert_many(surface_energy_docs)
+        print('[%s] Created %i new entries in the surface energy collection'
+              % (datetime.now(), len(surface_energy_docs)))
 
 
 def _find_atoms_docs_not_in_surface_energy_collection():
