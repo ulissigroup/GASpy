@@ -15,7 +15,8 @@ warnings.filterwarnings('ignore', category=ImportWarning)
 from ...tasks.make_fireworks import (FireworkMaker,
                                      MakeGasFW,
                                      MakeBulkFW,
-                                     MakeAdslabFW)
+                                     MakeAdslabFW,
+                                     MakeSurfaceFW)
 
 # Things we need to do the tests
 import pytest
@@ -23,7 +24,8 @@ import luigi
 from .utils import clean_up_tasks, run_task_locally
 from ... import defaults
 from ...utils import unfreeze_dict
-from ...tasks.core import get_task_output
+from ...tasks.core import get_task_output, schedule_tasks
+from ...tasks.calculation_finders import FindSurface
 from ...tasks.atoms_generators import (GenerateGas,
                                        GenerateBulk,
                                        GenerateAdslabs)
@@ -210,3 +212,44 @@ def test__find_matching_adslab_doc():
                                                      shift=0.25, top=False)
         assert ('You just tried to make an adslab FireWork rocket that we could not enumerate.'
                 in str(exc_info.value))
+
+
+def test_MakeSurfaceFW():
+    '''
+    WARNING:  This test uses `run_task_locally`, which has a chance of actually
+    submitting a FireWork to production. To avoid this, you must try to make a
+    surface from a bulk that shows up in the unit_testing_atoms Mongo
+    collection. If you copy/paste this test into somewhere else, make sure that
+    you use `run_task_locally` appropriately.
+    '''
+    # Let's have our `FindSurface` task create an instance of `MakeSurfaceFW`
+    # for us, because it's better at setting all the arguments and stuff
+    mpid = 'mp-1018129'
+    miller_indices = (0, 1, 1)
+    shift = 0.5
+    min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
+    vasp_settings = SLAB_SETTINGS['vasp']
+    finder = FindSurface(mpid=mpid,
+                         miller_indices=miller_indices,
+                         shift=shift,
+                         min_height=min_height,
+                         vasp_settings=vasp_settings)
+    try:
+        schedule_tasks([finder.requires()], local_scheduler=True)
+        finder._load_attributes()
+        task = finder.dependency
+        assert isinstance(task, MakeSurfaceFW)
+
+        # Manually call the `run` method with the unit testing flag to get the
+        # firework instead of actually submitting it
+        fwork = task.run(_testing=True)
+        assert fwork.name['calculation_type'] == 'surface energy optimization'
+        assert fwork.name['mpid'] == mpid
+        assert fwork.name['miller'] == miller_indices
+        assert fwork.name['shift'] == shift
+        assert fwork.name['num_slab_atoms'] == len(finder._create_surface())
+        assert fwork.name['vasp_settings'] == vasp_settings
+        assert task.complete() is True
+
+    finally:
+        clean_up_tasks()
