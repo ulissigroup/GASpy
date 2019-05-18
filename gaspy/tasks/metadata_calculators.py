@@ -374,9 +374,18 @@ class CalculateSurfaceEnergy(luigi.Task):
         depenenices here in `_dynamic_requires` for organizational purposes, and
         then just call it first in `run`.
         '''
+        # For some reason, Luigi might not run the `_static_requires` before
+        # running this method. If this happens, then call it manually. This
+        # ensures that some of the correct attributes are assigned.
+        try:
+            min_repeats = self.min_repeats
+        except AttributeError:
+            _ = self._static_requires()  # noqa: F841
+            min_repeats = self.min_repeats
+
         # Calculate the height of each slab
         surface_relaxation_tasks = []
-        for n_repeats in range(self.min_repeats, self.min_repeats+3):
+        for n_repeats in range(min_repeats, min_repeats+3):
             min_height = n_repeats * self.unit_slab_height
 
             # Instantiate and return each task
