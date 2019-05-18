@@ -299,6 +299,7 @@ def surface_projection():
                     'mongo_id': '$_id',
                     'mpid': '$mpid',
                     'miller': '$miller',
+                    'shift': '$shift',
                     'intercept': '$surface_energy',
                     'intercept_uncertainty': '$surface_energy_standard_error',
                     'structure': {'$arrayElemAt': ['$surface_structures', 0]},

@@ -46,8 +46,10 @@ from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
+import ase
 from ..utils import read_rc
 from ..defaults import catalog_projection, adslab_settings
+from ..mongo import make_atoms_from_doc
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
@@ -171,38 +173,30 @@ def __make_documents_dirty(docs):
     return dirty_docs
 
 
-@pytest.mark.baseline
-@pytest.mark.parametrize('extra_projections', [None, {'dates': '$calculation_dates'}])
-def test_to_create_aggregated_surface_documents(extra_projections):
-    try:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + \
-            '_'.join(list(extra_projections)) + '.pkl'
-    except TypeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-
-    docs = get_surface_docs(extra_projections)
-    with open(file_name, 'wb') as file_handle:
-        pickle.dump(docs, file_handle)
-    assert True
-
-
 @pytest.mark.parametrize('extra_projections', [None, {'dates': '$calculation_dates'}])
 def test_get_surface_docs(extra_projections):
     '''
     Currently not testing the "filters" argument because, well, I am being lazy.
     Feel free to change that yourself.
     '''
-    # EAFP to set the file name; depends on whether or not there are extra fingerprints
-    try:
-        file_name = (REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' +
-                     '_'.join(list(extra_projections.keys())) + '.pkl')
-    except AttributeError:
-        file_name = REGRESSION_BASELINES_LOCATION + 'aggregated_surface_documents_' + '.pkl'
-
-    with open(file_name, 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
     docs = get_surface_docs(extra_projections)
-    assert docs == expected_docs
+
+    assert len(docs) > 0
+    for doc in docs:
+        assert isinstance(doc['mongo_id'], ObjectId)
+        assert isinstance(doc['mpid'], str)
+        assert len(doc['miller']) == 3
+        assert all(isinstance(miller, int) for miller in doc['miller'])
+        assert isinstance(doc['shift'], (float, int))
+        assert isinstance(doc['intercept'], float)
+        assert isinstance(doc['intercept_uncertainty'], float)
+        assert isinstance(make_atoms_from_doc(doc['initial_configuration']), ase.Atoms)
+        assert len(doc['FW_info']) == 3
+        assert all(isinstance(fwid, int) for fwid in doc['FW_info'])
+        if extra_projections is not None:
+            for projection in extra_projections:
+                assert projection in doc
+
 
 
 def test_get_catalog_docs():
