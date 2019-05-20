@@ -215,13 +215,6 @@ def get_surface_docs(extra_projections=None, filters=None):
         docs = [doc for doc in tqdm(cursor)]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
-    # Some of our old code assumes that 'initial_configuration' is at the root
-    # of each dictionary/document. But right now, it's buried in the
-    # 'structure' key/value. Let's move it out and clean it up.
-    for doc in docs:
-        doc['initial_configuration'] = deepcopy(doc['structure']['initial_configuration'])
-        del doc['structure']
-
     return cleaned_docs
 
 

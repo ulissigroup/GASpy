@@ -302,7 +302,7 @@ def surface_projection():
                     'shift': '$shift',
                     'intercept': '$surface_energy',
                     'intercept_uncertainty': '$surface_energy_standard_error',
-                    'structure': {'$arrayElemAt': ['$surface_structures', 0]},
+                    'thinnest_structure': {'$arrayElemAt': ['$surface_structures', 0]},
                     'FW_info': '$fwids'}
     return fingerprints
 

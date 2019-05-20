@@ -190,7 +190,8 @@ def test_get_surface_docs(extra_projections):
         assert isinstance(doc['shift'], (float, int))
         assert isinstance(doc['intercept'], float)
         assert isinstance(doc['intercept_uncertainty'], float)
-        assert isinstance(make_atoms_from_doc(doc['initial_configuration']), ase.Atoms)
+        assert isinstance(make_atoms_from_doc(doc['thinnest_structure']), ase.Atoms)
+        assert isinstance(make_atoms_from_doc(doc['thinnest_structure']['initial_configuration']), ase.Atoms)
         assert len(doc['FW_info']) == 3
         assert all(isinstance(fwid, int) for fwid in doc['FW_info'])
         if extra_projections is not None:
