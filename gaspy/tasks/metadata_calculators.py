@@ -393,7 +393,8 @@ class CalculateSurfaceEnergy(luigi.Task):
                                miller_indices=self.miller_indices,
                                shift=self.shift,
                                min_height=min_height,
-                               vasp_settings=self.vasp_settings)
+                               vasp_settings=self.vasp_settings,
+                               bulk_vasp_settings=self.bulk_vasp_settings)
             surface_relaxation_tasks.append(task)
 
         # Save these tasks as an attribute so we can use the actual tasks later.
