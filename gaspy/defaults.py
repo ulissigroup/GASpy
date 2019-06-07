@@ -91,6 +91,24 @@ def bulk_settings():
                                                  **xc_settings()))
     return bulk_settings
 
+def SE_bulk_settings():
+    ''' 
+    The default settings we use to do DFT calculations of bulks 
+    spefically for surface energy calculations. 
+    '''
+    SE_bulk_settings = OrderedDict(max_atoms=80,
+                                vasp=OrderedDict(ibrion=1,
+                                                 nsw=100,
+                                                 isif=7,
+                                                 isym=0,
+                                                 ediff=1e-8,
+                                                 kpts=(10, 10, 10),
+                                                 prec='Accurate',
+                                                 encut=500.,
+                                                 pp_version=pp_version(),
+                                                 **xc_settings('pbesol')))
+    return SE_bulk_settings
+
 
 def slab_settings():
     '''

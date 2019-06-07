@@ -22,6 +22,7 @@ from .. import defaults
 GASDB_PATH = utils.read_rc('gasdb_path')
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
+SE_BULK_SETTINGS = defaults.SE_bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
@@ -273,7 +274,7 @@ class CalculateSurfaceEnergy(luigi.Task):
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_vasp_settings = luigi.DictParameter(SE_BULK_SETTINGS['vasp'])
 
     def _static_requires(self):
         '''

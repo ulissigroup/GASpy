@@ -30,7 +30,7 @@ from ...tasks.core import schedule_tasks
 from ...tasks.calculation_finders import FindBulk, FindSurface
 
 GAS_SETTINGS = defaults.gas_settings()
-
+SE_BULK_SETTINGS = defaults.SE_bulk_settings()
 
 def test_CalculateAdsorptionEnergy():
     '''
@@ -150,7 +150,9 @@ class TestCalculateSurfaceEnergy():
         it and doesn't do some of the other steps (i.e., assign attributes)
         '''
         mpid = 'mp-1018129'
+        bulk_vasp_settings = SE_BULK_SETTINGS['vasp']
         task = CalculateSurfaceEnergy(mpid=mpid, miller_indices=(0, 0, 1), shift=0.081)
+        assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
         bulk_task = task._static_requires()
         assert isinstance(bulk_task, FindBulk)
         assert bulk_task.mpid == mpid
