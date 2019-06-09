@@ -22,7 +22,7 @@ from .. import defaults
 GASDB_PATH = utils.read_rc('gasdb_path')
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
-SE_BULK_SETTINGS = defaults.SE_bulk_settings()
+SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 

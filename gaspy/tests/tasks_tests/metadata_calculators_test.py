@@ -30,7 +30,8 @@ from ...tasks.core import schedule_tasks
 from ...tasks.calculation_finders import FindBulk, FindSurface
 
 GAS_SETTINGS = defaults.gas_settings()
-SE_BULK_SETTINGS = defaults.SE_bulk_settings()
+SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
+
 
 def test_CalculateAdsorptionEnergy():
     '''
