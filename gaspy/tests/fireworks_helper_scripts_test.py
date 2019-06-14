@@ -83,7 +83,7 @@ def test_find_n_rockets():
                      'lreal': 'Auto'}
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
-        n_running, _ = find_n_rockets(query, vasp_settings)
+        n_running, _ = find_n_rockets(query, vasp_settings, _testing=True)
         assert n_running == 0
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
