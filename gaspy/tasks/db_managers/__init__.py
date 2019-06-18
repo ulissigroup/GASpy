@@ -17,4 +17,4 @@ from .surfaces import update_surface_energy_collection
 def update_all_collections(n_processes=1):
     update_atoms_collection(n_processes=n_processes)
     update_adsorption_collection(n_processes=n_processes)
-    udpate_surface_energy_collection(n_processes=n_processes)
+    update_surface_energy_collection(n_processes=n_processes)
