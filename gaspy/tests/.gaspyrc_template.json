@@ -2,6 +2,10 @@
     "temp_directory": "/tmp/",
     "luigi_port": "999.99.999.99",
     "gasdb_path": "/home/GASpy/gaspy/tests/test_caches",
+    "quantum_espresso":{
+        "pseudopotential_directory": "/path/to/pseudo_potentials",
+        "scratch_directory": "/path/to/scratch/directory"
+    },
     "matproj_api_key": "ABC123",
     "plotly_login_info":{
         "username": "user",

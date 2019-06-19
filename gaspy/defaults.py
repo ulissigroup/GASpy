@@ -9,6 +9,10 @@ import warnings
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
+from .utils import read_rc
+
+QE_PP_DIR = read_rc('quantum_espresso.pseudopotential_directory')
+QE_SCRATCH = read_rc('quantum_espresso.scratch_directory')
 
 
 def pp_version():
@@ -118,18 +122,69 @@ def slab_settings():
     `SlabGenerator` class in pymatgen, and the `get_slab_settings` are passed
     to the `get_slab` method of that class.
     '''
+    vasp = OrderedDict(ibrion=2,
+                       nsw=100,
+                       isif=0,
+                       isym=0,
+                       kpts=(4, 4, 1),
+                       lreal='Auto',
+                       ediffg=-0.03,
+                       encut=350.,
+                       pp_version=pp_version(),
+                       **xc_settings('pbesol'))
+
+    qe = OrderedDict(control=OrderedDict(calculation='relax',
+                                         pseudo_dir=QE_PP_DIR,
+                                         prefix='rism',
+                                         outdir=QE_SCRATCH,
+                                         etot_conv_thr=1e-5,
+                                         forc_conv_thr=1e-4,
+                                         trism=True,
+                                         lfcp=True,
+                                         max_seconds=86280),
+                     system=OrderedDict(input_dft='rpbe',
+                                        ibrav=0,
+                                        nat=38,
+                                        ntyp=3,
+                                        ecutwfc=36.749,
+                                        ecutrho=367.493,
+                                        occupations='smearing',
+                                        smearing='mv',
+                                        degauss=0.00735,
+                                        assume_isolated='esm',
+                                        nosym=True,
+                                        esm_bc='bc1'),
+                     electrons=OrderedDict(diagonalization='rmm',
+                                           diago_rmm_conv=False,
+                                           mixing_mode='local-TF',
+                                           electron_maxstep=100,
+                                           conv_thr=7.2e-8,
+                                           mixing_beta=0.7e0),
+                     kpoints_mode='automatic',
+                     kpoints_grid=(4, 4, 1),
+                     kpoints_shift=(0, 0, 0),
+                     fcp=OrderedDict(fcp_mu=-3.))
+
+    rism = OrderedDict(closure='kh',
+                       ecutsolv=300.0,
+                       laue_expand_right=90.0,
+                       laue_reference='right',
+                       laue_starting_right=2.0,
+                       nsolv=3,
+                       rism3d_conv_level=0.5,
+                       mdiis1d_step=0.1e0,
+                       mdiis3d_step=0.5e0,
+                       rism1d_conv_thr=1e-9,
+                       rism3d_conv_thr=5e-6,
+                       rism1d_maxstep=100000,
+                       rism3d_maxstep=100000,
+                       tempv=300.0)
+
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
-                                vasp=OrderedDict(ibrion=2,
-                                                 nsw=100,
-                                                 isif=0,
-                                                 isym=0,
-                                                 kpts=(4, 4, 1),
-                                                 lreal='Auto',
-                                                 ediffg=-0.03,
-                                                 encut=350.,
-                                                 pp_version=pp_version(),
-                                                 **xc_settings('pbesol')),
+                                vasp=vasp,
+                                qe=qe,
+                                rism=rism,
                                 slab_generator_settings=OrderedDict(min_slab_size=7.,
                                                                     min_vacuum_size=20.,
                                                                     lll_reduce=False,
@@ -149,19 +204,69 @@ def adslab_settings():
     subsequent DFT settings. `mix_xy` is the minimum with of the slab
     (Angstroms) before we enumerate adsorption sites on it.
     '''
+    vasp = OrderedDict(ibrion=2,
+                       nsw=200,
+                       isif=0,
+                       isym=0,
+                       kpts=(4, 4, 1),
+                       lreal='Auto',
+                       ediffg=-0.03,
+                       symprec=1e-10,
+                       encut=350.,
+                       pp_version=pp_version(),
+                       **xc_settings())
+
+    qe = OrderedDict(control=OrderedDict(calculation='relax',
+                                         pseudo_dir=QE_PP_DIR,
+                                         prefix='qe_gaspy',
+                                         outdir=QE_SCRATCH,
+                                         etot_conv_thr=1e-5,
+                                         forc_conv_thr=1e-4,
+                                         lfcp=True,
+                                         max_seconds=86280),
+                     system=OrderedDict(input_dft='rpbe',
+                                        ibrav=0,
+                                        nat=38,
+                                        ntyp=3,
+                                        ecutwfc=36.749,
+                                        ecutrho=367.493,
+                                        occupations='smearing',
+                                        smearing='mv',
+                                        degauss=0.00735,
+                                        assume_isolated='esm',
+                                        nosym=True,
+                                        esm_bc='bc1'),
+                     electrons=OrderedDict(diagonalization='rmm',
+                                           diago_rmm_conv=False,
+                                           mixing_mode='local-TF',
+                                           electron_maxstep=100,
+                                           conv_thr=7.2e-8,
+                                           mixing_beta=0.7e0),
+                     kpoints_mode='automatic',
+                     kpoints_grid=(4, 4, 1),
+                     kpoints_shift=(0, 0, 0),
+                     fcp=OrderedDict(fcp_mu=-3.))
+
+    rism = OrderedDict(closure='kh',
+                       ecutsolv=300.0,
+                       laue_expand_right=90.0,
+                       laue_reference='right',
+                       laue_starting_right=2.0,
+                       nsolv=3,
+                       rism3d_conv_level=0.5,
+                       mdiis1d_step=0.1e0,
+                       mdiis3d_step=0.5e0,
+                       rism1d_conv_thr=1e-9,
+                       rism3d_conv_thr=5e-6,
+                       rism1d_maxstep=100000,
+                       rism3d_maxstep=100000,
+                       tempv=300.0)
+
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
-                                  vasp=OrderedDict(ibrion=2,
-                                                   nsw=200,
-                                                   isif=0,
-                                                   isym=0,
-                                                   kpts=(4, 4, 1),
-                                                   lreal='Auto',
-                                                   ediffg=-0.03,
-                                                   symprec=1e-10,
-                                                   encut=350.,
-                                                   pp_version=pp_version(),
-                                                   **xc_settings()))
+                                  vasp=vasp,
+                                  qe=qe,
+                                  rism=rism)
     return adslab_settings
 
 
