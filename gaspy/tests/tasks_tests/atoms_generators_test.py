@@ -164,11 +164,12 @@ def test__make_slab_docs_from_structs():
     with open(REGRESSION_BASELINES_LOCATION + 'slab_docs_%s.pkl' % bulk_name, 'rb') as file_handle:
         expected_docs = pickle.load(file_handle)
 
-    # Remove creation and modification times because we don't care about
+    # Remove creation, modification times, and user because we don't care about
     # those... and they will be wrong
     for doc in docs + expected_docs:
         doc.pop('ctime', None)
         doc.pop('mtime', None)
+        doc.pop('user', None)
     assert docs == expected_docs
 
 

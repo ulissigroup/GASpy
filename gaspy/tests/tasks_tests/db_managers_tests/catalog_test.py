@@ -24,7 +24,7 @@ from ....mongo import make_atoms_from_doc
 from ....tasks import get_task_output
 
 
-def test_update_collection_catalog():
+def test_update_catalog_collection():
     elements = ['Pd']
     max_miller = 1
 
