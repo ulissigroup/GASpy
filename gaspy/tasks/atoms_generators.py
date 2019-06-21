@@ -107,7 +107,7 @@ class GenerateSlabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -224,7 +224,7 @@ class GenerateAdsorptionSites(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -329,7 +329,7 @@ class GenerateAdslabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -426,7 +426,7 @@ class GenerateAllSitesFromBulk(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         all_site_docs   A concatenated list of all of the Mongo documents
@@ -490,7 +490,7 @@ class _EnumerateDistinctFacets(luigi.Task):
                             'mp-2'
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
-        bulk_dft_settings   A dictionary containing the VASP settings of the
+        bulk_dft_settings   A dictionary containing the DFT settings of the
                             relaxed bulk to enumerate slabs from
     Returns:
         distinct_millers    A list of the distinct Miller indices, where the

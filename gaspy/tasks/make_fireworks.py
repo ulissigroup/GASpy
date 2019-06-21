@@ -46,7 +46,7 @@ class MakeGasFW(FireworkMaker):
 
     Args:
         gas_name        A string indicating which gas you want to relax
-        dft_settings    A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     '''
     gas_name = luigi.Parameter()
     dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
@@ -85,7 +85,7 @@ class MakeBulkFW(FireworkMaker):
 
     Args:
         mpid            A string indicating the mpid of the bulk
-        dft_settings    A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     '''
     mpid = luigi.Parameter()
     dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
@@ -141,7 +141,7 @@ class MakeAdslabFW(FireworkMaker):
         shift                   A float indicating the shift of the slab
         top                     A Boolean indicating whether the adsorption
                                 site is on the top or the bottom of the slab
-        dft_settings            A dictionary containing your VASP settings
+        dft_settings            A dictionary containing your DFT settings
                                 for the adslab relaxation
         adsorbate_name          A string indicating which adsorbate to use. It
                                 should be one of the keys within the
@@ -168,7 +168,7 @@ class MakeAdslabFW(FireworkMaker):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     '''
     adsorption_site = luigi.TupleParameter()
@@ -315,7 +315,7 @@ class MakeSurfaceFW(FireworkMaker):
                         surface you want to find
         shift           A float indicating the shift of the surface---i.e., the
                         termination that pymatgen finds
-        dft_settings    A dictionary containing your VASP settings for the
+        dft_settings    A dictionary containing your DFT settings for the
                         surface relaxation
     '''
     atoms_doc = luigi.DictParameter()

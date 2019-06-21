@@ -63,11 +63,11 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        gas_dft_settings        A dictionary containing the VASP settings of
+        gas_dft_settings        A dictionary containing the DFT settings of
                                 the gas relaxation of the adsorbate
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
-        adslab_dft_settings     A dictionary containing your VASP settings
+        adslab_dft_settings     A dictionary containing your DFT settings
                                 for the adslab relaxation
     Returns:
         doc A dictionary with the following keys:
@@ -150,7 +150,7 @@ class CalculateAdsorbateEnergy(luigi.Task):
     Arg:
         adsorbate_name  A string indicating the name of the adsorbate you
                         want to calculate the energy of
-        dft_settings    A dictionary containing the VASP settings you want to
+        dft_settings    A dictionary containing the DFT settings you want to
                         use for the DFT relaxations of the basis set
     Returns:
         energy  The DFT-calculated energy of the adsorbate
@@ -194,7 +194,7 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
     you so that you can use these energies in other calculations.
 
     Arg:
-        dft_settings    A dictionary containing the VASP settings you want to
+        dft_settings    A dictionary containing the DFT settings you want to
                         use for the DFT relaxations of the gases.
     Returns:
         basis_energies  A dictionary whose keys are the basis elements and
@@ -250,9 +250,9 @@ class CalculateSurfaceEnergy(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        dft_settings            A dictionary containing your VASP settings for
+        dft_settings            A dictionary containing your DFT settings for
                                 the surface relaxation
-        bulk_dft_settings       A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate surfaces from
     Returns::
         doc A dictionary with the following keys:
