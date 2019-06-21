@@ -107,7 +107,7 @@ class GenerateSlabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -127,11 +127,11 @@ class GenerateSlabs(luigi.Task):
     miller_indices = luigi.TupleParameter()
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors
-        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+        return FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -224,7 +224,7 @@ class GenerateAdsorptionSites(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -253,14 +253,14 @@ class GenerateAdsorptionSites(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return GenerateSlabs(mpid=self.mpid,
                              miller_indices=self.miller_indices,
                              slab_generator_settings=self.slab_generator_settings,
                              get_slab_settings=self.get_slab_settings,
-                             bulk_vasp_settings=self.bulk_vasp_settings)
+                             bulk_dft_settings=self.bulk_dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -329,7 +329,7 @@ class GenerateAdslabs(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of dictionaries (also known as "documents", because
@@ -360,7 +360,7 @@ class GenerateAdslabs(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return GenerateAdsorptionSites(mpid=self.mpid,
@@ -368,7 +368,7 @@ class GenerateAdslabs(luigi.Task):
                                        min_xy=self.min_xy,
                                        slab_generator_settings=self.slab_generator_settings,
                                        get_slab_settings=self.get_slab_settings,
-                                       bulk_vasp_settings=self.bulk_vasp_settings)
+                                       bulk_dft_settings=self.bulk_dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -426,7 +426,7 @@ class GenerateAllSitesFromBulk(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         all_site_docs   A concatenated list of all of the Mongo documents
@@ -442,12 +442,12 @@ class GenerateAllSitesFromBulk(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return _EnumerateDistinctFacets(mpid=self.mpid,
                                         max_miller=self.max_miller,
-                                        bulk_vasp_settings=self.bulk_vasp_settings)
+                                        bulk_dft_settings=self.bulk_dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -461,7 +461,7 @@ class GenerateAllSitesFromBulk(luigi.Task):
                                                      min_xy=self.min_xy,
                                                      slab_generator_settings=self.slab_generator_settings,
                                                      get_slab_settings=self.get_slab_settings,
-                                                     bulk_vasp_settings=self.bulk_vasp_settings)
+                                                     bulk_dft_settings=self.bulk_dft_settings)
             site_generators.append(site_generator)
         # Yield all the dynamic dependencies at once so that Luigi will run
         # them in parallel instead of sequentially
@@ -490,7 +490,7 @@ class _EnumerateDistinctFacets(luigi.Task):
                             'mp-2'
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
-        bulk_vasp_settings  A dictionary containing the VASP settings of the
+        bulk_dft_settings   A dictionary containing the VASP settings of the
                             relaxed bulk to enumerate slabs from
     Returns:
         distinct_millers    A list of the distinct Miller indices, where the
@@ -498,11 +498,11 @@ class _EnumerateDistinctFacets(luigi.Task):
     '''
     mpid = luigi.Parameter()
     max_miller = luigi.IntParameter()
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors
-        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+        return FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:

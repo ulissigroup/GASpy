@@ -97,19 +97,19 @@ def test_GenerateSlabs():
     miller_indices = (1, 0, 0)
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = BULK_SETTINGS['vasp']
+    bulk_dft_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateSlabs(mpid=mpid,
                          miller_indices=miller_indices,
                          slab_generator_settings=slab_generator_settings,
                          get_slab_settings=get_slab_settings,
-                         bulk_vasp_settings=bulk_vasp_settings)
+                         bulk_dft_settings=bulk_dft_settings)
     assert task.mpid == mpid
     assert task.miller_indices == miller_indices
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
-    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
+    assert unfreeze_dict(task.bulk_dft_settings) == bulk_dft_settings
 
     try:
         # Run the task and make sure the task output has the correct format/fields
@@ -186,7 +186,7 @@ def test_GenerateAdsorptionSites():
     min_xy = ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = BULK_SETTINGS['vasp']
+    bulk_dft_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdsorptionSites(mpid=mpid,
@@ -194,13 +194,13 @@ def test_GenerateAdsorptionSites():
                                    min_xy=min_xy,
                                    slab_generator_settings=slab_generator_settings,
                                    get_slab_settings=get_slab_settings,
-                                   bulk_vasp_settings=bulk_vasp_settings)
+                                   bulk_dft_settings=bulk_dft_settings)
     assert task.mpid == mpid
     assert task.miller_indices == miller_indices
     assert task.min_xy == min_xy
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
-    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
+    assert unfreeze_dict(task.bulk_dft_settings) == bulk_dft_settings
 
     try:
         run_task_locally(task)
@@ -239,7 +239,7 @@ def test_GenerateAdslabs():
     min_xy = ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = BULK_SETTINGS['vasp']
+    bulk_dft_settings = BULK_SETTINGS['vasp']
 
     # Make the task and make sure the arguments were parsed correctly
     task = GenerateAdslabs(adsorbate_name=adsorbate_name,
@@ -249,7 +249,7 @@ def test_GenerateAdslabs():
                            min_xy=min_xy,
                            slab_generator_settings=slab_generator_settings,
                            get_slab_settings=get_slab_settings,
-                           bulk_vasp_settings=bulk_vasp_settings)
+                           bulk_dft_settings=bulk_dft_settings)
     assert task.adsorbate_name == adsorbate_name
     assert unfreeze_dict(task.rotation) == rotation
     assert task.mpid == mpid
@@ -257,7 +257,7 @@ def test_GenerateAdslabs():
     assert task.min_xy == min_xy
     assert unfreeze_dict(task.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(task.get_slab_settings) == get_slab_settings
-    assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
+    assert unfreeze_dict(task.bulk_dft_settings) == bulk_dft_settings
 
     try:
         # Run the task and fetch the outputs
