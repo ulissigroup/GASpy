@@ -43,7 +43,7 @@ class FindCalculation(luigi.Task):
     definitions before it can be used.
 
     Required Luigi argument:
-        vasp_settings   A dictionary containing the VASP settings of the
+        dft_settings    A dictionary containing the DFT settings of the
                         calculation you want to find. You can probably find
                         examples in `gaspy.defaults.*_SETTNGS`.
     Required attributes:
@@ -78,7 +78,7 @@ class FindCalculation(luigi.Task):
         # FireWorks system is currently running it
         if calc_found is False:
             n_running, n_fizzles = find_n_rockets(self.fw_query,
-                                                  self.vasp_settings,
+                                                  self.dft_settings,
                                                   _testing=_testing)
 
             # If we aren't running yet, then start running
@@ -193,7 +193,7 @@ class FindGas(FindCalculation):
     Args:
         gas_name        A string indicating the name of the gas you are looking
                         for (e.g., 'CO')
-        vasp_settings   A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
@@ -203,7 +203,7 @@ class FindGas(FindCalculation):
                 an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
     '''
     gas_name = luigi.Parameter()
-    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
 
     def _load_attributes(self):
         '''
@@ -214,10 +214,10 @@ class FindGas(FindCalculation):
                             'fwname.gasname': self.gas_name}
         self.fw_query = {'name.calculation_type': 'gas phase optimization',
                          'name.gasname': self.gas_name}
-        for key, value in self.vasp_settings.items():
-            self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-            self.fw_query['name.vasp_settings.%s' % key] = value
-        self.dependency = MakeGasFW(self.gas_name, self.vasp_settings)
+        for key, value in self.dft_settings.items():
+            self.gasdb_query['fwname.dft_settings.%s' % key] = value
+            self.fw_query['name.dft_settings.%s' % key] = value
+        self.dependency = MakeGasFW(self.gas_name, self.dft_settings)
 
 
 class FindBulk(FindCalculation):
@@ -231,7 +231,7 @@ class FindBulk(FindCalculation):
     Args:
         mpid            A string indicating the Materials Project ID of the bulk
                         you are looking for (e.g., 'mp-30')
-        vasp_settings   A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
@@ -241,7 +241,7 @@ class FindBulk(FindCalculation):
                 an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
     '''
     mpid = luigi.Parameter()
-    vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def _load_attributes(self):
         '''
@@ -252,10 +252,10 @@ class FindBulk(FindCalculation):
                             "fwname.mpid": self.mpid}
         self.fw_query = {'name.calculation_type': 'unit cell optimization',
                          'name.mpid': self.mpid}
-        for key, value in self.vasp_settings.items():
-            self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-            self.fw_query['name.vasp_settings.%s' % key] = value
-        self.dependency = MakeBulkFW(self.mpid, self.vasp_settings)
+        for key, value in self.dft_settings.items():
+            self.gasdb_query['fwname.dft_settings.%s' % key] = value
+            self.fw_query['name.dft_settings.%s' % key] = value
+        self.dependency = MakeBulkFW(self.mpid, self.dft_settings)
 
 
 class FindAdslab(FindCalculation):
@@ -273,7 +273,7 @@ class FindAdslab(FindCalculation):
         shift                   A float indicating the shift of the slab
         top                     A Boolean indicating whether the adsorption
                                 site is on the top or the bottom of the slab
-        vasp_settings           A dictionary containing your VASP settings
+        dft_settings            A dictionary containing your DFT settings
                                 for the adslab relaxation
         adsorbate_name          A string indicating which adsorbate to use. It
                                 should be one of the keys within the
@@ -300,7 +300,7 @@ class FindAdslab(FindCalculation):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
@@ -313,7 +313,7 @@ class FindAdslab(FindCalculation):
     adsorption_site = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     top = luigi.BoolParameter()
-    vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
     adsorbate_name = luigi.Parameter()
     rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
     mpid = luigi.Parameter()
@@ -321,7 +321,7 @@ class FindAdslab(FindCalculation):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def _load_attributes(self):
         '''
@@ -361,11 +361,11 @@ class FindAdslab(FindCalculation):
                          'name.adsorbate_rotation.theta': self.rotation['theta'],
                          'name.adsorbate_rotation.psi': self.rotation['psi']}
 
-        for key, value in self.vasp_settings.items():
-            # We don't care if these VASP settings change
+        for key, value in self.dft_settings.items():
+            # We don't care if these VASP-DFT settings change
             if key not in set(['nsw', 'isym', 'symprec']):
-                self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-                self.fw_query['name.vasp_settings.%s' % key] = value
+                self.gasdb_query['fwname.dft_settings.%s' % key] = value
+                self.fw_query['name.dft_settings.%s' % key] = value
 
         # For historical reasons, we do bare slab relaxations with the adslab
         # infrastructure. If this task happens to be for a bare slab, then we
@@ -388,7 +388,7 @@ class FindAdslab(FindCalculation):
         self.dependency = MakeAdslabFW(adsorption_site=self.adsorption_site,
                                        shift=self.shift,
                                        top=self.top,
-                                       vasp_settings=self.vasp_settings,
+                                       dft_settings=self.dft_settings,
                                        adsorbate_name=self.adsorbate_name,
                                        rotation=self.rotation,
                                        mpid=self.mpid,
@@ -396,7 +396,7 @@ class FindAdslab(FindCalculation):
                                        min_xy=self.min_xy,
                                        slab_generator_settings=self.slab_generator_settings,
                                        get_slab_settings=self.get_slab_settings,
-                                       bulk_vasp_settings=self.bulk_vasp_settings)
+                                       bulk_dft_settings=self.bulk_dft_settings)
 
 
 class FindSurface(FindCalculation):
@@ -417,9 +417,9 @@ class FindSurface(FindCalculation):
                                 finds
         min_height              A float indicating the minimum height of the
                                 surface you want to find
-        vasp_settings           A dictionary containing your VASP settings for
+        dft_settings            A dictionary containing your DFT settings for
                                 the surface relaxation
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
         get_slab_settings       We use the `get_slabs` method of pymatgen's
                                 `SlabGenerator` class. You can feed the
@@ -440,8 +440,8 @@ class FindSurface(FindCalculation):
     miller_indices = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     min_height = luigi.FloatParameter()
-    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     # Should explicitly remove the `min_slab_size` key/value from here, because
     # it will be overridden
@@ -457,7 +457,7 @@ class FindSurface(FindCalculation):
         until we make the `ase.Atoms` object.
         '''
         from .calculation_finders import FindBulk
-        return FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+        return FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
 
     def _load_attributes(self):
         '''
@@ -482,12 +482,12 @@ class FindSurface(FindCalculation):
                          'name.shift': {'$gte': self.shift - 1e-3,
                                         '$lte': self.shift + 1e-3},
                          'name.num_slab_atoms': n_atoms}
-        # Parse the VASP settings
-        for key, value in self.vasp_settings.items():
-            # We don't care if these VASP settings change
+        # Parse the DFT settings
+        for key, value in self.dft_settings.items():
+            # We don't care if these VASP-DFT settings change
             if key != 'isym':
-                self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-                self.fw_query['name.vasp_settings.%s' % key] = value
+                self.gasdb_query['fwname.dft_settings.%s' % key] = value
+                self.fw_query['name.dft_settings.%s' % key] = value
 
         # We want to pass the atoms object to the `MakeSurfaceFW` task, but
         # Luigi doesn't accept `ase.Atoms` arguments. So we package it into a
@@ -501,7 +501,7 @@ class FindSurface(FindCalculation):
                                         mpid=self.mpid,
                                         miller_indices=self.miller_indices,
                                         shift=self.shift,
-                                        vasp_settings=self.vasp_settings)
+                                        dft_settings=self.dft_settings)
 
     def _create_surface(self):
         '''

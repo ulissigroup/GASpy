@@ -51,8 +51,8 @@ def test_FindCalculation():
 
     # Ok, let's pick one of the child tasks to test the max_fizzles feature.
     mpid = 'mp-120'
-    vasp_settings = BULK_SETTINGS['vasp']
-    task = FindBulk(mpid=mpid, vasp_settings=vasp_settings, max_fizzles=0)
+    dft_settings = BULK_SETTINGS['vasp']
+    task = FindBulk(mpid=mpid, dft_settings=dft_settings, max_fizzles=0)
     try:
         with pytest.raises(ValueError, match='Since we have fizzled'):
             _ = list(task.run(_testing=True))     # noqa: F841
@@ -86,6 +86,25 @@ def test__remove_old_docs():
     assert remove_old_docs(docs) == {}
 
 
+def _assert_dft_settings(doc, dft_settings):
+    '''
+    Asserts whether the dft settings inside a doc/dictionary are correct based
+    on whether they look like VASP settings or Quantum Espresso settings.
+
+    Args:
+        doc             Dictionary/Mongo document object
+        dft_settings    Dictionary of VASP settings
+    '''
+    # TODO:  Actually fill in the real conditionals to check for VASP vs QE
+    if False:
+        _assert_vasp_settings(doc, dft_settings)
+    elif False:
+        _assert_qe_settings(doc, dft_settings)
+    else:
+        raise AssertionError('The DFT settings do not look like VASP or QE '
+                             'settings')
+
+
 def _assert_vasp_settings(doc, vasp_settings):
     '''
     Asserts whether the vasp_settings inside a doc/dictionary are correct
@@ -108,16 +127,32 @@ def _assert_vasp_settings(doc, vasp_settings):
         except KeyError:
             # If we're looking at an adslab, then we don't care about certain
             # vasp settings
-            if doc['fwname']['calculation_type'] == 'slab+adsorbate optimization' and key in set(['nsw', 'isym', 'symprec']):
+            if (doc['fwname']['calculation_type'] == 'slab+adsorbate optimization' and
+                key in {'nsw', 'isym', 'symprec'}):  # noqa: E129
                 pass
 
             # If we're looking at a slab, then we don't care about certain
             # vasp settings
-            elif doc['fwname']['calculation_type'] == 'slab+adsorbat optimizatione' and key in set(['isym']):
+            elif (doc['fwname']['calculation_type'] == 'slab+adsorbate optimization' and
+                  key in {'isym'}):
                 pass
 
             else:
                 raise
+
+
+def _assert_qe_settings(doc, qe_settings):
+    '''
+    Asserts whether the qe_settings inside a doc/dictionary are correct
+
+    Args:
+        doc             Dictionary/Mongo document object
+        qe_settings     Dictionary of Quantum Espresso settings
+    '''
+    assert AssertionError('We have not yet set up a unit test for finding '
+                          'Quantum Espresso calculations. We will rely on the '
+                          'underlying infrastructure that is already here. Feel '
+                          'free to add a correct unit test.')
 
 
 def test_FindGas_successfully():
@@ -126,15 +161,15 @@ def test_FindGas_successfully():
     the correct Mongo document/dictionary
     '''
     gas = 'H2'
-    vasp_settings = GAS_SETTINGS['vasp']
-    task = FindGas(gas_name=gas, vasp_settings=vasp_settings)
+    dft_settings = GAS_SETTINGS['vasp']
+    task = FindGas(gas_name=gas, dft_settings=dft_settings)
 
     try:
         _run_task_with_dynamic_dependencies(task)
         doc = get_task_output(task)
         assert doc['fwname']['calculation_type'] == 'gas phase optimization'
         assert doc['fwname']['gasname'] == gas
-        _assert_vasp_settings(doc, vasp_settings)
+        _assert_dft_settings(doc, dft_settings)
 
         # Make sure we can turn it into an atoms object
         _ = make_atoms_from_doc(doc)    # noqa: F841
@@ -162,7 +197,7 @@ def test_FindGas_unsuccessfully():
     the correct dependency
     '''
     gas = 'CHO'
-    task = FindGas(gas_name=gas, vasp_settings=GAS_SETTINGS['vasp'])
+    task = FindGas(gas_name=gas, dft_settings=GAS_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -179,8 +214,8 @@ def test_FindBulk_successfully():
     the correct Mongo document/dictionary
     '''
     mpid = 'mp-2'
-    vasp_settings = BULK_SETTINGS['vasp']
-    task = FindBulk(mpid=mpid, vasp_settings=vasp_settings)
+    dft_settings = BULK_SETTINGS['vasp']
+    task = FindBulk(mpid=mpid, dft_settings=dft_settings)
 
     try:
         _run_task_with_dynamic_dependencies(task)
@@ -188,7 +223,7 @@ def test_FindBulk_successfully():
 
         assert doc['fwname']['calculation_type'] == 'unit cell optimization'
         assert doc['fwname']['mpid'] == mpid
-        _assert_vasp_settings(doc, vasp_settings)
+        _assert_dft_settings(doc, dft_settings)
 
         # Make sure we can turn it into an atoms object
         _ = make_atoms_from_doc(doc)    # noqa: F841
@@ -203,7 +238,7 @@ def test_FindBulk_unsuccessfully():
     the correct dependency
     '''
     mpid = 'mp-120'
-    task = FindBulk(mpid=mpid, vasp_settings=BULK_SETTINGS['vasp'])
+    task = FindBulk(mpid=mpid, dft_settings=BULK_SETTINGS['vasp'])
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -226,7 +261,7 @@ def test_FindAdslab_successfully():
     rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    vasp_settings = ADSLAB_SETTINGS['vasp']
+    dft_settings = ADSLAB_SETTINGS['vasp']
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
@@ -234,7 +269,7 @@ def test_FindAdslab_successfully():
                       rotation=rotation,
                       mpid=mpid,
                       miller_indices=miller_indices,
-                      vasp_settings=vasp_settings)
+                      dft_settings=dft_settings)
 
     try:
         _run_task_with_dynamic_dependencies(task)
@@ -247,7 +282,7 @@ def test_FindAdslab_successfully():
         assert doc['fwname']['adsorbate_rotation'] == rotation
         assert doc['fwname']['mpid'] == mpid
         assert tuple(doc['fwname']['miller']) == miller_indices
-        _assert_vasp_settings(doc, vasp_settings)
+        _assert_dft_settings(doc, dft_settings)
 
         # Make sure we can turn it into an atoms object
         _ = make_atoms_from_doc(doc)    # noqa: F841
@@ -268,7 +303,7 @@ def test_FindAdslab_unsuccessfully():
     rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
-    vasp_settings = ADSLAB_SETTINGS['vasp']
+    dft_settings = ADSLAB_SETTINGS['vasp']
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
@@ -276,7 +311,7 @@ def test_FindAdslab_unsuccessfully():
                       rotation=rotation,
                       mpid=mpid,
                       miller_indices=miller_indices,
-                      vasp_settings=vasp_settings)
+                      dft_settings=dft_settings)
 
     try:
         dependency = _run_task_with_dynamic_dependencies(task)
@@ -288,7 +323,7 @@ def test_FindAdslab_unsuccessfully():
         assert dependency.adsorbate_name == adsorbate_name
         assert unfreeze_dict(dependency.rotation) == rotation
         assert dependency.miller_indices == miller_indices
-        assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
+        assert unfreeze_dict(dependency.dft_settings) == dft_settings
 
     finally:
         clean_up_tasks()
@@ -305,12 +340,12 @@ class TestFindSurface():
         miller_indices = (0, 1, 1)
         shift = 0.5
         min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
-        vasp_settings = SLAB_SETTINGS['vasp']
+        dft_settings = SLAB_SETTINGS['vasp']
         task = FindSurface(mpid=mpid,
                            miller_indices=miller_indices,
                            shift=shift,
                            min_height=min_height,
-                           vasp_settings=vasp_settings)
+                           dft_settings=dft_settings)
         try:
             schedule_tasks([task.requires()], local_scheduler=True)
 
@@ -355,12 +390,12 @@ class TestFindSurface():
         miller_indices = (0, 1, 1)
         shift = 0.5
         min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
-        vasp_settings = SLAB_SETTINGS['vasp']
+        dft_settings = SLAB_SETTINGS['vasp']
         task = FindSurface(mpid=mpid,
                            miller_indices=miller_indices,
                            shift=shift,
                            min_height=min_height,
-                           vasp_settings=vasp_settings)
+                           dft_settings=dft_settings)
 
         try:
             _run_task_with_dynamic_dependencies(task.requires())
@@ -371,7 +406,7 @@ class TestFindSurface():
             assert math.isclose(doc['fwname']['shift'], shift)
             assert tuple(doc['fwname']['miller']) == miller_indices
             assert task.min_height == min_height
-            _assert_vasp_settings(doc, vasp_settings)
+            _assert_dft_settings(doc, dft_settings)
 
             # Make sure we can turn it into an atoms object
             assert isinstance(make_atoms_from_doc(doc), ase.Atoms)
@@ -388,12 +423,12 @@ class TestFindSurface():
         miller_indices = (0, 1, 1)
         shift = 90001.
         min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
-        vasp_settings = SLAB_SETTINGS['vasp']
+        dft_settings = SLAB_SETTINGS['vasp']
         task = FindSurface(mpid=mpid,
                            miller_indices=miller_indices,
                            shift=shift,
                            min_height=min_height,
-                           vasp_settings=vasp_settings)
+                           dft_settings=dft_settings)
 
         try:
             _run_task_with_dynamic_dependencies(task.requires())
@@ -402,7 +437,7 @@ class TestFindSurface():
             assert dependency.mpid == mpid
             assert dependency.miller_indices == miller_indices
             assert dependency.shift == shift
-            assert unfreeze_dict(dependency.vasp_settings) == vasp_settings
+            assert unfreeze_dict(dependency.dft_settings) == dft_settings
 
         finally:
             clean_up_tasks()
