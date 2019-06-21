@@ -32,7 +32,7 @@ def get_launchpad():
     return lpad
 
 
-def find_n_rockets(query, vasp_settings, _testing=False):
+def find_n_rockets(query, dft_settings, _testing=False):
     '''
     This function will check if we have something currently running in our
     FireWorks launcher. It will also warn you if we have a lot of fizzles.
@@ -40,7 +40,7 @@ def find_n_rockets(query, vasp_settings, _testing=False):
     Args:
         query           A dictionary that can be passed as a `query` argument
                         to the `fireworks` collection of our FireWorks database.
-        vasp_settings   A dictionary of vasp settings. These will be
+        dft_settings    A dictionary of dft settings. These will be
                         automatically parsed into the `query` argument.
         _testing        Boolean indicating whether or not you are currently
                         doing a unit test. You should probably not be
@@ -51,9 +51,9 @@ def find_n_rockets(query, vasp_settings, _testing=False):
         n_fizzles   An integer for how many FireWorks have fizzled that match
                     the query
     '''
-    # Parse the VASP settings into the FireWorks query, then grab the docs
-    for key, value in vasp_settings.items():
-        query['name.vasp_settings.%s' % key] = value
+    # Parse the DFT settings into the FireWorks query, then grab the docs
+    for key, value in dft_settings.items():
+        query['name.dft_settings.%s' % key] = value
     docs = _get_firework_docs(query=query, _testing=_testing)
 
     # Warn the user if there are a bunch of fizzles
@@ -118,14 +118,16 @@ def __get_n_fizzles(docs):
     return len(fwids_fizzled)
 
 
-def make_firework(atoms, fw_name, vasp_settings):
+def make_firework(atoms, fw_name, dft_settings):
     '''
-    This function makes a FireWorks rocket to perform a VASP relaxation
+    This function identifies whether you're trying to do a VASP relaxation or a
+    Quantum Espresso relaxation. It then calls the appropriate helper function
+    to make a FireWorks rocket for you.
 
     Args:
         atoms           `ase.Atoms` object to relax
         fw_name         Dictionary of tags/etc to use as the FireWorks name
-        vasp_settings   Dictionary of VASP settings to pass to Vasp()
+        dft_settings    Dictionary of DFT settings
     Returns:
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
@@ -135,6 +137,30 @@ def make_firework(atoms, fw_name, vasp_settings):
         warnings.warn('You are making a firework with %i atoms in it. This may '
                       'take awhile.' % len(atoms), RuntimeWarning)
 
+    # TODO:  Do this right
+    if 'foo':
+        fw_name['dft_method'] = 'vasp'
+        firework = _make_vasp_firework(atoms, fw_name, dft_settings)
+    elif 'bar':
+        fw_name['dft_method'] = 'qe'
+        firework = _make_qe_firework(atoms, fw_name, dft_settings)
+
+    return firework
+
+
+def _make_vasp_firework(atoms, fw_name, vasp_settings):
+    '''
+    This function creates a FireWorks rocket specifically tailored to do VASP
+    calculations.
+
+    Args:
+        atoms           `ase.Atoms` object to relax
+        fw_name         Dictionary of tags/etc to use as the FireWorks name
+        vasp_settings    Dictionary of settings to pass to VASP
+    Returns:
+        firework    An instance of a `fireworks.Firework` object that is set up
+                    to perform a VASP relaxation
+    '''
     # Take the `vasp_functions` submodule in GASpy and then pass it out to each
     # FireWork rocket to use.
     vasp_filename = vasp_functions.__file__
@@ -160,6 +186,22 @@ def make_firework(atoms, fw_name, vasp_settings):
     fw_name['user'] = getpass.getuser()
     firework = Firework([pass_vasp_functions, read_atoms_file, relax], name=fw_name)
     return firework
+
+
+def _make_qe_firework(atoms, fw_name, qe_settings):
+    '''
+    This function creates a FireWorks rocket specifically tailored to do
+    Quantum Espresso calculations.
+
+    Args:
+        atoms           `ase.Atoms` object to relax
+        fw_name         Dictionary of tags/etc to use as the FireWorks name
+        qe_settings     Dictionary of settings to pass to VASP
+    Returns:
+        firework    An instance of a `fireworks.Firework` object that is set up
+                    to perform a VASP relaxation
+    '''
+    raise
 
 
 def encode_atoms_to_trajhex(atoms):
@@ -230,7 +272,7 @@ def submit_fwork(fwork, _testing=False):
         wflow   An instance of the `firework.Workflow` that was added to the
                 FireWorks launch pad.
     '''
-    wflow = Workflow([fwork], name='vasp optimization')
+    wflow = Workflow([fwork], name='dft optimization')
 
     if not _testing:
         lpad = get_launchpad()
@@ -267,8 +309,32 @@ def get_atoms_from_fw(fw, index=-1):
     This function will return an `ase.Atoms` object given a Firework from our
     LaunchPad.
 
+    Args:
+        fw      Instance of a `fireworks.core.firework.Firework` class that
+                should probably get obtained from our Launchpad
+        index   Integer referring to the index of the trajectory file that
+                you want to pull the `ase.Atoms` object from. `0` will be
+                the starting image; `-1` will be the final image; etc.
+    Returns
+        atoms   `ase.Atoms` instance from the Firework you provided
+    '''
+    # There are different methods to pull it out whether it was a VASP
+    # calculation or a Quantum Espresso calculation. Figure out which to use
+    # and then call it.
+    if fw.name['dft_method'] == 'vasp':
+        atoms = _get_atoms_from_vasp_fw(fw, index)
+    elif fw.name['dft_method'] == 'qe':
+        atoms = _get_atoms_from_qe_fw(fw, index)
+    return atoms
+
+
+def _get_atoms_from_vasp_fw(fw, index=-1):
+    '''
+    This function will return an `ase.Atoms` object given a Firework from our
+    LaunchPad that happened to use VASP to perform the relaxation.
+
     Note:  The relaxation often mangles the tags and constraints due to
-    limitations in in vasp() calculators. We fix this by getting the original
+    limitations in vasp() calculators. We fix this by getting the original
     `ase.Atoms` object that we gave to the Firework, and the putting the tags
     and constraints from the original object onto the decoded one.
 
@@ -319,6 +385,23 @@ def get_atoms_from_fw(fw, index=-1):
     patched_atoms = __patch_old_atoms_tags(fw, atoms)
 
     return patched_atoms
+
+
+def _get_atoms_from_qe_fw(fw, index=-1):
+    '''
+    This function will return an `ase.Atoms` object given a Firework from our
+    LaunchPad that happened to use Quantum Espresso to perform the relaxation.
+
+    Args:
+        fw      Instance of a `fireworks.core.firework.Firework` class that
+                should probably get obtained from our Launchpad
+        index   Integer referring to the index of the trajectory file that
+                you want to pull the `ase.Atoms` object from. `0` will be
+                the starting image; `-1` will be the final image; etc.
+    Returns
+        atoms   `ase.Atoms` instance from the Firework you provided
+    '''
+    raise
 
 
 def __patch_old_atoms_tags(fw, atoms):

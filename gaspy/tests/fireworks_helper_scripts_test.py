@@ -16,12 +16,16 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         _get_firework_docs,
                                         __get_n_fizzles,
                                         make_firework,
+                                        _make_vasp_firework,
+                                        _make_qe_firework,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
                                         submit_fwork,
                                         check_jobs_status,
                                         get_atoms_from_fwid,
                                         get_atoms_from_fw,
+                                        _get_atoms_from_vasp_fw,
+                                        _get_atoms_from_qe_fw,
                                         __patch_old_atoms_tags)
 
 # Things we need to do the tests
@@ -121,6 +125,10 @@ def test___warn_about_fizzles():
 
 
 def test_make_firework():
+    assert False
+
+
+def test__make_vasp_firework():
     '''
     Our FireWork rockets should take three steps:  write our
     `vasp_functions.py` submodule to the local directory, write the atoms
@@ -131,7 +139,7 @@ def test_make_firework():
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
     vasp_settings = defaults.gas_settings()['vasp']
-    fwork = make_firework(atoms, fw_name, vasp_settings)
+    fwork = _make_vasp_firework(atoms, fw_name, vasp_settings)
     pass_vasp_functions, read_atoms_file, relax = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
@@ -167,6 +175,10 @@ def test_make_firework():
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'You are making a firework with' in str(warning_manager[-1].message)
+
+
+def test__make_qe_firework():
+    assert False
 
 
 @pytest.mark.parametrize('adslab_atoms_name',
@@ -262,10 +274,20 @@ def test_get_atoms_from_fwid(fw_file):
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
 def test__get_atoms_from_fw(fw_file):
+    assert False
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test__get_atoms_from_vasp_fw(fw_file):
     with open(fw_file, 'rb') as file_handle:
         fw = pickle.load(file_handle)
     atoms = get_atoms_from_fw(fw)
     assert isinstance(atoms, ase.Atoms)
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test__get_atoms_from_qe_fw(fw_file):
+    assert False
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
