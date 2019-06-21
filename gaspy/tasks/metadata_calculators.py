@@ -92,7 +92,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
 
     def requires(self):
         return {'adsorbate_energy': CalculateAdsorbateEnergy(self.adsorbate_name,
-                                                             self.gas_vasp_settings),
+                                                             self.gas_dft_settings),
                 'bare_slab_doc': FindAdslab(adsorption_site=(0., 0., 0.),
                                             shift=self.shift,
                                             top=self.top,

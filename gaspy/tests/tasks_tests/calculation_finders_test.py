@@ -115,14 +115,14 @@ def _assert_vasp_settings(doc, vasp_settings):
     '''
     for key, value in vasp_settings.items():
         try:
-            assert doc['fwname']['vasp_settings'][key] == value
+            assert doc['fwname']['dft_settings'][key] == value
 
         # Some of our VASP settings are tuples, but Mongo only saves lists.
         # If we're looking at one of these cases, then we should compare
         # list-to-list
         except AssertionError:
             if isinstance(value, tuple):
-                assert doc['fwname']['vasp_settings'][key] == list(value)
+                assert doc['fwname']['dft_settings'][key] == list(value)
 
         except KeyError:
             # If we're looking at an adslab, then we don't care about certain
