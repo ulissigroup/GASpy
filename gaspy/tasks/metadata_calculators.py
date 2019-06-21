@@ -63,11 +63,11 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        gas_vasp_settings       A dictionary containing the VASP settings of
+        gas_dft_settings        A dictionary containing the VASP settings of
                                 the gas relaxation of the adsorbate
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
-        adslab_vasp_settings    A dictionary containing your VASP settings
+        adslab_dft_settings     A dictionary containing your VASP settings
                                 for the adslab relaxation
     Returns:
         doc A dictionary with the following keys:
@@ -86,9 +86,9 @@ class CalculateAdsorptionEnergy(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    gas_vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-    adslab_vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
 
     def requires(self):
         return {'adsorbate_energy': CalculateAdsorbateEnergy(self.adsorbate_name,
@@ -96,7 +96,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
                 'bare_slab_doc': FindAdslab(adsorption_site=(0., 0., 0.),
                                             shift=self.shift,
                                             top=self.top,
-                                            vasp_settings=self.adslab_vasp_settings,
+                                            dft_settings=self.adslab_dft_settings,
                                             adsorbate_name='',
                                             rotation={'phi': 0., 'theta': 0., 'psi': 0.},
                                             mpid=self.mpid,
@@ -104,11 +104,11 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                             min_xy=self.min_xy,
                                             slab_generator_settings=self.slab_generator_settings,
                                             get_slab_settings=self.get_slab_settings,
-                                            bulk_vasp_settings=self.bulk_vasp_settings),
+                                            bulk_dft_settings=self.bulk_dft_settings),
                 'adslab_doc': FindAdslab(adsorption_site=self.adsorption_site,
                                          shift=self.shift,
                                          top=self.top,
-                                         vasp_settings=self.adslab_vasp_settings,
+                                         dft_settings=self.adslab_dft_settings,
                                          adsorbate_name=self.adsorbate_name,
                                          rotation=self.rotation,
                                          mpid=self.mpid,
@@ -116,7 +116,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                          min_xy=self.min_xy,
                                          slab_generator_settings=self.slab_generator_settings,
                                          get_slab_settings=self.get_slab_settings,
-                                         bulk_vasp_settings=self.bulk_vasp_settings)}
+                                         bulk_dft_settings=self.bulk_dft_settings)}
 
     def run(self):
         with open(self.input()['adsorbate_energy'].path, 'rb') as file_handle:
@@ -150,16 +150,16 @@ class CalculateAdsorbateEnergy(luigi.Task):
     Arg:
         adsorbate_name  A string indicating the name of the adsorbate you
                         want to calculate the energy of
-        vasp_settings   A dictionary containing the VASP settings you want to
+        dft_settings    A dictionary containing the VASP settings you want to
                         use for the DFT relaxations of the basis set
     Returns:
         energy  The DFT-calculated energy of the adsorbate
     '''
     adsorbate_name = luigi.Parameter()
-    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
 
     def requires(self):
-        return CalculateAdsorbateBasisEnergies(self.vasp_settings)
+        return CalculateAdsorbateBasisEnergies(self.dft_settings)
 
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
@@ -194,20 +194,20 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
     you so that you can use these energies in other calculations.
 
     Arg:
-        vasp_settings   A dictionary containing the VASP settings you want to
+        dft_settings    A dictionary containing the VASP settings you want to
                         use for the DFT relaxations of the gases.
     Returns:
         basis_energies  A dictionary whose keys are the basis elements and
                         whose values are their respective energies, e.g.,
                         {'H': foo, 'O': bar}
     '''
-    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
 
     def requires(self):
-        return {'CO': FindGas(gas_name='CO', vasp_settings=self.vasp_settings),
-                'H2': FindGas(gas_name='H2', vasp_settings=self.vasp_settings),
-                'H2O': FindGas(gas_name='H2O', vasp_settings=self.vasp_settings),
-                'N2': FindGas(gas_name='N2', vasp_settings=self.vasp_settings)}
+        return {'CO': FindGas(gas_name='CO', dft_settings=self.dft_settings),
+                'H2': FindGas(gas_name='H2', dft_settings=self.dft_settings),
+                'H2O': FindGas(gas_name='H2O', dft_settings=self.dft_settings),
+                'N2': FindGas(gas_name='N2', dft_settings=self.dft_settings)}
 
     def run(self):
         # Load each gas and calculate their energies
@@ -250,9 +250,9 @@ class CalculateSurfaceEnergy(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        vasp_settings           A dictionary containing your VASP settings for
+        dft_settings            A dictionary containing your VASP settings for
                                 the surface relaxation
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate surfaces from
     Returns::
         doc A dictionary with the following keys:
@@ -273,8 +273,8 @@ class CalculateSurfaceEnergy(luigi.Task):
     max_atoms = luigi.IntParameter(SLAB_SETTINGS['max_atoms'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
-    bulk_vasp_settings = luigi.DictParameter(SE_BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(SE_BULK_SETTINGS['vasp'])
 
     def _static_requires(self):
         '''
@@ -284,7 +284,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         then just call it first in `run`.
         '''
         # Define our static dependency, the bulk relaxation
-        find_bulk_task = FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings)
+        find_bulk_task = FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
 
         # If our dependency is done, then save the relaxed bulk atoms object as
         # an attribute for use by the other methods
@@ -394,8 +394,8 @@ class CalculateSurfaceEnergy(luigi.Task):
                                miller_indices=self.miller_indices,
                                shift=self.shift,
                                min_height=min_height,
-                               vasp_settings=self.vasp_settings,
-                               bulk_vasp_settings=self.bulk_vasp_settings)
+                               dft_settings=self.dft_settings,
+                               bulk_dft_settings=self.bulk_dft_settings)
             surface_relaxation_tasks.append(task)
 
         # Save these tasks as an attribute so we can use the actual tasks later.
