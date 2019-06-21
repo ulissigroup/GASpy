@@ -20,7 +20,7 @@ def pp_version():
     return '5.4'
 
 
-def xc_settings(xc='rpbe'):
+def vasp_xc_settings(xc='rpbe'):
     '''
     A dictionary whose keys are some typical sets of exchange correlationals
     and whose values are dictionaries with the corresponding pseudopotential
@@ -28,43 +28,46 @@ def xc_settings(xc='rpbe'):
     information.  Credit goes to John Kitchin who wrote vasp.Vasp.xc_defaults,
     which we copied and put here.
     '''
-    xc_settings = {'lda': OrderedDict(pp='LDA'),
-                    # GGAs
-                   'gga': OrderedDict(pp='GGA'),
-                   'pbe': OrderedDict(pp='PBE'),
-                   'revpbe': OrderedDict(pp='LDA', gga='RE'),
-                   'rpbe': OrderedDict(gga='RP', pp='PBE'),
-                   'am05': OrderedDict(pp='LDA', gga='AM'),
-                   'pbesol': OrderedDict(gga='PS', pp='PBE'),
-                   # Meta-GGAs
-                   'tpss': OrderedDict(pp='PBE', metagga='TPSS'),
-                   'revtpss': OrderedDict(pp='PBE', metagga='RTPSS'),
-                   'm06l': OrderedDict(pp='PBE', metagga='M06L'),
-                   # vdW-DFs
-                   'optpbe_vdw': OrderedDict(pp='LDA', gga='OR', luse_vdw=True,
-                                             aggac=0.0),
-                   'optb88_vdw': OrderedDict(pp='LDA', gga='BO', luse_vdw=True,
-                                             aggac=0.0, param1=1.1 / 6.0,
-                                             param2=0.22),
-                   'optb86b_vdw': OrderedDict(pp='LDA', gga='MK',
-                                              luse_vdw=True, aggac=0.0,
-                                              param1=0.1234, param2=1.0),
-                   'vdw_df2': OrderedDict(pp='LDA', gga='ML', luse_vdw=True,
-                                          aggac=0.0, zab_vdw=-1.8867),
-                   'beef_vdw': OrderedDict(pp='PBE', gga='BF', luse_vdw=True,
-                                           zab_vdw=-1.8867, lbeefens=True),
-                   # hybrids
-                   'pbe0': OrderedDict(pp='LDA', gga='PE', lhfcalc=True),
-                   'hse03': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
-                                        hfscreen=0.3),
-                   'hse06': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
-                                        hfscreen=0.2),
-                   'b3lyp': OrderedDict(pp='LDA', gga='B3', lhfcalc=True,
-                                        aexx=0.2, aggax=0.72, aggac=0.81,
-                                        aldac=0.19),
-                   'hf': OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
-                                     aldac=0.0, aggac=0.0)}
-    return xc_settings[xc]
+    vasp_xc_settings = {'lda': OrderedDict(pp='LDA'),
+                        # GGAs
+                        'gga': OrderedDict(pp='GGA'),
+                        'pbe': OrderedDict(pp='PBE'),
+                        'revpbe': OrderedDict(pp='LDA', gga='RE'),
+                        'rpbe': OrderedDict(gga='RP', pp='PBE'),
+                        'am05': OrderedDict(pp='LDA', gga='AM'),
+                        'pbesol': OrderedDict(gga='PS', pp='PBE'),
+                        # Meta-GGAs
+                        'tpss': OrderedDict(pp='PBE', metagga='TPSS'),
+                        'revtpss': OrderedDict(pp='PBE', metagga='RTPSS'),
+                        'm06l': OrderedDict(pp='PBE', metagga='M06L'),
+                        # vdW-DFs
+                        'optpbe_vdw': OrderedDict(pp='LDA', gga='OR',
+                                                  luse_vdw=True, aggac=0.0),
+                        'optb88_vdw': OrderedDict(pp='LDA', gga='BO',
+                                                  luse_vdw=True, aggac=0.0,
+                                                  param1=1.1 / 6.0,
+                                                  param2=0.22),
+                        'optb86b_vdw': OrderedDict(pp='LDA', gga='MK',
+                                                   luse_vdw=True, aggac=0.0,
+                                                   param1=0.1234, param2=1.0),
+                        'vdw_df2': OrderedDict(pp='LDA', gga='ML',
+                                               luse_vdw=True, aggac=0.0,
+                                               zab_vdw=-1.8867),
+                        'beef_vdw': OrderedDict(pp='PBE', gga='BF',
+                                                luse_vdw=True, zab_vdw=-1.8867,
+                                                lbeefens=True),
+                        # hybrids
+                        'pbe0': OrderedDict(pp='LDA', gga='PE', lhfcalc=True),
+                        'hse03': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                             hfscreen=0.3),
+                        'hse06': OrderedDict(pp='LDA', gga='PE', lhfcalc=True,
+                                             hfscreen=0.2),
+                        'b3lyp': OrderedDict(pp='LDA', gga='B3', lhfcalc=True,
+                                             aexx=0.2, aggax=0.72, aggac=0.81,
+                                             aldac=0.19),
+                        'hf': OrderedDict(pp='PBE', lhfcalc=True, aexx=1.0,
+                                          aldac=0.0, aggac=0.0)}
+    return vasp_xc_settings[xc]
 
 
 def gas_settings():
@@ -76,7 +79,7 @@ def gas_settings():
                                                 ediffg=-0.03,
                                                 encut=350.,
                                                 pp_version=pp_version(),
-                                                **xc_settings()))
+                                                **vasp_xc_settings()))
     return gas_settings
 
 
@@ -92,7 +95,7 @@ def bulk_settings():
                                                  prec='Accurate',
                                                  encut=500.,
                                                  pp_version=pp_version(),
-                                                 **xc_settings()))
+                                                 **vasp_xc_settings()))
     return bulk_settings
 
 
@@ -111,7 +114,7 @@ def surface_energy_bulk_settings():
                                                     prec='Accurate',
                                                     encut=500.,
                                                     pp_version=pp_version(),
-                                                    **xc_settings('pbesol')))
+                                                    **vasp_xc_settings('pbesol')))
     return SE_bulk_settings
 
 
@@ -131,7 +134,7 @@ def slab_settings():
                        ediffg=-0.03,
                        encut=350.,
                        pp_version=pp_version(),
-                       **xc_settings('pbesol'))
+                       **vasp_xc_settings('pbesol'))
 
     qe = OrderedDict(control=OrderedDict(calculation='relax',
                                          pseudo_dir=QE_PP_DIR,
@@ -214,7 +217,7 @@ def adslab_settings():
                        symprec=1e-10,
                        encut=350.,
                        pp_version=pp_version(),
-                       **xc_settings())
+                       **vasp_xc_settings())
 
     qe = OrderedDict(control=OrderedDict(calculation='relax',
                                          pseudo_dir=QE_PP_DIR,
@@ -346,7 +349,7 @@ def adsorption_projection():
     return fingerprints
 
 
-def adsorption_filters(adsorbate=None):
+def adsorption_filters(adsorbate=None, dft_calculator='vasp'):
     '''
     Not all of our adsorption calculations are "good" ones. Some end up in
     desorptions, dissociations, do not converge, or have ridiculous energies.
@@ -355,8 +358,11 @@ def adsorption_filters(adsorbate=None):
     `aggregate` commands.
 
     Arg:
-        adsorbate   A string of the adsorbate that you want to get
-                    calculations for.
+        adsorbate       A string of the adsorbate that you want to get
+                        calculations for.
+        dft_calculator  A string indicating which DFT calculator you want to
+                        check. Can either be 'vasp' or 'qe' (for Quantum
+                        Espresso).
     Returns:
         filters     A dictionary that is meant to be used as a `query` argument
                     for our `adsorption` Mongo collection's `find` or
@@ -401,7 +407,15 @@ def adsorption_filters(adsorbate=None):
     filters['movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
     filters['movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
     filters['movement_data.max_slab_movement'] = {'$lt': slab_move_max}
-    filters['vasp_settings.gga'] = xc_settings()['gga']
+
+    # Use different filters for different DFT calculation settings
+    if dft_calculator == 'vasp':
+        filters['dft_settings.gga'] = vasp_xc_settings()['gga']
+    elif dft_calculator == 'qe':
+        pass
+    else:
+        raise SyntaxError('The dft_calculator setting of "%s" is not '
+                          'recognized.' % dft_calculator)
 
     return filters
 
@@ -431,7 +445,7 @@ def surface_projection():
     return fingerprints
 
 
-def surface_filters():
+def surface_filters(dft_calculator='vasp'):
     '''
     Not all of our surface energy calculations are "good" ones. Some do not
     converge or have end up having a lot of movement. These are the filters we
@@ -439,9 +453,12 @@ def surface_filters():
     operator we can pass to Mongo's `find` or `aggregate` commands.
 
     Returns:
-        filters     A dictionary that is meant to be used as a `query` argument
-                    for our `surface_energy` Mongo collection's `find` or
-                    `aggregate` commands.
+        filters         A dictionary that is meant to be used as a `query`
+                        argument for our `surface_energy` Mongo collection's
+                        `find` or `aggregate` commands.
+        dft_calculator  A string indicating which DFT calculator you want to
+                        check. Can either be 'vasp' or 'qe' (for Quantum
+                        Espresso).
     '''
     filters = {}
 
@@ -457,7 +474,15 @@ def surface_filters():
     filters['max_atom_movement.0'] = {'$lt': max_surface_movement}
     filters['max_atom_movement.1'] = {'$lt': max_surface_movement}
     filters['max_atom_movement.2'] = {'$lt': max_surface_movement}
-    filters['vasp_settings.gga'] = xc_settings('pbesol')['gga']
+
+    # Use different filters for different DFT calculation settings
+    if dft_calculator == 'vasp':
+        filters['dft_settings.gga'] = vasp_xc_settings('pbesol')['gga']
+    elif dft_calculator == 'qe':
+        pass
+    else:
+        raise SyntaxError('The dft_calculator setting of "%s" is not '
+                          'recognized.' % dft_calculator)
 
     return filters
 
