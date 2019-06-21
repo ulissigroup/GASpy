@@ -36,27 +36,15 @@ def update_surface_energy_collection(n_processes=1):
     # Identify the surfaces that have been at least partially calculated, but
     # not yet added to the surface energy collection
     atoms_docs = _find_atoms_docs_not_in_surface_energy_collection()
-    surfaces = set()
-    for doc in atoms_docs:
-        mpid = doc['fwname']['mpid']
-        miller_indices = tuple(doc['fwname']['miller'])
-        shift = round(doc['fwname']['shift'], 3)
-        # We'll need to make the vasp_settings hashable
-        vasp_settings = doc['fwname']['vasp_settings']
-        vasp_settings['kpts'] = tuple(vasp_settings['kpts'])  # make hashable
-        vasp_settings = tuple((key, value) for key, value in vasp_settings.items())
-        # Define a surface according to mpid, miller, shift, and calculation
-        # settings
-        surface = (mpid, miller_indices, shift, vasp_settings)
-        surfaces.add(surface)
+    surfaces = _find_surfaces_from_docs(atoms_docs)
 
     # Create a `CalculateSurfaceEnergy` task for each surface energy
     # calculation that is in-progress.
     tasks = [CalculateSurfaceEnergy(mpid=mpid,
                                     miller_indices=miller_indices,
                                     shift=shift,
-                                    vasp_settings={key: value for key, value in vasp_settings})
-             for mpid, miller_indices, shift, vasp_settings in surfaces]
+                                    dft_settings={key: value for key, value in dft_settings})
+             for mpid, miller_indices, shift, dft_settings in surfaces]
 
     # Run each task and then see which ones are done
     print('[%s] Calculating surface energies...' % datetime.now())
@@ -81,6 +69,42 @@ def update_surface_energy_collection(n_processes=1):
             collection.insert_many(surface_energy_docs)
         print('[%s] Created %i new entries in the surface energy collection'
               % (datetime.now(), len(surface_energy_docs)))
+
+
+def _find_surfaces_from_docs(docs):
+    '''
+    Identifies the unique surfaces within a list of documents of surface
+    calculations. Also discriminates by calculation settings.
+
+    Arg:
+        docs    A list of dictionaries (i.e, Mongo documents) from the `atoms`
+                collection
+    Returns:
+        surfaces    A set of 4-tuples where the elements are the mpid, Miller
+                    indices, shift, and dft settings, respectively.
+    '''
+    surfaces = set()
+    for doc in docs:
+        mpid = doc['fwname']['mpid']
+        miller_indices = tuple(doc['fwname']['miller'])
+        shift = round(doc['fwname']['shift'], 3)
+
+        # We'll need to make the DFT settings hashable
+        dft_settings = doc['fwname']['dft_settings']
+        # One set of methods for VASP
+        if doc['fwname']['dft_method'] == 'vasp':
+            dft_settings['kpts'] = tuple(dft_settings['kpts'])  # make hashable
+            dft_settings = tuple((key, value) for key, value in dft_settings.items())
+        # TODO:  Another set of methods for Quantum Espresso
+        elif doc['fwname']['dft_method'] == 'qe':
+            dft_settings['kpts'] = tuple(dft_settings['kpts'])  # make hashable
+            dft_settings = tuple((key, value) for key, value in dft_settings.items())
+
+        # Define a surface according to mpid, miller, shift, and calculation
+        # settings
+        surface = (mpid, miller_indices, shift, dft_settings)
+        surfaces.add(surface)
+    return surfaces
 
 
 def _find_atoms_docs_not_in_surface_energy_collection():
@@ -147,7 +171,7 @@ def __run_calculate_surface_energy_task(task):
                       'the offending surface energy calculation information: '
                       ' (%s, %s, %s, %s)'
                       % (task.mpid, task.miller_indices, task.shift,
-                         unfreeze_dict(task.vasp_settings)))
+                         unfreeze_dict(task.dft_settings)))
 
 
 def __create_surface_energy_doc(surface_energy_task):
@@ -229,6 +253,6 @@ def __create_surface_energy_doc(surface_energy_task):
     doc['mpid'] = surface_energy_task.mpid
     doc['miller'] = surface_energy_task.miller_indices
     doc['shift'] = surface_energy_task.shift
-    doc['vasp_settings'] = unfreeze_dict(surface_energy_task.vasp_settings)
+    doc['dft_settings'] = unfreeze_dict(surface_energy_task.dft_settings)
 
     return doc

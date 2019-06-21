@@ -118,7 +118,7 @@ def test___create_adsorption_doc():
     assert isinstance(doc['top'], bool)
     # `slabrepeat` should be a tuple of ints, but historically it was made as a string
     assert all(isinstance(repeat, int) for repeat in doc['slab_repeat'])
-    assert isinstance(doc['vasp_settings'], dict)
+    assert isinstance(doc['dft_settings'], dict)
     assert all(isinstance(fwid, int) for fwid in doc['fwids'].values())
     assert 'fp_init' in doc
     assert 'fp_final' in doc

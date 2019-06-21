@@ -36,7 +36,8 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-def update_catalog_collection(elements, max_miller, n_processes=1, mp_query=None):
+def update_catalog_collection(elements, max_miller, bulk_dft_settings,
+                              n_processes=1, mp_query=None):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
@@ -76,7 +77,7 @@ def update_catalog_collection(elements, max_miller, n_processes=1, mp_query=None
                            iterable=mpids, chunksize=20))
     else:
         for mpid in mpids:
-            __run_insert_to_catalog_task(mpid, max_miller)
+            __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings)
 
 
 class _GetMpids(luigi.Task):
@@ -141,7 +142,7 @@ class _GetMpids(luigi.Task):
         return make_task_output_object(self)
 
 
-def __run_insert_to_catalog_task(mpid, max_miller):
+def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     '''
     Very light wrapper to instantiate a `_InsertSitesToCatalog` task and then
     run it manually.
@@ -152,7 +153,7 @@ def __run_insert_to_catalog_task(mpid, max_miller):
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
     '''
-    task = _InsertSitesToCatalog(mpid, max_miller)
+    task = _InsertSitesToCatalog(mpid, max_miller, bulk_dft_settings)
     try:
         run_task(task)
 
@@ -189,7 +190,7 @@ class _InsertSitesToCatalog(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of all of the Mongo documents (i.e., dictionaries)
@@ -201,7 +202,7 @@ class _InsertSitesToCatalog(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
         return GenerateAllSitesFromBulk(mpid=self.mpid,
@@ -209,7 +210,7 @@ class _InsertSitesToCatalog(luigi.Task):
                                         min_xy=self.min_xy,
                                         slab_generator_settings=self.slab_generator_settings,
                                         get_slab_settings=self.get_slab_settings,
-                                        bulk_vasp_settings=self.bulk_vasp_settings)
+                                        bulk_dft_settings=self.bulk_dft_settings)
 
     def run(self, _testing=False):
         '''
@@ -228,7 +229,7 @@ class _InsertSitesToCatalog(luigi.Task):
                          'min_xy': self.min_xy,
                          'slab_generator_settings': unfreeze_dict(self.slab_generator_settings),
                          'get_slab_settings': unfreeze_dict(self.get_slab_settings),
-                         'bulk_vasp_settings': unfreeze_dict(self.bulk_vasp_settings),
+                         'bulk_dft_settings': unfreeze_dict(self.bulk_dft_settings),
                          'shift': {'$gt': site_doc['shift'] - 0.01,
                                    '$lt': site_doc['shift'] + 0.01},
                          'top': site_doc['top'],
@@ -252,7 +253,7 @@ class _InsertSitesToCatalog(luigi.Task):
                     doc['min_xy'] = self.min_xy
                     doc['slab_generator_settings'] = unfreeze_dict(self.slab_generator_settings)
                     doc['get_slab_settings'] = unfreeze_dict(self.get_slab_settings)
-                    doc['bulk_vasp_settings'] = unfreeze_dict(self.bulk_vasp_settings)
+                    doc['bulk_dft_settings'] = unfreeze_dict(self.bulk_dft_settings)
                     doc['adsorption_site'] = tuple(doc['adsorption_site'])
                     doc['fwids'] = site_doc['fwids']
                     # Add fingerprint information to the document

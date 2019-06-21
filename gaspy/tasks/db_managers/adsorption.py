@@ -121,7 +121,7 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                      rotation=atoms_doc['fwname']['adsorbate_rotation'],
                                      mpid=atoms_doc['fwname']['mpid'],
                                      miller_indices=atoms_doc['fwname']['miller'],
-                                     adslab_vasp_settings=atoms_doc['fwname']['vasp_settings'])
+                                     adslab_dft_settings=atoms_doc['fwname']['dft_settings'])
     try:
         run_task(task)
         energy_doc = get_task_output(task)
@@ -230,7 +230,7 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['shift'] = adslab_doc['fwname']['shift']
     adsorption_doc['top'] = adslab_doc['fwname']['top']
     adsorption_doc['slab_repeat'] = adslab_doc['fwname']['slab_repeat']
-    adsorption_doc['vasp_settings'] = adslab_doc['fwname']['vasp_settings']
+    adsorption_doc['dft_settings'] = adslab_doc['fwname']['dft_settings']
     adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
                                'slab': slab_doc['fwid']}
     adsorption_doc['fp_final'] = fp_final

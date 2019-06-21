@@ -10,6 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ....tasks.db_managers.surfaces import (update_surface_energy_collection,
+                                            _find_surfaces_from_docs,
                                             _find_atoms_docs_not_in_surface_energy_collection,
                                             __run_calculate_surface_energy_task,
                                             __create_surface_energy_doc)
@@ -51,6 +52,24 @@ def test_update_surface_energy_collection():
         with get_mongo_collection('surface_energy') as collection:
             collection.delete_many({})
         populate_unit_testing_collection('surface_energy')
+
+
+def test__find_surfaces_from_docs():
+    docs = _find_atoms_docs_not_in_surface_energy_collection()
+    surfaces = _find_surfaces_from_docs(docs)
+
+    # Find all of the surfaces manually
+    for doc in docs:
+        mpid = doc['fwname']['mpid']
+        miller_indices = tuple(doc['fwname']['miller'])
+        shift = round(doc['fwname']['shift'], 3)
+        dft_settings = doc['fwname']['dft_settings']
+        dft_settings['kpts'] = tuple(dft_settings['kpts'])  # make hashable
+        dft_settings = tuple((key, value) for key, value in dft_settings.items())
+        surface = (mpid, miller_indices, shift, dft_settings)
+
+        # Make sure they inside the set of surfaces our function found
+        assert surface in surfaces
 
 
 def test__find_atoms_docs_not_in_surface_energy_collection():
