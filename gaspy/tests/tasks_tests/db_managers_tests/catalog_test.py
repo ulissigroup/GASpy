@@ -110,7 +110,8 @@ def test_catalog_update_with_custom_mp_query():
         clean_up_tasks()
 
 
-def test__InsertAllSitesFromBulkToCatalog():
+@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
+def test__InsertAllSitesFromBulkToCatalog(dft_method):
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
@@ -118,46 +119,43 @@ def test__InsertAllSitesFromBulkToCatalog():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
-    # Let's see if we can make catalogs for both VASP and Quantum Espresso
-    for dft_method in ['vasp', 'qe']:
+    # Need to clear out the current catalog before checking that we can add
+    # more
+    with get_mongo_collection('catalog') as collection:
+        collection.delete_many({})
 
-        # Need to clear out the current catalog before checking that we can add
-        # more
+    mpid = 'mp-2'
+    max_miller = 2
+    catalog_inserter = _InsertSitesToCatalog(mpid=mpid,
+                                             max_miller=max_miller,
+                                             bulk_dft_settings=BULK_SETTINGS[dft_method])
+    site_generator = catalog_inserter.requires()
+
+    try:
+        run_task_locally(site_generator)
+        site_docs = get_task_output(site_generator)
+
+        catalog_inserter.run(_testing=True)
+        catalog_docs = get_task_output(catalog_inserter)
+
+        for site_doc, catalog_doc in zip(site_docs, catalog_docs):
+            assert catalog_doc['mpid'] == mpid
+            assert max(catalog_doc['miller']) <= max_miller
+            assert catalog_doc['min_xy'] == site_generator.min_xy
+            assert catalog_doc['slab_generator_settings'] == unfreeze_dict(site_generator.slab_generator_settings)
+            assert catalog_doc['get_slab_settings'] == unfreeze_dict(site_generator.get_slab_settings)
+            # Mongo can't store tuples, so when we read it out, it turns into a list. Undo that here.
+            catalog_doc['bulk_dft_settings']['kpts'] = tuple(catalog_doc['bulk_dft_settings']['kpts'])
+            assert catalog_doc['bulk_dft_settings'] == dict(unfreeze_dict(site_generator.bulk_dft_settings))
+            assert catalog_doc['shift'] == site_doc['shift']
+            assert catalog_doc['top'] == site_doc['top']
+            assert make_atoms_from_doc(catalog_doc) == make_atoms_from_doc(site_doc)
+            npt.assert_allclose(catalog_doc['slab_repeat'], site_doc['slab_repeat'])
+            npt.assert_allclose(catalog_doc['adsorption_site'], site_doc['adsorption_site'])
+
+    # Reset the pickles and the collection
+    finally:
+        clean_up_tasks()
         with get_mongo_collection('catalog') as collection:
             collection.delete_many({})
-
-        mpid = 'mp-2'
-        max_miller = 2
-        catalog_inserter = _InsertSitesToCatalog(mpid=mpid,
-                                                 max_miller=max_miller,
-                                                 bulk_dft_settings=BULK_SETTINGS[dft_method])
-        site_generator = catalog_inserter.requires()
-
-        try:
-            run_task_locally(site_generator)
-            site_docs = get_task_output(site_generator)
-
-            catalog_inserter.run(_testing=True)
-            catalog_docs = get_task_output(catalog_inserter)
-
-            for site_doc, catalog_doc in zip(site_docs, catalog_docs):
-                assert catalog_doc['mpid'] == mpid
-                assert max(catalog_doc['miller']) <= max_miller
-                assert catalog_doc['min_xy'] == site_generator.min_xy
-                assert catalog_doc['slab_generator_settings'] == unfreeze_dict(site_generator.slab_generator_settings)
-                assert catalog_doc['get_slab_settings'] == unfreeze_dict(site_generator.get_slab_settings)
-                # Mongo can't store tuples, so when we read it out, it turns into a list. Undo that here.
-                catalog_doc['bulk_dft_settings']['kpts'] = tuple(catalog_doc['bulk_dft_settings']['kpts'])
-                assert catalog_doc['bulk_dft_settings'] == dict(unfreeze_dict(site_generator.bulk_dft_settings))
-                assert catalog_doc['shift'] == site_doc['shift']
-                assert catalog_doc['top'] == site_doc['top']
-                assert make_atoms_from_doc(catalog_doc) == make_atoms_from_doc(site_doc)
-                npt.assert_allclose(catalog_doc['slab_repeat'], site_doc['slab_repeat'])
-                npt.assert_allclose(catalog_doc['adsorption_site'], site_doc['adsorption_site'])
-
-        # Reset the pickles and the collection
-        finally:
-            clean_up_tasks()
-            with get_mongo_collection('catalog') as collection:
-                collection.delete_many({})
-            populate_unit_testing_collection('catalog')
+        populate_unit_testing_collection('catalog')
