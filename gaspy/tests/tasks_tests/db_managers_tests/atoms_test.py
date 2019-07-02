@@ -86,12 +86,18 @@ def test__make_atoms_doc_from_fwid():
 def test___patch_old_document():
     '''
     We rely on unit testing of the child functions to verify that we do the
-    patching correctly. This test will instead make sure that the function
-    can run and returns a separate instance.
+    patching correctly. This test will instead make sure that the function can
+    run and returns a separate instance.
     '''
     # Create an example document
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         atoms = get_atoms_from_fw(fw)
@@ -112,6 +118,12 @@ def test___patch_atoms_from_old_vasp():
     # Get example fireworks and atoms objects
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         atoms = get_atoms_from_fw(fw)
@@ -159,11 +171,17 @@ def test__get_patched_vasp_settings():
     '''
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         vasp_settings = __get_patched_vasp_settings(fw)
 
-        expected_vasp_settings = fw.name['vasp_settings']
+        expected_vasp_settings = fw.name['dft_settings']
         assert vasp_settings == expected_vasp_settings
 
 

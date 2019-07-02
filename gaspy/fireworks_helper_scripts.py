@@ -138,10 +138,10 @@ def make_firework(atoms, fw_name, dft_settings):
 
     # TODO:  Do this right
     if 'foo':
-        fw_name['dft_method'] = 'vasp'
+        fw_name['dft_settings']['_calculator'] = 'vasp'
         firework = _make_vasp_firework(atoms, fw_name, dft_settings)
     elif 'bar':
-        fw_name['dft_method'] = 'qe'
+        fw_name['dft_settings']['_calculator'] = 'qe'
         firework = _make_qe_firework(atoms, fw_name, dft_settings)
 
     return firework
@@ -318,9 +318,9 @@ def get_atoms_from_fw(fw, index=-1):
     # There are different methods to pull it out whether it was a VASP
     # calculation or a Quantum Espresso calculation. Figure out which to use
     # and then call it.
-    if fw.name['dft_method'] == 'vasp':
+    if fw.name['dft_settings']['_calculator'] == 'vasp':
         atoms = _get_atoms_from_vasp_fw(fw, index)
-    elif fw.name['dft_method'] == 'qe':
+    elif fw.name['dft_settings']['_calculator'] == 'qe':
         atoms = _get_atoms_from_qe_fw(fw, index)
     return atoms
 

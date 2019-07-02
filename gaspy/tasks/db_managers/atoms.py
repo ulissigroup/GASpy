@@ -269,7 +269,7 @@ def __get_patched_vasp_settings(fw):
     # calculations? I'm not sure. I think that it just assumes that
     # untagged calculations are RPBE.
     if 'gga' not in vasp_settings:
-        settings = defaults.xc_settings(xc='rpbe')
+        settings = defaults.vasp_xc_settings(xc='rpbe')
         for key in settings:
             vasp_settings[key] = settings[key]
 
