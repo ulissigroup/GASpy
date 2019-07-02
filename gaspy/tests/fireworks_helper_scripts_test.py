@@ -284,21 +284,30 @@ def test_get_atoms_from_fwid(fw_file):
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
-def test__get_atoms_from_fw(fw_file):
-    assert False
+def test_get_atoms_from_fw(fw_file):
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    atoms = get_atoms_from_fw(fw)
+    assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
 def test__get_atoms_from_vasp_fw(fw_file):
     with open(fw_file, 'rb') as file_handle:
         fw = pickle.load(file_handle)
-    atoms = get_atoms_from_vasp_fw(fw)
-    assert isinstance(atoms, ase.Atoms)
+    if fw.name['dft_settings']['_calculator'] == 'vasp':
+        atoms = _get_atoms_from_vasp_fw(fw)
+        assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
 def test__get_atoms_from_qe_fw(fw_file):
-    assert False
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    if fw.name['dft_settings']['_calculator'] == 'qe':
+        atoms = _get_atoms_from_qe_fw(fw)
+        assert isinstance(atoms, ase.Atoms)
+    assert False, 'We do not actually have any QE fireworks to test currently.'
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
