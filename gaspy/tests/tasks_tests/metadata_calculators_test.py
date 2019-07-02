@@ -185,14 +185,13 @@ class TestCalculateSurfaceEnergy():
                                       miller_indices=(0, 0, 1),
                                       shift=0.081,
                                       max_atoms=5)
-        bulk_task = task._static_requires()
         try:
-            schedule_tasks([bulk_task], local_scheduler=True)
-
             # Make sure it throws an error. Note that we don't actually call
             # the `__teminate_if_too_large` method, because it should be called
             # when we execute `_static_requires` with a completed `FindBulk`.
             with pytest.raises(RuntimeError, match='Cannot calculate surface.*'):
+                bulk_task = task._static_requires()
+                schedule_tasks([bulk_task], local_scheduler=True)
                 _ = task._static_requires()  # noqa: F841
 
         finally:
