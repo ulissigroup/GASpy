@@ -15,7 +15,6 @@ import pandas as pd
 import ase.io
 from fireworks import Firework, PyTask, LaunchPad, FileWriteTask, Workflow
 from .utils import print_dict, read_rc
-from . import vasp_functions
 
 
 def get_launchpad():
@@ -163,9 +162,7 @@ def _make_vasp_firework(atoms, fw_name, vasp_settings):
     '''
     # Take the `vasp_functions` submodule in GASpy and then pass it out to each
     # FireWork rocket to use.
-    vasp_filename = vasp_functions.__file__
-    if vasp_filename.split('.')[-1] == 'pyc':   # Make sure we use the source file
-        vasp_filename = vasp_filename[:-3] + 'py'
+    vasp_filename = '/home/GASpy/gaspy/vasp_functions.py'
     with open(vasp_filename) as file_handle:
         vasp_functions_contents = file_handle.read()
     pass_vasp_functions = FileWriteTask(files_to_write=[{'filename': 'vasp_functions.py',
