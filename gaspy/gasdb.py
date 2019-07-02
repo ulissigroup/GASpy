@@ -360,7 +360,7 @@ def _add_orr_predictions_to_projection(projection, latest_predictions):
 
 def get_unsimulated_catalog_docs(adsorbate,
                                  adsorbate_rotation_list=None,
-                                 vasp_settings=None):
+                                 dft_settings=None):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out all
     items that also show up in `get_adsorption_docs`, i.e., gets the catalog
@@ -376,26 +376,25 @@ def get_unsimulated_catalog_docs(adsorbate,
                                 will add another set of sites to the output
                                 list. If you add nothing, then we'll just check
                                 for the default rotation only.
-        vasp_settings           [optional] An OrderedDict containing the
-                                default energy cutoff, VASP pseudo-potential
-                                version number (pp_version), and
-                                exchange-correlational settings. This should be
-                                obtained (and modified, if necessary) from
-                                `gaspy.defaults.adslab_settings()['vasp']`. If
+        dft_settings            [optional] An OrderedDict containing the DFT
+                                settings to use. This should be obtained (and
+                                modified, if necessary) from
+                                `gaspy.defaults.adslab_settings()['vasp']` or
+                                `gaspy.defaults.adslab_settings()['qe']`.  If
                                 `None`, then pulls default settings.
     Returns:
         docs    A list of dictionaries for various projection.
     '''
     # Python doesn't like mutable default arguments
-    if vasp_settings is None:
-        vasp_settings = defaults.adslab_settings()['vasp']
+    if dft_settings is None:
+        dft_settings = defaults.adslab_settings()['vasp']
     if adsorbate_rotation_list is None:
         adsorbate_rotation_list = [defaults.adslab_settings()['rotation']]
 
     docs_catalog = get_catalog_docs()
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
     docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate,
-                                                    vasp_settings=vasp_settings)
+                                                    dft_settings=dft_settings)
 
     # Hash all of the documents, which we will use to check if something
     # in the catalog has been simulated or not
@@ -454,7 +453,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
         return docs
 
 
-def _get_attempted_adsorption_docs(adsorbate, vasp_settings=None):
+def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`. This differs from
@@ -466,11 +465,11 @@ def _get_attempted_adsorption_docs(adsorbate, vasp_settings=None):
     Args:
         adsorbate       A string indicating the adsorbate that you want to find
                         the attempted calculations for.
-        vasp_settings   [optional] An OrderedDict containing the default energy
-                        cutoff, VASP pseudo-potential version number
-                        (pp_version), and exchange-correlational settings. This
-                        should be obtained (and modified, if necessary) from
-                        `gaspy.defaults.adslab_settings()['vasp']`. If `None`,
+        dft_settings    [optional] An OrderedDict containing the DFT settings
+                        to use. This should be obtained (and modified, if
+                        necessary) from
+                        `gaspy.defaults.adslab_settings()['vasp']` or
+                        `gaspy.defaults.adslab_settings()['qe']`.  If `None`,
                         then pulls default settings.
     Returns:
         cleaned_docs    A list of dictionaries whose key/value pairings are the
@@ -480,10 +479,10 @@ def _get_attempted_adsorption_docs(adsorbate, vasp_settings=None):
     '''
     # Get only the documents that have the right calculation settings and
     # adsorbates
-    if vasp_settings is None:
-        vasp_settings = defaults.adslab_settings()['vasp']
-    filters = {'vasp_settings.%s' % setting: value
-               for setting, value in vasp_settings.items()}
+    if dft_settings is None:
+        dft_settings = defaults.adslab_settings()['vasp']
+    filters = {'dft_settings.%s' % setting: value
+               for setting, value in dft_settings.items()}
     if adsorbate:
         filters['adsorbate'] = adsorbate
     match = {'$match': filters}
