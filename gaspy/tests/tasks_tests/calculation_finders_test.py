@@ -95,14 +95,13 @@ def _assert_dft_settings(doc, dft_settings):
         doc             Dictionary/Mongo document object
         dft_settings    Dictionary of VASP settings
     '''
-    # TODO:  Actually fill in the real conditionals to check for VASP vs QE
-    if False:
+    if dft_settings['_calculator'] == 'vasp':
         _assert_vasp_settings(doc, dft_settings)
-    elif False:
+    elif dft_settings['_calculator'] == 'qe':
         _assert_qe_settings(doc, dft_settings)
     else:
-        raise AssertionError('The DFT settings do not look like VASP or QE '
-                             'settings')
+        raise AssertionError('The DFT settings do not look like anything we '
+                             'have the infrastruture setup for.')
 
 
 def _assert_vasp_settings(doc, vasp_settings):

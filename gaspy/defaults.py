@@ -72,7 +72,8 @@ def vasp_xc_settings(xc='rpbe'):
 
 def gas_settings():
     ''' The default settings we use to do DFT calculations of gases '''
-    gas_settings = OrderedDict(vasp=OrderedDict(ibrion=2,
+    gas_settings = OrderedDict(vasp=OrderedDict(_calculator='vasp',
+                                                ibrion=2,
                                                 nsw=100,
                                                 isif=0,
                                                 kpts=(1, 1, 1),
@@ -86,7 +87,8 @@ def gas_settings():
 def bulk_settings():
     ''' The default settings we use to do DFT calculations of bulks '''
     bulk_settings = OrderedDict(max_atoms=80,
-                                vasp=OrderedDict(ibrion=1,
+                                vasp=OrderedDict(_calculator='vasp',
+                                                 ibrion=1,
                                                  nsw=100,
                                                  isif=7,
                                                  isym=0,
@@ -105,7 +107,8 @@ def surface_energy_bulk_settings():
     spefically for surface energy calculations.
     '''
     SE_bulk_settings = OrderedDict(max_atoms=80,
-                                   vasp=OrderedDict(ibrion=1,
+                                   vasp=OrderedDict(_calculator='vasp',
+                                                    ibrion=1,
                                                     nsw=100,
                                                     isif=7,
                                                     isym=0,
@@ -125,7 +128,8 @@ def slab_settings():
     `SlabGenerator` class in pymatgen, and the `get_slab_settings` are passed
     to the `get_slab` method of that class.
     '''
-    vasp = OrderedDict(ibrion=2,
+    vasp = OrderedDict(_calculator='vasp',
+                       ibrion=2,
                        nsw=100,
                        isif=0,
                        isym=0,
@@ -207,7 +211,8 @@ def adslab_settings():
     subsequent DFT settings. `mix_xy` is the minimum with of the slab
     (Angstroms) before we enumerate adsorption sites on it.
     '''
-    vasp = OrderedDict(ibrion=2,
+    vasp = OrderedDict(_calculator='vasp',
+                       ibrion=2,
                        nsw=200,
                        isif=0,
                        isym=0,
