@@ -91,12 +91,14 @@ def _find_surfaces_from_docs(docs):
 
         # We'll need to make the DFT settings hashable
         dft_settings = doc['fwname']['dft_settings']
+
         # One set of methods for VASP
-        if doc['fwname']['dft_method'] == 'vasp':
+        if doc['fwname']['dft_settings']['_calculator'] == 'vasp':
             dft_settings['kpts'] = tuple(dft_settings['kpts'])  # make hashable
             dft_settings = tuple((key, value) for key, value in dft_settings.items())
+
         # TODO:  Another set of methods for Quantum Espresso
-        elif doc['fwname']['dft_method'] == 'qe':
+        elif doc['fwname']['dft_settings']['_calculator'] == 'qe':
             dft_settings['kpts'] = tuple(dft_settings['kpts'])  # make hashable
             dft_settings = tuple((key, value) for key, value in dft_settings.items())
 
