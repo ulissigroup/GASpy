@@ -14,6 +14,7 @@ from ....tasks.db_managers.catalog import (update_catalog_collection,
                                            _InsertSitesToCatalog)
 
 # Things we need to do the tests
+import pytest
 import numpy.testing as npt
 from pymatgen.ext.matproj import MPRester
 from ..utils import clean_up_tasks, run_task_locally
@@ -27,32 +28,30 @@ from ....defaults import bulk_settings
 BULK_SETTINGS = bulk_settings()
 
 
-def test_update_catalog_collection():
+@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
+def test_update_catalog_collection(dft_method):
     elements = ['Pd']
     max_miller = 1
 
-    # Let's see if we can make catalogs for both VASP and Quantum Espresso
-    for dft_method in ['vasp', 'qe']:
+    try:
+        # Clear out the catalog so we know that anything new was added by
+        # this function
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
 
-        try:
-            # Clear out the catalog so we know that anything new was added by
-            # this function
-            with get_mongo_collection('catalog') as collection:
-                collection.delete_many({})
+            # Add some sites and check that they're there
+            update_catalog_collection(elements=elements,
+                                      max_miller=max_miller,
+                                      bulk_dft_settings=BULK_SETTINGS[dft_method])
+            docs = list(collection.find({'mpid': 'mp-2'}))
+        assert len(docs) > 0
 
-                # Add some sites and check that they're there
-                update_catalog_collection(elements=elements,
-                                          max_miller=max_miller,
-                                          bulk_dft_settings=BULK_SETTINGS[dft_method])
-                docs = list(collection.find({'mpid': 'mp-2'}))
-            assert len(docs) > 0
-
-        # Reset the unit testing catalog and clear any pickles we made
-        finally:
-            with get_mongo_collection('catalog') as collection:
-                collection.delete_many({})
-            populate_unit_testing_collection('catalog')
-            clean_up_tasks()
+    # Reset the unit testing catalog and clear any pickles we made
+    finally:
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+        populate_unit_testing_collection('catalog')
+        clean_up_tasks()
 
 
 def test__GetMpids():
@@ -98,7 +97,7 @@ def test_catalog_update_with_custom_mp_query():
             # Add some sites and check that they're there
             update_catalog_collection(elements=elements,
                                       max_miller=max_miller,
-                                      dft_settings=BULK_SETTINGS['vasp'],
+                                      bulk_dft_settings=BULK_SETTINGS['vasp'],
                                       mp_query=mp_query)
             docs = list(collection.find({'mpid': mpid}))
         assert len(docs) > 0
