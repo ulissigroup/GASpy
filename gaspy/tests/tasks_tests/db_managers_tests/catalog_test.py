@@ -119,19 +119,18 @@ def test__InsertAllSitesFromBulkToCatalog(dft_method):
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
-    # Need to clear out the current catalog before checking that we can add
-    # more
-    with get_mongo_collection('catalog') as collection:
-        collection.delete_many({})
-
-    mpid = 'mp-2'
-    max_miller = 2
-    catalog_inserter = _InsertSitesToCatalog(mpid=mpid,
-                                             max_miller=max_miller,
-                                             bulk_dft_settings=BULK_SETTINGS[dft_method])
-    site_generator = catalog_inserter.requires()
-
     try:
+        # Need to clear out the current catalog before checking that we can add
+        # more
+        with get_mongo_collection('catalog') as collection:
+            collection.delete_many({})
+
+        mpid = 'mp-2'
+        max_miller = 2
+        catalog_inserter = _InsertSitesToCatalog(mpid=mpid,
+                                                 max_miller=max_miller,
+                                                 bulk_dft_settings=BULK_SETTINGS[dft_method])
+        site_generator = catalog_inserter.requires()
         run_task_locally(site_generator)
         site_docs = get_task_output(site_generator)
 
