@@ -20,12 +20,13 @@ def clean_up_tasks():
     Cuthbert on Stack Exchange.
     '''
     folder = '/home/GASpy/gaspy/tests/test_caches/pickles'
-    for the_file in os.listdir(folder):
-        file_path = os.path.join(folder, the_file)
-        if os.path.isfile(file_path):
-            os.unlink(file_path)
-        elif os.path.isdir(file_path):
-            shutil.rmtree(file_path)
+    for file_ in os.listdir(folder):
+        if file_ != '.gitignore':  # Don't delete the .gitignore file
+            file_path = os.path.join(folder, file_)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
 
 
 def run_task_locally(task):
