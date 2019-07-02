@@ -44,7 +44,9 @@ REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
                                  '/fireworks_helper_scripts/')
 TEST_CASES_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
 FIREWORKS_FOLDER = TEST_CASES_LOCATION + 'fireworks/'
-FIREWORKS_FILES = [FIREWORKS_FOLDER + file_name for file_name in os.listdir(FIREWORKS_FOLDER)]
+FIREWORKS_FILES = [FIREWORKS_FOLDER + file_name
+                   for file_name in os.listdir(FIREWORKS_FOLDER)
+                   if file_name.split('.')[0].isdigit()]
 
 
 def test_get_launchpad():
@@ -73,21 +75,22 @@ def test_find_n_rockets():
     # (2) can it report fizzles correctly, and
     # (3) will it tell us [correctly] if something is not running?
     query = {'fw_id': 353903}
-    vasp_settings = {'kpts': [4, 4, 1],
-                     'symprec': 1e-10,
-                     'isym': 0,
-                     'pp': 'PBE',
-                     'encut': 350,
-                     'pp_version': '5.4',
-                     'isif': 0,
-                     'ibrion': 2,
-                     'gga': 'RP',
-                     'ediffg': -0.03,
-                     'nsw': 200,
-                     'lreal': 'Auto'}
+    dft_settings = {'_calculator': 'vasp',
+                    'kpts': [4, 4, 1],
+                    'symprec': 1e-10,
+                    'isym': 0,
+                    'pp': 'PBE',
+                    'encut': 350,
+                    'pp_version': '5.4',
+                    'isif': 0,
+                    'ibrion': 2,
+                    'gga': 'RP',
+                    'ediffg': -0.03,
+                    'nsw': 200,
+                    'lreal': 'Auto'}
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
-        n_running, _ = find_n_rockets(query, vasp_settings, _testing=True)
+        n_running, _ = find_n_rockets(query, dft_settings, _testing=True)
         assert n_running == 0
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
@@ -95,7 +98,7 @@ def test_find_n_rockets():
 
     # Test if it can correctly flag a bunch of running rockets
     for fwid in [365912, 355429, 369302, 355479, 365912]:
-        n_running, _ = find_n_rockets({'fw_id': fwid}, vasp_settings={}, _testing=True)
+        n_running, _ = find_n_rockets({'fw_id': fwid}, dft_settings={}, _testing=True)
         assert n_running == 1
 
 
@@ -138,8 +141,8 @@ def test__make_vasp_firework():
     # Make the firework and pull out the operations so we can inspect them
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.gas_settings()['vasp']
-    fwork = _make_vasp_firework(atoms, fw_name, vasp_settings)
+    dft_settings = defaults.gas_settings()['vasp']
+    fwork = _make_vasp_firework(atoms, fw_name, dft_settings)
     pass_vasp_functions, read_atoms_file, relax = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
@@ -164,14 +167,14 @@ def test__make_vasp_firework():
     # Make sure we start VASP
     assert isinstance(relax, PyTask)
     assert relax['func'] == 'vasp_functions.runVasp'
-    assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', vasp_settings]
+    assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', dft_settings]
     assert relax['stored_data_varname'] == 'opt_results'
 
     # Make sure GASpy gives us a warning about big jobs
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
         big_atoms = ase.Atoms('CO'*41)
-        fwork = make_firework(big_atoms, fw_name, vasp_settings)
+        fwork = make_firework(big_atoms, fw_name, dft_settings)
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'You are making a firework with' in str(warning_manager[-1].message)
@@ -257,12 +260,12 @@ def test_decode_trajhex_to_atoms(adslab_atoms_name):
 def test_submit_fwork():
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.gas_settings()['vasp']
-    fwork = make_firework(atoms, fw_name, vasp_settings)
+    dft_settings = defaults.gas_settings()['vasp']
+    fwork = make_firework(atoms, fw_name, dft_settings)
     wflow = submit_fwork(fwork, _testing=True)
     assert len(wflow.fws) == 1
     assert isinstance(wflow, Workflow)
-    assert wflow.name == 'vasp optimization'
+    assert wflow.name == 'dft optimization'
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)

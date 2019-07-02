@@ -136,12 +136,11 @@ def make_firework(atoms, fw_name, dft_settings):
         warnings.warn('You are making a firework with %i atoms in it. This may '
                       'take awhile.' % len(atoms), RuntimeWarning)
 
-    # TODO:  Do this right
-    if 'foo':
-        fw_name['dft_settings']['_calculator'] = 'vasp'
+    # We'll make one type of firework rocket for VASP, and another for Quantum
+    # Espresso
+    if dft_settings['_calculator'] == 'vasp':
         firework = _make_vasp_firework(atoms, fw_name, dft_settings)
-    elif 'bar':
-        fw_name['dft_settings']['_calculator'] = 'qe'
+    if dft_settings['_calculator'] == 'qe':
         firework = _make_qe_firework(atoms, fw_name, dft_settings)
 
     return firework
