@@ -153,7 +153,8 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
     '''
-    task = _InsertSitesToCatalog(mpid, max_miller, bulk_dft_settings)
+    task = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller,
+                                 bulk_dft_settings=bulk_dft_settings)
     try:
         run_task(task)
 
