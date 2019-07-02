@@ -127,8 +127,25 @@ def test___warn_about_fizzles():
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
 
 
-def test_make_firework():
-    assert False
+@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
+def test_make_firework(dft_method):
+    '''
+    We make two different types of FireWorks rockets right now:  VASP ones and
+    Quantum Espresso ones. The `make_firework` function is just a syntax
+    wrapper around two functions built for each rocket type. So our testing
+    here is just to make sure that one of the warnings is thrown.
+    '''
+    # Make the firework and pull out the operations so we can inspect them
+    big_atoms = ase.Atoms('CO'*41)
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    dft_settings = defaults.gas_settings()[dft_method]
+
+    with warnings.catch_warnings(record=True) as warning_manager:
+        warnings.simplefilter('always')
+        _ = make_firework(big_atoms, fw_name, dft_settings)  # noqa: F841
+        assert len(warning_manager) == 1
+        assert issubclass(warning_manager[-1].category, RuntimeWarning)
+        assert 'You are making a firework with' in str(warning_manager[-1].message)
 
 
 def test__make_vasp_firework():
@@ -169,15 +186,6 @@ def test__make_vasp_firework():
     assert relax['func'] == 'vasp_functions.runVasp'
     assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', dft_settings]
     assert relax['stored_data_varname'] == 'opt_results'
-
-    # Make sure GASpy gives us a warning about big jobs
-    with warnings.catch_warnings(record=True) as warning_manager:
-        warnings.simplefilter('always')
-        big_atoms = ase.Atoms('CO'*41)
-        fwork = make_firework(big_atoms, fw_name, dft_settings)
-        assert len(warning_manager) == 1
-        assert issubclass(warning_manager[-1].category, RuntimeWarning)
-        assert 'You are making a firework with' in str(warning_manager[-1].message)
 
 
 def test__make_qe_firework():
@@ -284,7 +292,7 @@ def test__get_atoms_from_fw(fw_file):
 def test__get_atoms_from_vasp_fw(fw_file):
     with open(fw_file, 'rb') as file_handle:
         fw = pickle.load(file_handle)
-    atoms = get_atoms_from_fw(fw)
+    atoms = get_atoms_from_vasp_fw(fw)
     assert isinstance(atoms, ase.Atoms)
 
 
