@@ -35,7 +35,12 @@ import pickle
 import getpass
 import pandas as pd
 import ase
-from fireworks import Firework, LaunchPad, FileWriteTask, PyTask, Workflow
+from fireworks import (Firework,
+                       LaunchPad,
+                       PyTask,
+                       FileWriteTask,
+                       ScriptTask,
+                       Workflow)
 from . import test_cases
 from ..utils import read_rc
 from .. import defaults
@@ -150,7 +155,7 @@ def test_make_firework(dft_method):
 
 def test__make_vasp_firework():
     '''
-    Our FireWork rockets should take three steps:  write our
+    Our VASP FireWork rockets should take three steps:  write our
     `vasp_functions.py` submodule to the local directory, write the atoms
     object to the local directory, and then perform the VASP relaxation. We'll
     pick apart each of these during this test.
@@ -189,7 +194,39 @@ def test__make_vasp_firework():
 
 
 def test__make_qe_firework():
-    assert False
+    '''
+    Our Quantum Espresso rockets should take three steps:  Clone the
+    espressotools repository; perform the relaxation via epressotools; then
+    delete espressotools after saving the commit hash. We'll pick apart each of
+    these during this test.
+    '''
+    # Make the firework and pull out the operations so we can inspect them
+    atoms = ase.Atoms('CO')
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    dft_settings = defaults.gas_settings()['qe']
+    fwork = _make_qe_firework(atoms, fw_name, dft_settings)
+    clone_espresso_tools, relax, clean_up = fwork.tasks
+
+    # Make sure it's actually a Firework object and its name is correct
+    assert isinstance(fwork, Firework)
+    fw_name_expected = fw_name.copy()
+    fw_name_expected['user'] == getpass.getuser()
+    assert fwork.name == fw_name_expected
+
+    # Make sure we clone espressotools correctly
+    assert isinstance(clone_espresso_tools, ScriptTask)
+    assert 'git clone' in clone_espresso_tools.script
+    assert 'espresso_tools' in clone_espresso_tools.script
+
+    # Make sure we are calling espressotools
+    assert isinstance(relax, PyTask)
+    assert relax['func'] == 'espressotools.run_qe'
+    assert relax['args'] == [encode_atoms_to_trajhex(atoms), dft_settings]
+
+    # Make sure we start VASP
+    assert isinstance(clean_up, ScriptTask)
+    assert 'rm -rf espresso_tools' in clean_up.script
+    assert 'espresso_tools_version.log' in clean_up.script
 
 
 @pytest.mark.parametrize('adslab_atoms_name',

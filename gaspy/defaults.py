@@ -9,10 +9,6 @@ import warnings
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
-from .utils import read_rc
-
-QE_PP_DIR = read_rc('quantum_espresso.pseudopotential_directory')
-QE_SCRATCH = read_rc('quantum_espresso.scratch_directory')
 
 
 def pp_version():
@@ -72,32 +68,55 @@ def vasp_xc_settings(xc='rpbe'):
 
 def gas_settings():
     ''' The default settings we use to do DFT calculations of gases '''
-    gas_settings = OrderedDict(vasp=OrderedDict(_calculator='vasp',
-                                                ibrion=2,
-                                                nsw=100,
-                                                isif=0,
-                                                kpts=(1, 1, 1),
-                                                ediffg=-0.03,
-                                                encut=350.,
-                                                pp_version=pp_version(),
-                                                **vasp_xc_settings()))
+    vasp = OrderedDict(_calculator='vasp',
+                       ibrion=2,
+                       nsw=100,
+                       isif=0,
+                       kpts=(1, 1, 1),
+                       ediffg=-0.03,
+                       encut=350.,
+                       pp_version=pp_version(),
+                       **vasp_xc_settings())
+
+    qe = OrderedDict(_calculator='qe',
+                     xcf='rpbe',
+                     encut=350,
+                     gammac=False,
+                     spol=0,
+                     nbands=-36,
+                     mode='relax',
+                     psps='GBRV',
+                     kpts=(1, 1, 1))
+
+    gas_settings = OrderedDict(vasp=vasp, qe=qe)
     return gas_settings
 
 
 def bulk_settings():
     ''' The default settings we use to do DFT calculations of bulks '''
-    bulk_settings = OrderedDict(max_atoms=80,
-                                vasp=OrderedDict(_calculator='vasp',
-                                                 ibrion=1,
-                                                 nsw=100,
-                                                 isif=7,
-                                                 isym=0,
-                                                 ediff=1e-8,
-                                                 kpts=(10, 10, 10),
-                                                 prec='Accurate',
-                                                 encut=500.,
-                                                 pp_version=pp_version(),
-                                                 **vasp_xc_settings()))
+    vasp = OrderedDict(_calculator='vasp',
+                       ibrion=1,
+                       nsw=100,
+                       isif=7,
+                       isym=0,
+                       ediff=1e-8,
+                       kpts=(10, 10, 10),
+                       prec='Accurate',
+                       encut=500.,
+                       pp_version=pp_version(),
+                       **vasp_xc_settings())
+
+    qe = OrderedDict(_calculator='qe',
+                     xcf='rpbe',
+                     encut=500.,
+                     gammac=False,
+                     spol=0,
+                     nbands=-36,
+                     mode='relax',
+                     psps='GBRV',
+                     kpts='bulk')
+
+    bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
     return bulk_settings
 
 
@@ -106,18 +125,29 @@ def surface_energy_bulk_settings():
     The default settings we use to do DFT calculations of bulks
     spefically for surface energy calculations.
     '''
-    SE_bulk_settings = OrderedDict(max_atoms=80,
-                                   vasp=OrderedDict(_calculator='vasp',
-                                                    ibrion=1,
-                                                    nsw=100,
-                                                    isif=7,
-                                                    isym=0,
-                                                    ediff=1e-8,
-                                                    kpts=(10, 10, 10),
-                                                    prec='Accurate',
-                                                    encut=500.,
-                                                    pp_version=pp_version(),
-                                                    **vasp_xc_settings('pbesol')))
+    vasp = OrderedDict(_calculator='vasp',
+                       ibrion=1,
+                       nsw=100,
+                       isif=7,
+                       isym=0,
+                       ediff=1e-8,
+                       kpts=(10, 10, 10),
+                       prec='Accurate',
+                       encut=500.,
+                       pp_version=pp_version(),
+                       **vasp_xc_settings('pbesol'))
+
+    qe = OrderedDict(_calculator='qe',
+                     xcf='pbesol',
+                     encut=500.,
+                     gammac=False,
+                     spol=0,
+                     nbands=-36,
+                     mode='relax',
+                     psps='GBRV',
+                     kpts='bulk')
+
+    SE_bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
     return SE_bulk_settings
 
 
@@ -140,58 +170,20 @@ def slab_settings():
                        pp_version=pp_version(),
                        **vasp_xc_settings('pbesol'))
 
-    qe = OrderedDict(control=OrderedDict(calculation='relax',
-                                         pseudo_dir=QE_PP_DIR,
-                                         prefix='rism',
-                                         outdir=QE_SCRATCH,
-                                         etot_conv_thr=1e-5,
-                                         forc_conv_thr=1e-4,
-                                         trism=True,
-                                         lfcp=True,
-                                         max_seconds=86280),
-                     system=OrderedDict(input_dft='rpbe',
-                                        ibrav=0,
-                                        nat=38,
-                                        ntyp=3,
-                                        ecutwfc=36.749,
-                                        ecutrho=367.493,
-                                        occupations='smearing',
-                                        smearing='mv',
-                                        degauss=0.00735,
-                                        assume_isolated='esm',
-                                        nosym=True,
-                                        esm_bc='bc1'),
-                     electrons=OrderedDict(diagonalization='rmm',
-                                           diago_rmm_conv=False,
-                                           mixing_mode='local-TF',
-                                           electron_maxstep=100,
-                                           conv_thr=7.2e-8,
-                                           mixing_beta=0.7e0),
-                     kpoints_mode='automatic',
-                     kpoints_grid=(4, 4, 1),
-                     kpoints_shift=(0, 0, 0),
-                     fcp=OrderedDict(fcp_mu=-3.))
-
-    rism = OrderedDict(closure='kh',
-                       ecutsolv=300.0,
-                       laue_expand_right=90.0,
-                       laue_reference='right',
-                       laue_starting_right=2.0,
-                       nsolv=3,
-                       rism3d_conv_level=0.5,
-                       mdiis1d_step=0.1e0,
-                       mdiis3d_step=0.5e0,
-                       rism1d_conv_thr=1e-9,
-                       rism3d_conv_thr=5e-6,
-                       rism1d_maxstep=100000,
-                       rism3d_maxstep=100000,
-                       tempv=300.0)
+    qe = OrderedDict(_calculator='qe',
+                     xcf='pbesol',
+                     encut=350.,
+                     gammac=False,
+                     spol=0,
+                     nbands=-36,
+                     mode='relax',
+                     psps='GBRV',
+                     kpts=(4, 4, 1))
 
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
                                 vasp=vasp,
                                 qe=qe,
-                                rism=rism,
                                 slab_generator_settings=OrderedDict(min_slab_size=7.,
                                                                     min_vacuum_size=20.,
                                                                     lll_reduce=False,
@@ -224,57 +216,20 @@ def adslab_settings():
                        pp_version=pp_version(),
                        **vasp_xc_settings())
 
-    qe = OrderedDict(control=OrderedDict(calculation='relax',
-                                         pseudo_dir=QE_PP_DIR,
-                                         prefix='qe_gaspy',
-                                         outdir=QE_SCRATCH,
-                                         etot_conv_thr=1e-5,
-                                         forc_conv_thr=1e-4,
-                                         lfcp=True,
-                                         max_seconds=86280),
-                     system=OrderedDict(input_dft='rpbe',
-                                        ibrav=0,
-                                        nat=38,
-                                        ntyp=3,
-                                        ecutwfc=36.749,
-                                        ecutrho=367.493,
-                                        occupations='smearing',
-                                        smearing='mv',
-                                        degauss=0.00735,
-                                        assume_isolated='esm',
-                                        nosym=True,
-                                        esm_bc='bc1'),
-                     electrons=OrderedDict(diagonalization='rmm',
-                                           diago_rmm_conv=False,
-                                           mixing_mode='local-TF',
-                                           electron_maxstep=100,
-                                           conv_thr=7.2e-8,
-                                           mixing_beta=0.7e0),
-                     kpoints_mode='automatic',
-                     kpoints_grid=(4, 4, 1),
-                     kpoints_shift=(0, 0, 0),
-                     fcp=OrderedDict(fcp_mu=-3.))
-
-    rism = OrderedDict(closure='kh',
-                       ecutsolv=300.0,
-                       laue_expand_right=90.0,
-                       laue_reference='right',
-                       laue_starting_right=2.0,
-                       nsolv=3,
-                       rism3d_conv_level=0.5,
-                       mdiis1d_step=0.1e0,
-                       mdiis3d_step=0.5e0,
-                       rism1d_conv_thr=1e-9,
-                       rism3d_conv_thr=5e-6,
-                       rism1d_maxstep=100000,
-                       rism3d_maxstep=100000,
-                       tempv=300.0)
+    qe = OrderedDict(_calculator='qe',
+                     xcf='rpbe',
+                     encut=350.,
+                     gammac=False,
+                     spol=0,
+                     nbands=-36,
+                     mode='relax',
+                     psps='GBRV',
+                     kpts=(4, 4, 1))
 
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
                                   vasp=vasp,
-                                  qe=qe,
-                                  rism=rism)
+                                  qe=qe)
     return adslab_settings
 
 

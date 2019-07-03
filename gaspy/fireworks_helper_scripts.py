@@ -11,9 +11,15 @@ import warnings
 import uuid
 from datetime import datetime
 import getpass
+import numpy as np
 import pandas as pd
 import ase.io
-from fireworks import Firework, PyTask, LaunchPad, FileWriteTask, Workflow
+from fireworks import (Firework,
+                       LaunchPad,
+                       PyTask,
+                       FileWriteTask,
+                       ScriptTask,
+                       Workflow)
 from .utils import print_dict, read_rc
 
 
@@ -192,12 +198,39 @@ def _make_qe_firework(atoms, fw_name, qe_settings):
     Args:
         atoms           `ase.Atoms` object to relax
         fw_name         Dictionary of tags/etc to use as the FireWorks name
-        qe_settings     Dictionary of settings to pass to VASP
+        qe_settings     Dictionary of settings to pass to espressotools/Quantum
+                        Espresso
     Returns:
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
     '''
-    raise
+    # Calculate the k-point grid for bulk calculations
+    if qe_settings['kpts'] == 'bulk':
+        qe_settings['kpts'] = calculate_bulk_k_points(atoms)
+
+    # Clone the espresso_tools repository, which will help create the input
+    # files
+    clone_command = ('git clone git@github.com:ulissigroup/espresso_tools.git || '
+                     'git clone https://github.com/ulissigroup/espresso_tools.git')
+    clone_espresso_tools = ScriptTask.from_str(clone_command)
+
+    # Tell the FireWork rocket to run the job using espressotools
+    atom_trajhex = encode_atoms_to_trajhex(atoms)
+    relax = PyTask(func='espressotools.run_qe',
+                   args=[atom_trajhex, qe_settings],
+                   stored_data_varname='opt_results')
+
+    # espressotools is big. Let's remove it and then leave behind the commit
+    # number we used (for traceability)
+    cleaning_command = ('cd espresso_tools && '
+                        'git rev-parse --verify HEAD > ../espresso_tools_version.log && '
+                        'cd .. && '
+                        'rm -rf espresso_tools')
+    clean_up = ScriptTask.from_str(cleaning_command)
+
+    fw_name['user'] = getpass.getuser()
+    firework = Firework([clone_espresso_tools, relax, clean_up], name=fw_name)
+    return firework
 
 
 def encode_atoms_to_trajhex(atoms):
@@ -253,6 +286,28 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     # Clean up
     os.remove(fname)
     return atoms
+
+
+def calculate_bulk_k_points(atoms, k_pts_x=14):
+    '''
+    For unit cell calculations, it's a good practice to calculate the k-point
+    mesh given the unit cell size. We do that on-the-spot here.
+
+    Args:
+        atoms       The `ase.Atoms` object you want to relax
+        k_pts_x     An integer indicating the number of k points you want in
+                    the x-direction
+    Returns:
+        k_pts   A 3-tuple of integers indicating the k-point mesh to use
+    '''
+    cell = atoms.get_cell()
+    a0 = np.linalg.norm(cell[0])
+    b0 = np.linalg.norm(cell[1])
+    c0 = np.linalg.norm(cell[2])
+    k_pts = (k_pts_x,
+             max(1, int(k_pts_x*a0/b0)),
+             max(1, int(k_pts_x*a0/c0)))
+    return k_pts
 
 
 def submit_fwork(fwork, _testing=False):
@@ -397,7 +452,10 @@ def _get_atoms_from_qe_fw(fw, index=-1):
     Returns
         atoms   `ase.Atoms` instance from the Firework you provided
     '''
-    raise
+    # Get the `ase.Atoms` object from FireWork's results
+    atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
+    atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
+    return atoms
 
 
 def __patch_old_atoms_tags(fw, atoms):
