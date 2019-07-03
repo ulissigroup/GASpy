@@ -55,14 +55,15 @@ def update_catalog_collection(elements, max_miller, bulk_dft_settings,
                         you can.
         mp_query        We get our bulks from The Materials Project. This
                         dictionary argument is used as a Mongo query to The
-                        Materials Project Database. If you do not supply this
-                        argument, then it will automatically filter out bulks
-                        whose energies above the hull are greater than 0.1 eV
-                        and whose formation energy per atom are above 0 eV.
+                        Materials Project Database. If `None`, then it will
+                        automatically filter out bulks whose energies above the
+                        hull are greater than 0.1 eV and whose formation energy
+                        per atom are above 0 eV.
     '''
     # Python doesn't like mutable arguments
     if mp_query is None:
-        mp_query = {}
+        mp_query = {'e_above_hull': {'$lt': 0.1},
+                    'formation_energy_per_atom': {'$lte': 0.}}
 
     # Figure out the MPIDs we need to enumerate
     get_mpid_task = _GetMpids(elements=elements, mp_query=mp_query)
@@ -97,7 +98,7 @@ class _GetMpids(luigi.Task):
                 e.g., `{'mp-2'}`
     '''
     elements = luigi.ListParameter()
-    mp_query = luigi.DictParameter({})
+    mp_query = luigi.DictParameter()
 
     def run(self):
         '''
@@ -124,9 +125,7 @@ class _GetMpids(luigi.Task):
 
         # Instantiate the Mongo query to the Materials Project database, and
         # then attach defaults
-        query = {'elements': {'$nin': list(elements_restricted)},
-                 'e_above_hull': {'$lt': 0.1},
-                 'formation_energy_per_atom': {'$lte': 0.}}
+        query = {'elements': {'$nin': list(elements_restricted)}}
         for key, value in unfreeze_dict(self.mp_query).items():
             query[key] = value
 

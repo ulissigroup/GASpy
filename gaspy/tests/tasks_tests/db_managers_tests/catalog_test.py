@@ -56,7 +56,9 @@ def test_update_catalog_collection(dft_method):
 
 def test__GetMpids():
     elements = set(['Cu', 'Al'])
-    task = _GetMpids(elements=list(elements))
+    mp_query = {'e_above_hull': {'$lt': 0.1},
+                'formation_energy_per_atom': {'$lte': 0.}}
+    task = _GetMpids(elements=list(elements), mp_query=mp_query)
 
     # Run the task
     try:
