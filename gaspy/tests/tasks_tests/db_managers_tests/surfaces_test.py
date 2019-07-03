@@ -91,15 +91,17 @@ def test__find_atoms_docs_not_in_surface_energy_collection():
 
 
 def test___run_calculate_surface_energy_task():
+    '''
+    It turns out that our `run_task` function works terribly with dynamic
+    dependencies. It works less terribly when the dependencies are already
+    done. For this test, let's run that dependency first. In production, we
+    will effectively rely on our periodically running scripts to take care of
+    this pre-run part.
+
+    Note that we use `run_task` because `schedule_tasks` hangs up on unfinished
+    tasks, and we don't want it to hang up during database updates.
+    '''
     try:
-        # It turns out that our `run_task` function works terribly with dynamic
-        # dependencies. It works less terribly when the dependencies are
-        # already done. For this test, let's run that dependency first. In
-        # production, we will effectively rely on our periodically running
-        # scripts to take care of this pre-run part.
-        # Note that we use `run_task` because `schedule_tasks` hangs up on
-        # unfinished tasks, and we don't want it to hang up during database
-        # updates.
         bulk_task = FindBulk(mpid='mp-1018129')
         schedule_tasks([bulk_task], local_scheduler=True)
 
@@ -115,9 +117,11 @@ def test___run_calculate_surface_energy_task():
         surface_energy_doc = get_task_output(task)
         assert isinstance(surface_energy_doc, dict)
 
+        # TODO:  Figure out a way to test this feature without accidentally
+        # submitting a job to run on FireWorks
         # Make sure the function won't throw an error when the task isn't done
-        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=9001)
-        __run_calculate_surface_energy_task(task)
+        #task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=9001)
+        #__run_calculate_surface_energy_task(task)
 
     finally:
         clean_up_tasks()

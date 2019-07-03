@@ -86,7 +86,8 @@ def test_catalog_update_with_custom_mp_query():
     max_miller = 1
     mpid = 'mp-2'
     mp_query = {'e_above_hull': {'$exists': True},
-                'formation_energy_per_atom': {'$exists': True}}
+                'formation_energy_per_atom': {'$exists': True},
+                'task_id': mpid}
 
     try:
         # Clear out the catalog so we know that anything new was added by this
