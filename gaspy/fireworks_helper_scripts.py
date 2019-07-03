@@ -198,7 +198,7 @@ def _make_qe_firework(atoms, fw_name, qe_settings):
     Args:
         atoms           `ase.Atoms` object to relax
         fw_name         Dictionary of tags/etc to use as the FireWorks name
-        qe_settings     Dictionary of settings to pass to espressotools/Quantum
+        qe_settings     Dictionary of settings to pass to espress_tools/Quantum
                         Espresso
     Returns:
         firework    An instance of a `fireworks.Firework` object that is set up
@@ -214,13 +214,13 @@ def _make_qe_firework(atoms, fw_name, qe_settings):
                      'git clone https://github.com/ulissigroup/espresso_tools.git')
     clone_espresso_tools = ScriptTask.from_str(clone_command)
 
-    # Tell the FireWork rocket to run the job using espressotools
+    # Tell the FireWork rocket to run the job using espress_tools
     atom_trajhex = encode_atoms_to_trajhex(atoms)
-    relax = PyTask(func='espressotools.run_qe',
+    relax = PyTask(func='espress_tools.run_qe',
                    args=[atom_trajhex, qe_settings],
                    stored_data_varname='opt_results')
 
-    # espressotools is big. Let's remove it and then leave behind the commit
+    # espress_tools is big. Let's remove it and then leave behind the commit
     # number we used (for traceability)
     cleaning_command = ('cd espresso_tools && '
                         'git rev-parse --verify HEAD > ../espresso_tools_version.log && '

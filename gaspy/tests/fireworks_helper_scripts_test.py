@@ -215,8 +215,8 @@ def test__make_qe_firework():
 
     # Make sure we clone espressotools correctly
     assert isinstance(clone_espresso_tools, ScriptTask)
-    assert 'git clone' in clone_espresso_tools.script
-    assert 'espresso_tools' in clone_espresso_tools.script
+    assert 'git clone' in clone_espresso_tools['script'][0]
+    assert 'espresso_tools' in clone_espresso_tools['script'][0]
 
     # Make sure we are calling espressotools
     assert isinstance(relax, PyTask)
@@ -225,8 +225,8 @@ def test__make_qe_firework():
 
     # Make sure we start VASP
     assert isinstance(clean_up, ScriptTask)
-    assert 'rm -rf espresso_tools' in clean_up.script
-    assert 'espresso_tools_version.log' in clean_up.script
+    assert 'rm -rf espresso_tools' in clean_up['script'][0]
+    assert 'espresso_tools_version.log' in clean_up['script'][0]
 
 
 @pytest.mark.parametrize('adslab_atoms_name',
