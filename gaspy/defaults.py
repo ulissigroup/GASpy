@@ -79,7 +79,7 @@ def gas_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='rpbe',
+                     xcf='PBE',
                      encut=400.,
                      spol=0,
                      mode='relax',
@@ -106,7 +106,7 @@ def bulk_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='rpbe',
+                     xcf='PBE',
                      encut=400.,
                      spol=0,
                      mode='relax',
@@ -136,7 +136,7 @@ def surface_energy_bulk_settings():
                        **vasp_xc_settings('pbesol'))
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='pbesol',
+                     xcf='PBEsol',
                      encut=400.,
                      spol=0,
                      mode='relax',
@@ -168,7 +168,7 @@ def slab_settings():
                        **vasp_xc_settings('pbesol'))
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='pbesol',
+                     xcf='PBEsol',
                      encut=400.,
                      spol=0,
                      mode='relax',
@@ -213,7 +213,7 @@ def adslab_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='rpbe',
+                     xcf='PBE',
                      encut=400.,
                      spol=0,
                      mode='relax',
