@@ -80,13 +80,12 @@ def gas_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='rpbe',
-                     encut=350,
-                     gammac=False,
+                     encut=400.,
                      spol=0,
-                     nbands=-36,
                      mode='relax',
                      psps='GBRV',
-                     kpts=(1, 1, 1))
+                     kpts=(1, 1, 1),
+                     sigma=0.05)
 
     gas_settings = OrderedDict(vasp=vasp, qe=qe)
     return gas_settings
@@ -108,13 +107,12 @@ def bulk_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='rpbe',
-                     encut=500.,
-                     gammac=False,
+                     encut=400.,
                      spol=0,
-                     nbands=-36,
                      mode='relax',
                      psps='GBRV',
-                     kpts='bulk')
+                     kpts='bulk',
+                     sigma=0.1)
 
     bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
     return bulk_settings
@@ -139,13 +137,12 @@ def surface_energy_bulk_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='pbesol',
-                     encut=500.,
-                     gammac=False,
+                     encut=400.,
                      spol=0,
-                     nbands=-36,
                      mode='relax',
                      psps='GBRV',
-                     kpts='bulk')
+                     kpts='bulk',
+                     sigma=0.1)
 
     SE_bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
     return SE_bulk_settings
@@ -172,13 +169,12 @@ def slab_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='pbesol',
-                     encut=350.,
-                     gammac=False,
+                     encut=400.,
                      spol=0,
-                     nbands=-36,
                      mode='relax',
                      psps='GBRV',
-                     kpts=(4, 4, 1))
+                     kpts=(4, 4, 1),
+                     sigma=0.1)
 
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
@@ -218,13 +214,12 @@ def adslab_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='rpbe',
-                     encut=350.,
-                     gammac=False,
+                     encut=400.,
                      spol=0,
-                     nbands=-36,
                      mode='relax',
                      psps='GBRV',
-                     kpts=(4, 4, 1))
+                     kpts=(4, 4, 1),
+                     sigma=0.1)
 
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
