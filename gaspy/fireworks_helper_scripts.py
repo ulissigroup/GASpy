@@ -288,7 +288,7 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     return atoms
 
 
-def calculate_bulk_k_points(atoms, k_pts_x=14):
+def calculate_bulk_k_points(atoms, k_pts_x=10):
     '''
     For unit cell calculations, it's a good practice to calculate the k-point
     mesh given the unit cell size. We do that on-the-spot here.
