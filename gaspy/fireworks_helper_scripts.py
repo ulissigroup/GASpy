@@ -11,7 +11,6 @@ import warnings
 import uuid
 from datetime import datetime
 import getpass
-import numpy as np
 import pandas as pd
 import ase.io
 from fireworks import (Firework,
@@ -204,10 +203,6 @@ def _make_qe_firework(atoms, fw_name, qe_settings):
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
     '''
-    # Calculate the k-point grid for bulk calculations
-    if qe_settings['kpts'] == 'bulk':
-        qe_settings['kpts'] = calculate_bulk_k_points(atoms)
-
     # Clone the espresso_tools repository, which will help create the input
     # files
     clone_command = ('git clone git@github.com:ulissigroup/espresso_tools.git || '
@@ -286,28 +281,6 @@ def decode_trajhex_to_atoms(hex_, index=-1):
     # Clean up
     os.remove(fname)
     return atoms
-
-
-def calculate_bulk_k_points(atoms, k_pts_x=10):
-    '''
-    For unit cell calculations, it's a good practice to calculate the k-point
-    mesh given the unit cell size. We do that on-the-spot here.
-
-    Args:
-        atoms       The `ase.Atoms` object you want to relax
-        k_pts_x     An integer indicating the number of k points you want in
-                    the x-direction
-    Returns:
-        k_pts   A 3-tuple of integers indicating the k-point mesh to use
-    '''
-    cell = atoms.get_cell()
-    a0 = np.linalg.norm(cell[0])
-    b0 = np.linalg.norm(cell[1])
-    c0 = np.linalg.norm(cell[2])
-    k_pts = (k_pts_x,
-             max(1, int(k_pts_x*a0/b0)),
-             max(1, int(k_pts_x*a0/c0)))
-    return k_pts
 
 
 def submit_fwork(fwork, _testing=False):

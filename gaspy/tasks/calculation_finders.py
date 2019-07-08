@@ -9,6 +9,7 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import warnings
 from copy import deepcopy
 import pickle
+import numpy as np
 import luigi
 from ase.constraints import FixAtoms
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -19,6 +20,7 @@ from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import find_n_rockets
 from .core import save_task_output, make_task_output_object, get_task_output
+from .atoms_generators import GenerateBulk
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
                              MakeAdslabFW,
@@ -232,6 +234,8 @@ class FindBulk(FindCalculation):
         mpid            A string indicating the Materials Project ID of the bulk
                         you are looking for (e.g., 'mp-30')
         dft_settings    A dictionary containing your DFT settings
+        k_pts_x         The number of k-points you want in the x-direction. It
+                        is only used if `dft_settings['kpts'] == 'bulk'`.
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
@@ -242,12 +246,30 @@ class FindBulk(FindCalculation):
     '''
     mpid = luigi.Parameter()
     dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    k_pts_x = luigi.IntParameter(10)
+
+    def requires(self):
+        '''
+        This calculation finder is different because we need to create the
+        `ase.Atoms` objects BEFORE performing the queries, because the queries
+        will contain the number of atoms. And we don't know the number of atoms
+        until we make the `ase.Atoms` object.
+        '''
+        return GenerateBulk(mpid=self.mpid)
 
     def _load_attributes(self):
         '''
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
+        # If the k-points is 'bulk', then calculate them
+        if self.dft_settings['kpts'] == 'bulk':
+            bulk_doc = get_task_output(self.requires())
+            bulk_atoms = make_atoms_from_doc(bulk_doc)
+            kpts = self.calculate_bulk_k_points(bulk_atoms, self.k_pts_x)
+            self.dft_settings['kpts'] = kpts
+
+        # Initialize the required attributes
         self.gasdb_query = {"fwname.calculation_type": "unit cell optimization",
                             "fwname.mpid": self.mpid}
         self.fw_query = {'name.calculation_type': 'unit cell optimization',
@@ -256,6 +278,28 @@ class FindBulk(FindCalculation):
             self.gasdb_query['fwname.dft_settings.%s' % key] = value
             self.fw_query['name.dft_settings.%s' % key] = value
         self.dependency = MakeBulkFW(self.mpid, self.dft_settings)
+
+    @staticmethod
+    def calculate_bulk_k_points(atoms, k_pts_x=10):
+        '''
+        For unit cell calculations, it's a good practice to calculate the
+        k-point mesh given the unit cell size. We do that on-the-spot here.
+
+        Args:
+            atoms       The `ase.Atoms` object you want to relax
+            k_pts_x     An integer indicating the number of k points you want in
+                        the x-direction
+        Returns:
+            k_pts   A 3-tuple of integers indicating the k-point mesh to use
+        '''
+        cell = atoms.get_cell()
+        a0 = np.linalg.norm(cell[0])
+        b0 = np.linalg.norm(cell[1])
+        c0 = np.linalg.norm(cell[2])
+        k_pts = (k_pts_x,
+                 max(1, int(k_pts_x*a0/b0)),
+                 max(1, int(k_pts_x*a0/c0)))
+        return k_pts
 
 
 class FindAdslab(FindCalculation):
@@ -456,7 +500,6 @@ class FindSurface(FindCalculation):
         will contain the number of atoms. And we don't know the number of atoms
         until we make the `ase.Atoms` object.
         '''
-        from .calculation_finders import FindBulk
         return FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
 
     def _load_attributes(self):
