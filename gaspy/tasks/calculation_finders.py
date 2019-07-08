@@ -19,7 +19,10 @@ from .. import defaults
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import find_n_rockets
-from .core import save_task_output, make_task_output_object, get_task_output
+from .core import (save_task_output,
+                   make_task_output_object,
+                   get_task_output,
+                   run_task)
 from .atoms_generators import GenerateBulk
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
@@ -264,19 +267,31 @@ class FindBulk(FindCalculation):
         '''
         # If the k-points is 'bulk', then calculate them
         if self.dft_settings['kpts'] == 'bulk':
-            bulk_doc = get_task_output(self.requires())
+            try:  # EAFP to just run the task if we need to
+                bulk_doc = get_task_output(self.requires())
+            except FileNotFoundError:
+                run_task(self.requires())
+                bulk_doc = get_task_output(self.requires())
             bulk_atoms = make_atoms_from_doc(bulk_doc)
             kpts = self.calculate_bulk_k_points(bulk_atoms, self.k_pts_x)
-            self.dft_settings['kpts'] = kpts
 
-        # Initialize the required attributes
-        self.gasdb_query = {"fwname.calculation_type": "unit cell optimization",
-                            "fwname.mpid": self.mpid}
+        # Initialize the queries
+        self.gasdb_query = {'fwname.calculation_type': 'unit cell optimization',
+                            'fwname.mpid': self.mpid}
         self.fw_query = {'name.calculation_type': 'unit cell optimization',
                          'name.mpid': self.mpid}
         for key, value in self.dft_settings.items():
             self.gasdb_query['fwname.dft_settings.%s' % key] = value
             self.fw_query['name.dft_settings.%s' % key] = value
+
+        # Assign the k-points that we calculated
+        try:
+            self.gasdb_query['fwname.dft_settings.kpts'] = kpts
+            self.fw_query['name.dft_settings.kpts'] = kpts
+        except NameError:
+            pass
+
+        # Assign the dynamic dependency
         self.dependency = MakeBulkFW(self.mpid, self.dft_settings)
 
     @staticmethod
