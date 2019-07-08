@@ -36,29 +36,33 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-def update_catalog_collection(elements, max_miller, bulk_dft_settings,
+def update_catalog_collection(elements, max_miller,
+                              bulk_dft_settings=BULK_SETTINGS['vasp'],
                               n_processes=1, mp_query=None):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
 
     Args:
-        elements        A list of strings indicating the elements you are
-                        looking for, e.g., ['Cu', 'Al']
-        max_miller      An integer indicating the maximum Miller index to be
-                        enumerated
-        n_processes     An integer indicating how many threads you want to use
-                        when running the tasks. If you do not expect many
-                        updates, stick to the default of 1, or go up to 4. If
-                        you are re-creating your collection from scratch, you
-                        may want to want to increase this argument as high as
-                        you can.
-        mp_query        We get our bulks from The Materials Project. This
-                        dictionary argument is used as a Mongo query to The
-                        Materials Project Database. If `None`, then it will
-                        automatically filter out bulks whose energies above the
-                        hull are greater than 0.1 eV and whose formation energy
-                        per atom are above 0 eV.
+        elements            A list of strings indicating the elements you are
+                            looking for, e.g., ['Cu', 'Al']
+        max_miller          An integer indicating the maximum Miller index to
+                            be enumerated
+        bulk_dft_settings   A dictionary containing the DFT settings you want to
+                            use for the bulk calculations. Defaults to using
+                            `gaspy.defaults.bulk_dft_settings()['vasp']`.
+        n_processes         An integer indicating how many threads you want to
+                            use when running the tasks. If you do not expect
+                            many updates, stick to the default of 1, or go up
+                            to 4. If you are re-creating your collection from
+                            scratch, you may want to want to increase this
+                            argument as high as you can.
+        mp_query            We get our bulks from The Materials Project. This
+                            dictionary argument is used as a Mongo query to The
+                            Materials Project Database. If `None`, then it will
+                            automatically filter out bulks whose energies above the
+                            hull are greater than 0.1 eV and whose formation energy
+                            per atom are above 0 eV.
     '''
     # Python doesn't like mutable arguments
     if mp_query is None:
