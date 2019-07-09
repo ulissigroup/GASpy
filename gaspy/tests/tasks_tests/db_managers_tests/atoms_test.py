@@ -19,6 +19,7 @@ from ....tasks.db_managers.atoms import (_find_fwids_missing_from_atoms_collecti
                                          __get_patched_miller)
 
 # Things we need to do the tests
+import socket
 import subprocess
 from datetime import datetime
 import pickle
@@ -62,25 +63,34 @@ def test__find_fwids_missing_from_atoms_collection():
 
 def test__make_atoms_doc_from_fwid():
     '''
-    This test will try to make a document from your real FireWorks
-    database, not the unit testing one (because I'm too lazy). So if it
-    fails, then change the ID to a FireWorks ID of a completed rocket that
-    you have.
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
+
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
     '''
-    fwid = 365912
-    doc = _make_atoms_doc_from_fwid(fwid)
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
 
-    # Verify that we can make atoms objects from the document
-    atoms = make_atoms_from_doc(doc)
-    starting_atoms = make_atoms_from_doc(doc['initial_configuration'])
-    assert isinstance(atoms, ase.Atoms)
-    assert isinstance(starting_atoms, ase.Atoms)
+        # The actual test
+        fwid = 365912
+        doc = _make_atoms_doc_from_fwid(fwid)
 
-    # Check that we have some of the necessary fields
-    assert 'fwname' in doc  # If we weren't patching, this would be a real comparison
-    assert doc['fwid'] == fwid
-    assert isinstance(doc['directory'], str)
-    assert isinstance('calculation_date', str)
+        # Verify that we can make atoms objects from the document
+        atoms = make_atoms_from_doc(doc)
+        starting_atoms = make_atoms_from_doc(doc['initial_configuration'])
+        assert isinstance(atoms, ase.Atoms)
+        assert isinstance(starting_atoms, ase.Atoms)
+
+        # Check that we have some of the necessary fields
+        assert 'fwname' in doc  # If we weren't patching, this would be a real comparison
+        assert doc['fwid'] == fwid
+        assert isinstance(doc['directory'], str)
+        assert isinstance('calculation_date', str)
 
 
 def test___patch_old_document():
