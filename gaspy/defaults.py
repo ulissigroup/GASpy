@@ -9,6 +9,9 @@ import warnings
 from collections import OrderedDict
 from ase import Atoms
 import ase.constraints
+from .utils import read_rc
+
+DFT_CALCULATOR = read_rc('dft_calculator')
 
 
 def pp_version():

@@ -30,6 +30,7 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
 from .. import utils, defaults
 
 GASDB_PATH = utils.read_rc('gasdb_path')
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
@@ -127,7 +128,7 @@ class GenerateSlabs(luigi.Task):
     miller_indices = luigi.TupleParameter()
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors
@@ -253,7 +254,7 @@ class GenerateAdsorptionSites(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateSlabs(mpid=self.mpid,
@@ -360,7 +361,7 @@ class GenerateAdslabs(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateAdsorptionSites(mpid=self.mpid,
@@ -442,7 +443,7 @@ class GenerateAllSitesFromBulk(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return _EnumerateDistinctFacets(mpid=self.mpid,
@@ -498,7 +499,7 @@ class _EnumerateDistinctFacets(luigi.Task):
     '''
     mpid = luigi.Parameter()
     max_miller = luigi.IntParameter()
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         from .calculation_finders import FindBulk   # local import to avoid import errors

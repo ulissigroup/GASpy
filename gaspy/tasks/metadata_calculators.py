@@ -20,6 +20,7 @@ from .. import utils
 from .. import defaults
 
 GASDB_PATH = utils.read_rc('gasdb_path')
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
@@ -86,9 +87,9 @@ class CalculateAdsorptionEnergy(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
-    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
+    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return {'adsorbate_energy': CalculateAdsorbateEnergy(self.adsorbate_name,
@@ -156,7 +157,7 @@ class CalculateAdsorbateEnergy(luigi.Task):
         energy  The DFT-calculated energy of the adsorbate
     '''
     adsorbate_name = luigi.Parameter()
-    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return CalculateAdsorbateBasisEnergies(self.dft_settings)
@@ -201,7 +202,7 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
                         whose values are their respective energies, e.g.,
                         {'H': foo, 'O': bar}
     '''
-    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return {'CO': FindGas(gas_name='CO', dft_settings=self.dft_settings),
@@ -273,8 +274,8 @@ class CalculateSurfaceEnergy(luigi.Task):
     max_atoms = luigi.IntParameter(SLAB_SETTINGS['max_atoms'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    dft_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
-    bulk_dft_settings = luigi.DictParameter(SE_BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS[DFT_CALCULATOR])
+    bulk_dft_settings = luigi.DictParameter(SE_BULK_SETTINGS[DFT_CALCULATOR])
 
     def _static_requires(self):
         '''

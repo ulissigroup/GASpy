@@ -30,6 +30,7 @@ from .make_fireworks import (MakeGasFW,
                              MakeAdslabFW,
                              MakeSurfaceFW)
 
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
@@ -213,7 +214,7 @@ class FindGas(FindCalculation):
                 an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
     '''
     gas_name = luigi.Parameter()
-    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
 
     def _load_attributes(self):
         '''
@@ -253,7 +254,7 @@ class FindBulk(FindCalculation):
                 an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
     '''
     mpid = luigi.Parameter()
-    dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
     k_pts_x = luigi.IntParameter(10)
 
     def requires(self):
@@ -372,7 +373,7 @@ class FindAdslab(FindCalculation):
     adsorption_site = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     top = luigi.BoolParameter()
-    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
     adsorbate_name = luigi.Parameter()
     rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
     mpid = luigi.Parameter()
@@ -380,7 +381,7 @@ class FindAdslab(FindCalculation):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def _load_attributes(self):
         '''
@@ -499,8 +500,8 @@ class FindSurface(FindCalculation):
     miller_indices = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     min_height = luigi.FloatParameter()
-    dft_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS[DFT_CALCULATOR])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     # Should explicitly remove the `min_slab_size` key/value from here, because
     # it will be overridden

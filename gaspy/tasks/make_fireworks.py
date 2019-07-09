@@ -21,6 +21,7 @@ from ..mongo import make_atoms_from_doc
 from ..utils import unfreeze_dict
 from ..fireworks_helper_scripts import make_firework, submit_fwork, get_launchpad
 
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
@@ -49,7 +50,7 @@ class MakeGasFW(FireworkMaker):
         dft_settings    A dictionary containing your DFT settings
     '''
     gas_name = luigi.Parameter()
-    dft_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateGas(gas_name=self.gas_name)
@@ -88,7 +89,7 @@ class MakeBulkFW(FireworkMaker):
         dft_settings    A dictionary containing your DFT settings
     '''
     mpid = luigi.Parameter()
-    dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
     max_atoms = luigi.IntParameter(50)
 
     def requires(self):
@@ -174,7 +175,7 @@ class MakeAdslabFW(FireworkMaker):
     adsorption_site = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     top = luigi.BoolParameter()
-    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
 
     # Passed to `GenerateAdslabs`
     adsorbate_name = luigi.Parameter()
@@ -184,7 +185,7 @@ class MakeAdslabFW(FireworkMaker):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateAdslabs(adsorbate_name=self.adsorbate_name,
@@ -322,7 +323,7 @@ class MakeSurfaceFW(FireworkMaker):
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
     shift = luigi.FloatParameter()
-    dft_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS[DFT_CALCULATOR])
 
     def run(self, _testing=False):
         ''' Do not use `_testing=True` unless you are unit testing '''
