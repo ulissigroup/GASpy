@@ -302,7 +302,7 @@ def adsorption_projection():
     return fingerprints
 
 
-def adsorption_filters(adsorbate=None, dft_calculator='vasp'):
+def adsorption_filters(adsorbate=None, dft_calculator=DFT_CALCULATOR):
     '''
     Not all of our adsorption calculations are "good" ones. Some end up in
     desorptions, dissociations, do not converge, or have ridiculous energies.
@@ -398,7 +398,7 @@ def surface_projection():
     return fingerprints
 
 
-def surface_filters(dft_calculator='vasp'):
+def surface_filters(dft_calculator=DFT_CALCULATOR):
     '''
     Not all of our surface energy calculations are "good" ones. Some do not
     converge or have end up having a lot of movement. These are the filters we
