@@ -77,11 +77,11 @@ def test_CalculateAdsorbateEnergy():
     sure that you use `run_task_locally` appropriately.
     '''
     adsorbate_name = 'OOH'
-    vasp_settings = GAS_SETTINGS['vasp']
+    dft_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateEnergy(adsorbate_name=adsorbate_name,
-                                    vasp_settings=vasp_settings)
+                                    dft_settings=dft_settings)
     assert task.adsorbate_name == adsorbate_name
-    assert unfreeze_dict(task.vasp_settings) == vasp_settings
+    assert unfreeze_dict(task.dft_settings) == dft_settings
 
     try:
         run_task_locally(task)
@@ -104,11 +104,11 @@ def test_CalculateAdsorbateEnergy_Error():
     defined, then this task should yell at us.
     '''
     adsorbate_name = 'U'
-    vasp_settings = GAS_SETTINGS['vasp']
+    dft_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateEnergy(adsorbate_name=adsorbate_name,
-                                    vasp_settings=vasp_settings)
+                                    dft_settings=dft_settings)
     assert task.adsorbate_name == adsorbate_name
-    assert unfreeze_dict(task.vasp_settings) == vasp_settings
+    assert unfreeze_dict(task.dft_settings) == dft_settings
 
     try:
         with pytest.raises(KeyError, message='Expected a KeyError') as exc_info:
@@ -128,9 +128,9 @@ def test_CalculateAdsorbateBasisEnergies():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
-    vasp_settings = GAS_SETTINGS['vasp']
-    task = CalculateAdsorbateBasisEnergies(vasp_settings)
-    assert unfreeze_dict(task.vasp_settings) == vasp_settings
+    dft_settings = GAS_SETTINGS['vasp']
+    task = CalculateAdsorbateBasisEnergies(dft_settings)
+    assert unfreeze_dict(task.dft_settings) == dft_settings
 
     try:
         run_task_locally(task)
@@ -151,9 +151,9 @@ class TestCalculateSurfaceEnergy():
         it and doesn't do some of the other steps (i.e., assign attributes)
         '''
         mpid = 'mp-1018129'
-        bulk_vasp_settings = SE_BULK_SETTINGS['vasp']
+        bulk_dft_settings = SE_BULK_SETTINGS['vasp']
         task = CalculateSurfaceEnergy(mpid=mpid, miller_indices=(0, 0, 1), shift=0.081)
-        assert unfreeze_dict(task.bulk_vasp_settings) == bulk_vasp_settings
+        assert unfreeze_dict(task.bulk_dft_settings) == bulk_dft_settings
         bulk_task = task._static_requires()
         assert isinstance(bulk_task, FindBulk)
         assert bulk_task.mpid == mpid
@@ -185,14 +185,13 @@ class TestCalculateSurfaceEnergy():
                                       miller_indices=(0, 0, 1),
                                       shift=0.081,
                                       max_atoms=5)
-        bulk_task = task._static_requires()
         try:
-            schedule_tasks([bulk_task], local_scheduler=True)
-
             # Make sure it throws an error. Note that we don't actually call
             # the `__teminate_if_too_large` method, because it should be called
             # when we execute `_static_requires` with a completed `FindBulk`.
             with pytest.raises(RuntimeError, match='Cannot calculate surface.*'):
+                bulk_task = task._static_requires()
+                schedule_tasks([bulk_task], local_scheduler=True)
                 _ = task._static_requires()  # noqa: F841
 
         finally:

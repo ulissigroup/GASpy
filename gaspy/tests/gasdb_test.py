@@ -373,7 +373,7 @@ def test__duplicate_docs_per_rotation():
 def test__get_attempted_adsorption_docs(adsorbate):
     attempted_docs = _get_attempted_adsorption_docs(adsorbate=adsorbate)
 
-    filters = {'vasp_settings.%s' % setting: value
+    filters = {'dft_settings.%s' % setting: value
                for setting, value in adslab_settings()['vasp'].items()}
     all_docs = get_adsorption_docs(adsorbate=adsorbate, filters=filters)
     assert len(attempted_docs) == len(all_docs)

@@ -3,13 +3,15 @@
     "luigi_host": "999.99.999.99",
     "gasdb_path": "/path/to/gasdb",
     "matproj_api_key": "ABC123",
+    "dft_calculator": "vasp",
     "plotly_login_info":{
         "username": "user",
         "api_key": "123ABC"
         },
     "gasdb_server":{
         "username": "user",
-        "password": "pw"},
+        "password": "pw"
+    },
     "fireworks_info":{
         "lpad_path": "/path/to/fireworks/launchpad.yaml",
         "lpad":{

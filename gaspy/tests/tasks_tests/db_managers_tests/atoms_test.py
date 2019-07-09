@@ -19,6 +19,7 @@ from ....tasks.db_managers.atoms import (_find_fwids_missing_from_atoms_collecti
                                          __get_patched_miller)
 
 # Things we need to do the tests
+import socket
 import subprocess
 from datetime import datetime
 import pickle
@@ -62,36 +63,51 @@ def test__find_fwids_missing_from_atoms_collection():
 
 def test__make_atoms_doc_from_fwid():
     '''
-    This test will try to make a document from your real FireWorks
-    database, not the unit testing one (because I'm too lazy). So if it
-    fails, then change the ID to a FireWorks ID of a completed rocket that
-    you have.
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
+
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
     '''
-    fwid = 365912
-    doc = _make_atoms_doc_from_fwid(fwid)
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
 
-    # Verify that we can make atoms objects from the document
-    atoms = make_atoms_from_doc(doc)
-    starting_atoms = make_atoms_from_doc(doc['initial_configuration'])
-    assert isinstance(atoms, ase.Atoms)
-    assert isinstance(starting_atoms, ase.Atoms)
+        # The actual test
+        fwid = 365912
+        doc = _make_atoms_doc_from_fwid(fwid)
 
-    # Check that we have some of the necessary fields
-    assert 'fwname' in doc  # If we weren't patching, this would be a real comparison
-    assert doc['fwid'] == fwid
-    assert isinstance(doc['directory'], str)
-    assert isinstance('calculation_date', str)
+        # Verify that we can make atoms objects from the document
+        atoms = make_atoms_from_doc(doc)
+        starting_atoms = make_atoms_from_doc(doc['initial_configuration'])
+        assert isinstance(atoms, ase.Atoms)
+        assert isinstance(starting_atoms, ase.Atoms)
+
+        # Check that we have some of the necessary fields
+        assert 'fwname' in doc  # If we weren't patching, this would be a real comparison
+        assert doc['fwid'] == fwid
+        assert isinstance(doc['directory'], str)
+        assert isinstance('calculation_date', str)
 
 
 def test___patch_old_document():
     '''
     We rely on unit testing of the child functions to verify that we do the
-    patching correctly. This test will instead make sure that the function
-    can run and returns a separate instance.
+    patching correctly. This test will instead make sure that the function can
+    run and returns a separate instance.
     '''
     # Create an example document
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         atoms = get_atoms_from_fw(fw)
@@ -112,6 +128,12 @@ def test___patch_atoms_from_old_vasp():
     # Get example fireworks and atoms objects
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         atoms = get_atoms_from_fw(fw)
@@ -159,11 +181,17 @@ def test__get_patched_vasp_settings():
     '''
     fireworks_folder = '/home/GASpy/gaspy/tests/test_cases/fireworks/'
     for file_name in os.listdir(fireworks_folder):
+        # EAFP to make sure we don't try to load non-fireworks objects
+        try:
+            _ = int(file_name.split('.')[0])  # noqa: F841
+        except ValueError:
+            continue
+
         with open(fireworks_folder + file_name, 'rb') as file_handle:
             fw = pickle.load(file_handle)
         vasp_settings = __get_patched_vasp_settings(fw)
 
-        expected_vasp_settings = fw.name['vasp_settings']
+        expected_vasp_settings = fw.name['dft_settings']
         assert vasp_settings == expected_vasp_settings
 
 

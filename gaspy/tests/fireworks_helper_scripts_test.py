@@ -16,22 +16,33 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         _get_firework_docs,
                                         __get_n_fizzles,
                                         make_firework,
+                                        _make_vasp_firework,
+                                        _make_qe_firework,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
                                         submit_fwork,
                                         check_jobs_status,
                                         get_atoms_from_fwid,
                                         get_atoms_from_fw,
+                                        _get_atoms_from_vasp_fw,
+                                        _get_atoms_from_qe_fw,
                                         __patch_old_atoms_tags)
 
 # Things we need to do the tests
 import pytest
 import warnings
+import socket
+import subprocess
 import pickle
 import getpass
 import pandas as pd
 import ase
-from fireworks import Firework, LaunchPad, FileWriteTask, PyTask, Workflow
+from fireworks import (Firework,
+                       LaunchPad,
+                       PyTask,
+                       FileWriteTask,
+                       ScriptTask,
+                       Workflow)
 from . import test_cases
 from ..utils import read_rc
 from .. import defaults
@@ -40,7 +51,9 @@ REGRESSION_BASELINES_LOCATION = ('/home/GASpy/gaspy/tests/regression_baselines'
                                  '/fireworks_helper_scripts/')
 TEST_CASES_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
 FIREWORKS_FOLDER = TEST_CASES_LOCATION + 'fireworks/'
-FIREWORKS_FILES = [FIREWORKS_FOLDER + file_name for file_name in os.listdir(FIREWORKS_FOLDER)]
+FIREWORKS_FILES = [FIREWORKS_FOLDER + file_name
+                   for file_name in os.listdir(FIREWORKS_FOLDER)
+                   if file_name.split('.')[0].isdigit()]
 
 
 def test_get_launchpad():
@@ -69,21 +82,22 @@ def test_find_n_rockets():
     # (2) can it report fizzles correctly, and
     # (3) will it tell us [correctly] if something is not running?
     query = {'fw_id': 353903}
-    vasp_settings = {'kpts': [4, 4, 1],
-                     'symprec': 1e-10,
-                     'isym': 0,
-                     'pp': 'PBE',
-                     'encut': 350,
-                     'pp_version': '5.4',
-                     'isif': 0,
-                     'ibrion': 2,
-                     'gga': 'RP',
-                     'ediffg': -0.03,
-                     'nsw': 200,
-                     'lreal': 'Auto'}
+    dft_settings = {'_calculator': 'vasp',
+                    'kpts': [4, 4, 1],
+                    'symprec': 1e-10,
+                    'isym': 0,
+                    'pp': 'PBE',
+                    'encut': 350,
+                    'pp_version': '5.4',
+                    'isif': 0,
+                    'ibrion': 2,
+                    'gga': 'RP',
+                    'ediffg': -0.03,
+                    'nsw': 200,
+                    'lreal': 'Auto'}
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
-        n_running, _ = find_n_rockets(query, vasp_settings)
+        n_running, _ = find_n_rockets(query, dft_settings, _testing=True)
         assert n_running == 0
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
@@ -91,7 +105,7 @@ def test_find_n_rockets():
 
     # Test if it can correctly flag a bunch of running rockets
     for fwid in [365912, 355429, 369302, 355479, 365912]:
-        n_running, _ = find_n_rockets({'fw_id': fwid}, vasp_settings={}, _testing=True)
+        n_running, _ = find_n_rockets({'fw_id': fwid}, dft_settings={}, _testing=True)
         assert n_running == 1
 
 
@@ -120,9 +134,30 @@ def test___warn_about_fizzles():
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
 
 
-def test_make_firework():
+@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
+def test_make_firework(dft_method):
     '''
-    Our FireWork rockets should take three steps:  write our
+    We make two different types of FireWorks rockets right now:  VASP ones and
+    Quantum Espresso ones. The `make_firework` function is just a syntax
+    wrapper around two functions built for each rocket type. So our testing
+    here is just to make sure that one of the warnings is thrown.
+    '''
+    # Make the firework and pull out the operations so we can inspect them
+    big_atoms = ase.Atoms('CO'*41)
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    dft_settings = defaults.gas_settings()[dft_method]
+
+    with warnings.catch_warnings(record=True) as warning_manager:
+        warnings.simplefilter('always')
+        _ = make_firework(big_atoms, fw_name, dft_settings)  # noqa: F841
+        assert len(warning_manager) == 1
+        assert issubclass(warning_manager[-1].category, RuntimeWarning)
+        assert 'You are making a firework with' in str(warning_manager[-1].message)
+
+
+def test__make_vasp_firework():
+    '''
+    Our VASP FireWork rockets should take three steps:  write our
     `vasp_functions.py` submodule to the local directory, write the atoms
     object to the local directory, and then perform the VASP relaxation. We'll
     pick apart each of these during this test.
@@ -130,8 +165,8 @@ def test_make_firework():
     # Make the firework and pull out the operations so we can inspect them
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.gas_settings()['vasp']
-    fwork = make_firework(atoms, fw_name, vasp_settings)
+    dft_settings = defaults.gas_settings()['vasp']
+    fwork = _make_vasp_firework(atoms, fw_name, dft_settings)
     pass_vasp_functions, read_atoms_file, relax = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
@@ -156,17 +191,44 @@ def test_make_firework():
     # Make sure we start VASP
     assert isinstance(relax, PyTask)
     assert relax['func'] == 'vasp_functions.runVasp'
-    assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', vasp_settings]
+    assert relax['args'] == ['slab_in.traj', 'slab_relaxed.traj', dft_settings]
     assert relax['stored_data_varname'] == 'opt_results'
 
-    # Make sure GASpy gives us a warning about big jobs
-    with warnings.catch_warnings(record=True) as warning_manager:
-        warnings.simplefilter('always')
-        big_atoms = ase.Atoms('CO'*41)
-        fwork = make_firework(big_atoms, fw_name, vasp_settings)
-        assert len(warning_manager) == 1
-        assert issubclass(warning_manager[-1].category, RuntimeWarning)
-        assert 'You are making a firework with' in str(warning_manager[-1].message)
+
+def test__make_qe_firework():
+    '''
+    Our Quantum Espresso rockets should take three steps:  Clone the
+    espresso_tools repository; perform the relaxation via epressotools; then
+    delete espresso_tools after saving the commit hash. We'll pick apart each of
+    these during this test.
+    '''
+    # Make the firework and pull out the operations so we can inspect them
+    atoms = ase.Atoms('CO')
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    dft_settings = defaults.gas_settings()['qe']
+    fwork = _make_qe_firework(atoms, fw_name, dft_settings)
+    clone_espresso_tools, relax, clean_up = fwork.tasks
+
+    # Make sure it's actually a Firework object and its name is correct
+    assert isinstance(fwork, Firework)
+    fw_name_expected = fw_name.copy()
+    fw_name_expected['user'] == getpass.getuser()
+    assert fwork.name == fw_name_expected
+
+    # Make sure we clone espresso_tools correctly
+    assert isinstance(clone_espresso_tools, ScriptTask)
+    assert 'git clone' in clone_espresso_tools['script'][0]
+    assert 'espresso_tools' in clone_espresso_tools['script'][0]
+
+    # Make sure we are calling espresso_tools
+    assert isinstance(relax, PyTask)
+    assert relax['func'] == 'espresso_tools.run_qe'
+    assert relax['args'] == [encode_atoms_to_trajhex(atoms), dft_settings]
+
+    # Make sure we start VASP
+    assert isinstance(clean_up, ScriptTask)
+    assert 'rm -rf espresso_tools' in clean_up['script'][0]
+    assert 'espresso_tools_version.log' in clean_up['script'][0]
 
 
 @pytest.mark.parametrize('adslab_atoms_name',
@@ -245,27 +307,60 @@ def test_decode_trajhex_to_atoms(adslab_atoms_name):
 def test_submit_fwork():
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    vasp_settings = defaults.gas_settings()['vasp']
-    fwork = make_firework(atoms, fw_name, vasp_settings)
+    dft_settings = defaults.gas_settings()['vasp']
+    fwork = make_firework(atoms, fw_name, dft_settings)
     wflow = submit_fwork(fwork, _testing=True)
     assert len(wflow.fws) == 1
     assert isinstance(wflow, Workflow)
-    assert wflow.name == 'vasp optimization'
+    assert wflow.name == 'dft optimization'
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
 def test_get_atoms_from_fwid(fw_file):
-    fwid = int(fw_file.split('.')[0].split('/')[-1])
-    atoms = get_atoms_from_fwid(fwid)
-    assert isinstance(atoms, ase.Atoms)
+    '''
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
+
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
+    '''
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
+
+        # The actual test
+        fwid = int(fw_file.split('.')[0].split('/')[-1])
+        atoms = get_atoms_from_fwid(fwid)
+        assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
-def test__get_atoms_from_fw(fw_file):
+def test_get_atoms_from_fw(fw_file):
     with open(fw_file, 'rb') as file_handle:
         fw = pickle.load(file_handle)
     atoms = get_atoms_from_fw(fw)
     assert isinstance(atoms, ase.Atoms)
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test__get_atoms_from_vasp_fw(fw_file):
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    if fw.name['dft_settings']['_calculator'] == 'vasp':
+        atoms = _get_atoms_from_vasp_fw(fw)
+        assert isinstance(atoms, ase.Atoms)
+
+
+@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
+def test__get_atoms_from_qe_fw(fw_file):
+    with open(fw_file, 'rb') as file_handle:
+        fw = pickle.load(file_handle)
+    if fw.name['dft_settings']['_calculator'] == 'qe':
+        atoms = _get_atoms_from_qe_fw(fw)
+        assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
@@ -294,9 +389,22 @@ def test___patch_old_atoms(fw_file):
                           ('apalizha', 10),
                           ('zulissi', 20)])
 def test_check_jobs_user(user, n_jobs):
-    ''' This function test if the DataFrame contains only the user inquired '''
-    dataframe = check_jobs_status(user, n_jobs)
+    '''
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
 
-    assert isinstance(dataframe, pd.DataFrame)
-    assert user == dataframe['user'].unique()
-    assert n_jobs == len(dataframe.index)
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
+    '''
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
+
+        # The actual test
+        dataframe = check_jobs_status(user, n_jobs)
+        assert isinstance(dataframe, pd.DataFrame)
+        assert user == dataframe['user'].unique()
+        assert n_jobs == len(dataframe.index)

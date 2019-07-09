@@ -15,16 +15,15 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 from datetime import datetime
-import pickle
 import luigi
 import multiprocess
 from pymatgen.ext.matproj import MPRester
 from ..core import (schedule_tasks,
-                    run_task,
                     get_task_output,
                     save_task_output,
                     make_task_output_object)
 from ..atoms_generators import GenerateAllSitesFromBulk
+from ..calculation_finders import FindBulk
 from ... import defaults
 from ...utils import read_rc, unfreeze_dict
 from ...mongo import make_atoms_from_doc
@@ -36,32 +35,38 @@ SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
-def update_catalog_collection(elements, max_miller, n_processes=1, mp_query=None):
+def update_catalog_collection(elements, max_miller,
+                              bulk_dft_settings=BULK_SETTINGS['vasp'],
+                              n_processes=1, mp_query=None):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
 
     Args:
-        elements        A list of strings indicating the elements you are
-                        looking for, e.g., ['Cu', 'Al']
-        max_miller      An integer indicating the maximum Miller index to be
-                        enumerated
-        n_processes     An integer indicating how many threads you want to use
-                        when running the tasks. If you do not expect many
-                        updates, stick to the default of 1, or go up to 4. If
-                        you are re-creating your collection from scratch, you
-                        may want to want to increase this argument as high as
-                        you can.
-        mp_query        We get our bulks from The Materials Project. This
-                        dictionary argument is used as a Mongo query to The
-                        Materials Project Database. If you do not supply this
-                        argument, then it will automatically filter out bulks
-                        whose energies above the hull are greater than 0.1 eV
-                        and whose formation energy per atom are above 0 eV.
+        elements            A list of strings indicating the elements you are
+                            looking for, e.g., ['Cu', 'Al']
+        max_miller          An integer indicating the maximum Miller index to
+                            be enumerated
+        bulk_dft_settings   A dictionary containing the DFT settings you want to
+                            use for the bulk calculations. Defaults to using
+                            `gaspy.defaults.bulk_dft_settings()['vasp']`.
+        n_processes         An integer indicating how many threads you want to
+                            use when running the tasks. If you do not expect
+                            many updates, stick to the default of 1, or go up
+                            to 4. If you are re-creating your collection from
+                            scratch, you may want to want to increase this
+                            argument as high as you can.
+        mp_query            We get our bulks from The Materials Project. This
+                            dictionary argument is used as a Mongo query to The
+                            Materials Project Database. If `None`, then it will
+                            automatically filter out bulks whose energies above the
+                            hull are greater than 0.1 eV and whose formation energy
+                            per atom are above 0 eV.
     '''
     # Python doesn't like mutable arguments
     if mp_query is None:
-        mp_query = {}
+        mp_query = {'e_above_hull': {'$lt': 0.1},
+                    'formation_energy_per_atom': {'$lte': 0.}}
 
     # Figure out the MPIDs we need to enumerate
     get_mpid_task = _GetMpids(elements=elements, mp_query=mp_query)
@@ -76,7 +81,7 @@ def update_catalog_collection(elements, max_miller, n_processes=1, mp_query=None
                            iterable=mpids, chunksize=20))
     else:
         for mpid in mpids:
-            __run_insert_to_catalog_task(mpid, max_miller)
+            __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings)
 
 
 class _GetMpids(luigi.Task):
@@ -96,7 +101,7 @@ class _GetMpids(luigi.Task):
                 e.g., `{'mp-2'}`
     '''
     elements = luigi.ListParameter()
-    mp_query = luigi.DictParameter({})
+    mp_query = luigi.DictParameter()
 
     def run(self):
         '''
@@ -123,9 +128,7 @@ class _GetMpids(luigi.Task):
 
         # Instantiate the Mongo query to the Materials Project database, and
         # then attach defaults
-        query = {'elements': {'$nin': list(elements_restricted)},
-                 'e_above_hull': {'$lt': 0.1},
-                 'formation_energy_per_atom': {'$lte': 0.}}
+        query = {'elements': {'$nin': list(elements_restricted)}}
         for key, value in unfreeze_dict(self.mp_query).items():
             query[key] = value
 
@@ -141,7 +144,7 @@ class _GetMpids(luigi.Task):
         return make_task_output_object(self)
 
 
-def __run_insert_to_catalog_task(mpid, max_miller):
+def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     '''
     Very light wrapper to instantiate a `_InsertSitesToCatalog` task and then
     run it manually.
@@ -152,14 +155,15 @@ def __run_insert_to_catalog_task(mpid, max_miller):
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
     '''
-    task = _InsertSitesToCatalog(mpid, max_miller)
-    try:
-        run_task(task)
+    task = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller,
+                                 bulk_dft_settings=bulk_dft_settings)
 
     # We need bulk calculations to enumerate our catalog. If these calculations
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
-    except FileNotFoundError:
+    try:
+        schedule_tasks([task], local_scheduler=True)
+    except RuntimeError:
         pass
 
 
@@ -189,7 +193,7 @@ class _InsertSitesToCatalog(luigi.Task):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings      A dictionary containing the VASP settings of
                                 the relaxed bulk to enumerate slabs from
     Returns:
         docs    A list of all of the Mongo documents (i.e., dictionaries)
@@ -201,25 +205,38 @@ class _InsertSitesToCatalog(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
-        return GenerateAllSitesFromBulk(mpid=self.mpid,
-                                        max_miller=self.max_miller,
-                                        min_xy=self.min_xy,
-                                        slab_generator_settings=self.slab_generator_settings,
-                                        get_slab_settings=self.get_slab_settings,
-                                        bulk_vasp_settings=self.bulk_vasp_settings)
+        bulk_finder = FindBulk(mpid=self.mpid,
+                               dft_settings=self.bulk_dft_settings)
+        site_gen = GenerateAllSitesFromBulk(mpid=self.mpid,
+                                            max_miller=self.max_miller,
+                                            min_xy=self.min_xy,
+                                            slab_generator_settings=self.slab_generator_settings,
+                                            get_slab_settings=self.get_slab_settings,
+                                            bulk_dft_settings=self.bulk_dft_settings)
+        return {'bulk_finder': bulk_finder,
+                'site_generator': site_gen}
 
     def run(self, _testing=False):
         '''
         Don't use the `_testing` argument unless you're unit testing
         '''
-        with open(self.input().path, 'rb') as file_handle:
-            site_docs = pickle.load(file_handle)
-        with get_mongo_collection('catalog') as collection:
+        reqs = self.requires()
+        bulk_finder = reqs['bulk_finder']
+        site_gen = reqs['site_generator']
 
-            # Try to find each adsorption site in our catalog
+        # Calculate the k-points, if needed
+        bulk_dft_settings = unfreeze_dict(self.bulk_dft_settings)
+        if bulk_dft_settings['kpts'] == 'bulk':
+            bulk_dft_settings['kpts'] = bulk_finder.calculate_bulk_k_points()
+
+        # Grab all of the sites we want in the catalog
+        site_docs = get_task_output(site_gen)
+
+        # Try to find each adsorption site in our catalog
+        with get_mongo_collection('catalog') as collection:
             incumbent_docs = []
             inserted_docs = []
             for site_doc in site_docs:
@@ -228,7 +245,7 @@ class _InsertSitesToCatalog(luigi.Task):
                          'min_xy': self.min_xy,
                          'slab_generator_settings': unfreeze_dict(self.slab_generator_settings),
                          'get_slab_settings': unfreeze_dict(self.get_slab_settings),
-                         'bulk_vasp_settings': unfreeze_dict(self.bulk_vasp_settings),
+                         'bulk_dft_settings': bulk_dft_settings,
                          'shift': {'$gt': site_doc['shift'] - 0.01,
                                    '$lt': site_doc['shift'] + 0.01},
                          'top': site_doc['top'],
@@ -252,7 +269,7 @@ class _InsertSitesToCatalog(luigi.Task):
                     doc['min_xy'] = self.min_xy
                     doc['slab_generator_settings'] = unfreeze_dict(self.slab_generator_settings)
                     doc['get_slab_settings'] = unfreeze_dict(self.get_slab_settings)
-                    doc['bulk_vasp_settings'] = unfreeze_dict(self.bulk_vasp_settings)
+                    doc['bulk_dft_settings'] = bulk_dft_settings
                     doc['adsorption_site'] = tuple(doc['adsorption_site'])
                     doc['fwids'] = site_doc['fwids']
                     # Add fingerprint information to the document

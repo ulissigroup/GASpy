@@ -8,46 +8,13 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 import warnings
 import pickle
-import json
 from bson.objectid import ObjectId
 from pymongo import MongoClient
+from ..utils import read_testing_rc
 from ....gasdb import get_mongo_collection, ConnectableCollection
 
 LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/test_cases/mongo_test_collections/'
 ALL_COLLECTION_TAGS = ['atoms', 'catalog', 'adsorption', 'surface_energy']
-
-
-def read_testing_rc(query=None):
-    '''
-    This function is nearly identical to the one in `gaspy.utils.read_rc`,
-    except this one specifically reads from the .gaspyrc.json file
-    within the testing folder, which should contain Mongo collection
-    information about your testing database.
-
-    Input:
-        query   [Optional] The string indicating the configuration you want.
-                If you're looking for nested information, use the syntax
-                "foo.bar.key"
-    Output:
-        rc_contents  A dictionary whose keys are the input keys and whose values
-                     are the values that we found in the .gaspyrc file
-    '''
-    try:
-        with open('/home/GASpy/gaspy/tests/.gaspyrc.json', 'r') as file_handle:
-            rc_contents = json.load(file_handle)
-    except FileNotFoundError as error:
-        raise FileNotFoundError('You have not yet created your .gaspyrc.json file in the gaspy/tests/ folder').with_traceback(error.__traceback__)
-
-    # Return out the keys you asked for. If the user did not specify the key, then return it all
-    if query:
-        keys = query.split('.')
-        for key in keys:
-            try:
-                rc_contents = rc_contents[key]
-            except KeyError as error:
-                raise KeyError('Check the spelling/capitalization of the key/values you are looking for').with_traceback(error.__traceback__)
-
-    return rc_contents
 
 
 def get_testing_mongo_collection(collection_tag):

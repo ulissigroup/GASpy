@@ -119,7 +119,8 @@ def _make_atoms_doc_from_fwid(fwid):
     doc['calculation_date'] = fw.updated_on
 
     # Fix some of our old FireWorks
-    doc = __patch_old_document(doc, atoms, fw)
+    if doc['calculation_date'] < datetime(2019, 6, 21):
+        doc = __patch_old_document(doc, atoms, fw)
     return doc
 
 
@@ -146,7 +147,7 @@ def __patch_old_document(doc, atoms, fw):
         patched_doc[key] = value
 
     # Guess some VASP setttings we never recorded
-    patched_doc['fwname']['vasp_settings'] = __get_patched_vasp_settings(fw)
+    patched_doc['fwname']['dft_settings'] = __get_patched_vasp_settings(fw)
 
     # Some of our old FireWorks had string-formatted Miller indices. Let's
     # fix those.
@@ -245,16 +246,16 @@ def __get_patched_vasp_settings(fw):
     have missing information, so this function will also fill in some
     blanks.  If you're using GASpy outside of the Ulissi group, then you
     should probably delete all of the lines past
-    `vasp_settings=fw.name['vasp_settings']`.
+    `dft_settings=fw.name['dft_settings']`.
 
     Arg:
         fw  Instance of a `fireworks.core.firework.Firework` class that
             should probably get obtained from our Launchpad
     Returts:
-        vasp_settings   A dictionary containing the VASP settings we used
+        dft_settings    A dictionary containing the VASP settings we used
                         to perform the relaxation for this FireWork.
     '''
-    vasp_settings = fw.name['vasp_settings']
+    vasp_settings = fw.name['dft_settings']
 
     # Guess the pseudotential version if it's not present
     if 'pp_version' not in vasp_settings:
@@ -268,7 +269,7 @@ def __get_patched_vasp_settings(fw):
     # calculations? I'm not sure. I think that it just assumes that
     # untagged calculations are RPBE.
     if 'gga' not in vasp_settings:
-        settings = defaults.xc_settings(xc='rpbe')
+        settings = defaults.vasp_xc_settings(xc='rpbe')
         for key in settings:
             vasp_settings[key] = settings[key]
 

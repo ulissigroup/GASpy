@@ -60,7 +60,7 @@ def test_MakeGasFW():
         fwork = task.run(_testing=True)
         assert fwork.name['calculation_type'] == 'gas phase optimization'
         assert fwork.name['gasname'] == gas_name
-        assert fwork.name['vasp_settings'] == GAS_SETTINGS['vasp']
+        assert fwork.name['dft_settings'] == GAS_SETTINGS['vasp']
         assert task.complete() is True
 
     finally:
@@ -86,7 +86,7 @@ def test_MakeBulkFW():
         fwork = task.run(_testing=True)
         assert fwork.name['calculation_type'] == 'unit cell optimization'
         assert fwork.name['mpid'] == mpid
-        assert fwork.name['vasp_settings'] == BULK_SETTINGS['vasp']
+        assert fwork.name['dft_settings'] == BULK_SETTINGS['vasp']
         assert task.complete() is True
 
     finally:
@@ -124,7 +124,7 @@ def test_MakeAdslabFW():
     adsorption_site = (1.48564485e-23, 1.40646118e+00, 2.08958465e+01)
     shift = 0.25
     top = False
-    vasp_settings = ADSLAB_SETTINGS['vasp']
+    dft_settings = ADSLAB_SETTINGS['vasp']
     adsorbate_name = 'OH'
     rotation = ADSLAB_SETTINGS['rotation']
     mpid = 'mp-2'
@@ -132,11 +132,11 @@ def test_MakeAdslabFW():
     min_xy = ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']
-    bulk_vasp_settings = BULK_SETTINGS['vasp']
+    bulk_dft_settings = BULK_SETTINGS['vasp']
     task = MakeAdslabFW(adsorption_site=adsorption_site,
                         shift=shift,
                         top=top,
-                        vasp_settings=vasp_settings,
+                        dft_settings=dft_settings,
                         adsorbate_name=adsorbate_name,
                         rotation=rotation,
                         mpid=mpid,
@@ -144,7 +144,7 @@ def test_MakeAdslabFW():
                         min_xy=min_xy,
                         slab_generator_settings=slab_generator_settings,
                         get_slab_settings=get_slab_settings,
-                        bulk_vasp_settings=bulk_vasp_settings)
+                        bulk_dft_settings=bulk_dft_settings)
 
     # Check that our requirement is correct
     req = task.requires()
@@ -156,7 +156,7 @@ def test_MakeAdslabFW():
     assert req.min_xy == min_xy
     assert unfreeze_dict(req.slab_generator_settings) == slab_generator_settings
     assert unfreeze_dict(req.get_slab_settings) == get_slab_settings
-    assert unfreeze_dict(req.bulk_vasp_settings) == bulk_vasp_settings
+    assert unfreeze_dict(req.bulk_dft_settings) == bulk_dft_settings
 
     try:
         # Need to make sure our requirement is run before testing our task.
@@ -178,7 +178,7 @@ def test_MakeAdslabFW():
         assert fwork.name['shift'] == shift
         assert fwork.name['top'] == top
         assert isinstance(fwork.name['slab_repeat'], tuple)
-        assert fwork.name['vasp_settings'] == ADSLAB_SETTINGS['vasp']
+        assert fwork.name['dft_settings'] == ADSLAB_SETTINGS['vasp']
         assert task.complete() is True
 
     finally:
@@ -228,12 +228,12 @@ def test_MakeSurfaceFW():
     miller_indices = (0, 1, 1)
     shift = 0.5
     min_height = SLAB_SETTINGS['slab_generator_settings']['min_slab_size'],
-    vasp_settings = SLAB_SETTINGS['vasp']
+    dft_settings = SLAB_SETTINGS['vasp']
     finder = FindSurface(mpid=mpid,
                          miller_indices=miller_indices,
                          shift=shift,
                          min_height=min_height,
-                         vasp_settings=vasp_settings)
+                         dft_settings=dft_settings)
     try:
         schedule_tasks([finder.requires()], local_scheduler=True)
         finder._load_attributes()
@@ -248,7 +248,7 @@ def test_MakeSurfaceFW():
         assert fwork.name['miller'] == miller_indices
         assert fwork.name['shift'] == shift
         assert fwork.name['num_slab_atoms'] == len(finder._create_surface())
-        assert fwork.name['vasp_settings'] == vasp_settings
+        assert fwork.name['dft_settings'] == dft_settings
         assert task.complete() is True
 
     finally:

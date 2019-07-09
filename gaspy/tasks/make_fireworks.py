@@ -21,6 +21,7 @@ from ..mongo import make_atoms_from_doc
 from ..utils import unfreeze_dict
 from ..fireworks_helper_scripts import make_firework, submit_fwork, get_launchpad
 
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
@@ -46,10 +47,10 @@ class MakeGasFW(FireworkMaker):
 
     Args:
         gas_name        A string indicating which gas you want to relax
-        vasp_settings   A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     '''
     gas_name = luigi.Parameter()
-    vasp_settings = luigi.DictParameter(GAS_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateGas(gas_name=self.gas_name)
@@ -62,13 +63,13 @@ class MakeGasFW(FireworkMaker):
         atoms = make_atoms_from_doc(doc)
 
         # Create, package, and submit the FireWork
-        vasp_settings = unfreeze_dict(self.vasp_settings)
+        dft_settings = unfreeze_dict(self.dft_settings)
         fw_name = {'calculation_type': 'gas phase optimization',
                    'gasname': self.gas_name,
-                   'vasp_settings': vasp_settings}
+                   'dft_settings': dft_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
-                              vasp_settings=vasp_settings)
+                              dft_settings=dft_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
 
         # Let Luigi know that we've made the FireWork
@@ -85,10 +86,10 @@ class MakeBulkFW(FireworkMaker):
 
     Args:
         mpid            A string indicating the mpid of the bulk
-        vasp_settings   A dictionary containing your VASP settings
+        dft_settings    A dictionary containing your DFT settings
     '''
     mpid = luigi.Parameter()
-    vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
     max_atoms = luigi.IntParameter(50)
 
     def requires(self):
@@ -109,13 +110,13 @@ class MakeBulkFW(FireworkMaker):
                              % (len(atoms), self.max_atoms, self.mpid))
 
         # Create, package, and submit the FireWork
-        vasp_settings = unfreeze_dict(self.vasp_settings)
+        dft_settings = unfreeze_dict(self.dft_settings)
         fw_name = {'calculation_type': 'unit cell optimization',
                    'mpid': self.mpid,
-                   'vasp_settings': vasp_settings}
+                   'dft_settings': dft_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
-                              vasp_settings=vasp_settings)
+                              dft_settings=dft_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
 
         # Increase the priority because it's a bulk
@@ -141,7 +142,7 @@ class MakeAdslabFW(FireworkMaker):
         shift                   A float indicating the shift of the slab
         top                     A Boolean indicating whether the adsorption
                                 site is on the top or the bottom of the slab
-        vasp_settings           A dictionary containing your VASP settings
+        dft_settings            A dictionary containing your DFT settings
                                 for the adslab relaxation
         adsorbate_name          A string indicating which adsorbate to use. It
                                 should be one of the keys within the
@@ -168,13 +169,13 @@ class MakeAdslabFW(FireworkMaker):
                                 `SlabGenerator` class. You can feed the
                                 arguments for the `get_slabs` method here
                                 as a dictionary.
-        bulk_vasp_settings      A dictionary containing the VASP settings of
+        bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
     '''
     adsorption_site = luigi.TupleParameter()
     shift = luigi.FloatParameter()
     top = luigi.BoolParameter()
-    vasp_settings = luigi.DictParameter(ADSLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
 
     # Passed to `GenerateAdslabs`
     adsorbate_name = luigi.Parameter()
@@ -184,7 +185,7 @@ class MakeAdslabFW(FireworkMaker):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         return GenerateAdslabs(adsorbate_name=self.adsorbate_name,
@@ -194,7 +195,7 @@ class MakeAdslabFW(FireworkMaker):
                                min_xy=self.min_xy,
                                slab_generator_settings=self.slab_generator_settings,
                                get_slab_settings=self.get_slab_settings,
-                               bulk_vasp_settings=self.bulk_vasp_settings)
+                               bulk_dft_settings=self.bulk_dft_settings)
 
     def run(self, _testing=False):
         ''' Do not use `_testing=True` unless you are unit testing '''
@@ -217,7 +218,7 @@ class MakeAdslabFW(FireworkMaker):
         atoms = make_atoms_from_doc(doc)
 
         # Create, package, and submit the FireWork
-        vasp_settings = unfreeze_dict(self.vasp_settings)
+        dft_settings = unfreeze_dict(self.dft_settings)
         fw_name = {'calculation_type': 'slab+adsorbate optimization',
                    'adsorbate': self.adsorbate_name,
                    'adsorbate_rotation': dict(self.rotation),
@@ -227,10 +228,10 @@ class MakeAdslabFW(FireworkMaker):
                    'shift': self.shift,
                    'top': self.top,
                    'slab_repeat': doc['slab_repeat'],
-                   'vasp_settings': vasp_settings}
+                   'dft_settings': dft_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
-                              vasp_settings=vasp_settings)
+                              dft_settings=dft_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
 
         # Let Luigi know that we've made the FireWork
@@ -315,29 +316,29 @@ class MakeSurfaceFW(FireworkMaker):
                         surface you want to find
         shift           A float indicating the shift of the surface---i.e., the
                         termination that pymatgen finds
-        vasp_settings   A dictionary containing your VASP settings for the
+        dft_settings    A dictionary containing your DFT settings for the
                         surface relaxation
     '''
     atoms_doc = luigi.DictParameter()
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
     shift = luigi.FloatParameter()
-    vasp_settings = luigi.DictParameter(SLAB_SETTINGS['vasp'])
+    dft_settings = luigi.DictParameter(SLAB_SETTINGS[DFT_CALCULATOR])
 
     def run(self, _testing=False):
         ''' Do not use `_testing=True` unless you are unit testing '''
         # Create, package, and submit the FireWork
         atoms = make_atoms_from_doc(unfreeze_dict(self.atoms_doc))
-        vasp_settings = unfreeze_dict(self.vasp_settings)
+        dft_settings = unfreeze_dict(self.dft_settings)
         fw_name = {'calculation_type': 'surface energy optimization',
                    'mpid': self.mpid,
                    'miller': self.miller_indices,
                    'shift': self.shift,
                    'num_slab_atoms': len(atoms),
-                   'vasp_settings': vasp_settings}
+                   'dft_settings': dft_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
-                              vasp_settings=vasp_settings)
+                              dft_settings=dft_settings)
         _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
 
         # Let Luigi know that we've made the FireWork

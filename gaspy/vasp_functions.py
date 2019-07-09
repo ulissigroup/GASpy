@@ -1,3 +1,10 @@
+'''
+This module houses the functions that are to be run by each FireWorks rocket
+for VASP calculations. Both this module and the `qe_functions.py` module are
+hard-coded for the HPC centers that we use. If you use GASpy, you'll need to
+make your own versions.
+'''
+
 import os
 import uuid
 import numpy as np
@@ -6,7 +13,6 @@ from ase.io.trajectory import TrajectoryWriter
 from ase.optimize import BFGS
 from ase.calculators.vasp import Vasp2
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
-# noqa: E731
 
 # Need to handle setting the pseudopotential directory, probably in the submission
 # config if it stays constant? (vasp_qadapter.yaml)
