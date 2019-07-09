@@ -50,7 +50,7 @@ def test_FindCalculation():
     assert hasattr(finder, 'max_fizzles')
 
     # Ok, let's pick one of the child tasks to test the max_fizzles feature.
-    mpid = 'mp-120'
+    mpid = 'mp-42'
     dft_settings = BULK_SETTINGS['vasp']
     task = FindBulk(mpid=mpid, dft_settings=dft_settings, max_fizzles=0)
     try:
@@ -236,7 +236,7 @@ def test_FindBulk_unsuccessfully():
     If we ask this task to find something that is not there, it should return
     the correct dependency
     '''
-    mpid = 'mp-120'
+    mpid = 'mp-42'
     task = FindBulk(mpid=mpid, dft_settings=BULK_SETTINGS['vasp'])
 
     try:
