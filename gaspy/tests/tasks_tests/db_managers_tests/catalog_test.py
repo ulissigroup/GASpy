@@ -28,8 +28,7 @@ from ....defaults import bulk_settings
 BULK_SETTINGS = bulk_settings()
 
 
-@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
-def test_update_catalog_collection(dft_method):
+def test_update_catalog_collection():
     elements = ['Pd']
     max_miller = 1
 
@@ -113,8 +112,7 @@ def test_catalog_update_with_custom_mp_query():
         clean_up_tasks()
 
 
-@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
-def test__InsertAllSitesFromBulkToCatalog(dft_method):
+def test__InsertAllSitesFromBulkToCatalog():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
@@ -132,9 +130,11 @@ def test__InsertAllSitesFromBulkToCatalog(dft_method):
         max_miller = 2
         catalog_inserter = _InsertSitesToCatalog(mpid=mpid,
                                                  max_miller=max_miller,
-                                                 bulk_dft_settings=BULK_SETTINGS[dft_method])
-        site_generator = catalog_inserter.requires()
-        run_task_locally(site_generator)
+                                                 bulk_dft_settings=BULK_SETTINGS['vasp'])
+        reqs = catalog_inserter.requires()
+        for task in reqs.values():
+            run_task_locally(task)
+        site_generator = reqs['site_generator']
         site_docs = get_task_output(site_generator)
 
         catalog_inserter.run(_testing=True)
