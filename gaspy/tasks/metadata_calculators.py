@@ -13,7 +13,10 @@ import statsmodels.api as statsmodels
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
-from .core import save_task_output, make_task_output_object, get_task_output
+from .core import (schedule_tasks,
+                   save_task_output,
+                   make_task_output_object,
+                   get_task_output)
 from .calculation_finders import FindBulk, FindGas, FindAdslab, FindSurface
 from ..mongo import make_atoms_from_doc
 from .. import utils
@@ -26,6 +29,53 @@ BULK_SETTINGS = defaults.bulk_settings()
 SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
+
+
+def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
+    '''
+    Light wrapper for submitting adsorption calculations given documents from
+    the catalog.
+
+    Arg:
+        adsorbate       A string indicating which adsorbate you want to submit
+                        a calculation for. See `gaspy.defaults.adsorbates` for
+                        possible values.
+        catalog_docs    Any portion of the list of dictionaries obtained from
+                        `gaspy.gasdb.get_catalog_docs` that you want to run.
+        kwargs          If you want to override any arguments for the
+                        `gaspy.tasks.metadata_calculators.CalculateAdsorptionEnergy`
+                        task, then just supply them here. Note that if you
+                        supply a value for a field that is inside one of the
+                        dictionaries in the `site_docs` argument, the document
+                        will be overridden by the `kwarg`.
+    '''
+    tasks = []
+
+    # Take out the basic arguments from each site document
+    for doc in catalog_docs:
+        site = doc['adsorption_site']
+        mpid = doc['mpid']
+        miller = doc['miller']
+        shift = doc['shift']
+        top = doc['top']
+
+        # Add the basic arguments to the kwargs, but not if the user wants to
+        # override them
+        if 'adsorption_site' not in kwargs:
+            kwargs['adsorption_site'] = site
+        if 'mpid' not in kwargs:
+            kwargs['mpid'] = mpid
+        if 'miller_indices' not in kwargs:
+            kwargs['miller_indices'] = miller
+        if 'shift' not in kwargs:
+            kwargs['shift'] = shift
+        if 'top' not in kwargs:
+            kwargs['top'] = top
+
+        # Create and submit the tasks/jobs
+        task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+        tasks.append(task)
+    schedule_tasks(tasks)
 
 
 class CalculateAdsorptionEnergy(luigi.Task):
