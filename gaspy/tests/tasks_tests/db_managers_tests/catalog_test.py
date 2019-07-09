@@ -14,7 +14,6 @@ from ....tasks.db_managers.catalog import (update_catalog_collection,
                                            _InsertSitesToCatalog)
 
 # Things we need to do the tests
-import pytest
 import numpy.testing as npt
 from pymatgen.ext.matproj import MPRester
 from ..utils import clean_up_tasks, run_task_locally
@@ -41,7 +40,7 @@ def test_update_catalog_collection():
             # Add some sites and check that they're there
             update_catalog_collection(elements=elements,
                                       max_miller=max_miller,
-                                      bulk_dft_settings=BULK_SETTINGS[dft_method])
+                                      bulk_dft_settings=BULK_SETTINGS['vasp'])
             docs = list(collection.find({'mpid': 'mp-2'}))
         assert len(docs) > 0
 
