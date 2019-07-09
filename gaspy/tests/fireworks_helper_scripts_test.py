@@ -31,6 +31,8 @@ from ..fireworks_helper_scripts import (get_launchpad,
 # Things we need to do the tests
 import pytest
 import warnings
+import socket
+import subprocess
 import pickle
 import getpass
 import pandas as pd
@@ -315,9 +317,24 @@ def test_submit_fwork():
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
 def test_get_atoms_from_fwid(fw_file):
-    fwid = int(fw_file.split('.')[0].split('/')[-1])
-    atoms = get_atoms_from_fwid(fwid)
-    assert isinstance(atoms, ase.Atoms)
+    '''
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
+
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
+    '''
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
+
+        # The actual test
+        fwid = int(fw_file.split('.')[0].split('/')[-1])
+        atoms = get_atoms_from_fwid(fwid)
+        assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
