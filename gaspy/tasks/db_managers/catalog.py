@@ -25,6 +25,7 @@ from ..core import (schedule_tasks,
                     save_task_output,
                     make_task_output_object)
 from ..atoms_generators import GenerateAllSitesFromBulk
+from ..calculation_finders import FindBulk
 from ... import defaults
 from ...utils import read_rc, unfreeze_dict
 from ...mongo import make_atoms_from_doc
@@ -209,22 +210,35 @@ class _InsertSitesToCatalog(luigi.Task):
     bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
-        return GenerateAllSitesFromBulk(mpid=self.mpid,
-                                        max_miller=self.max_miller,
-                                        min_xy=self.min_xy,
-                                        slab_generator_settings=self.slab_generator_settings,
-                                        get_slab_settings=self.get_slab_settings,
-                                        bulk_dft_settings=self.bulk_dft_settings)
+        bulk_finder = FindBulk(mpid=self.mpid,
+                               bulk_dft_settings=self.bulk_dft_settings)
+        site_gen = GenerateAllSitesFromBulk(mpid=self.mpid,
+                                            max_miller=self.max_miller,
+                                            min_xy=self.min_xy,
+                                            slab_generator_settings=self.slab_generator_settings,
+                                            get_slab_settings=self.get_slab_settings,
+                                            bulk_dft_settings=self.bulk_dft_settings)
+        return {'bulk_finder': bulk_finder,
+                'site_generator': site_gen}
 
     def run(self, _testing=False):
         '''
         Don't use the `_testing` argument unless you're unit testing
         '''
-        with open(self.input().path, 'rb') as file_handle:
-            site_docs = pickle.load(file_handle)
-        with get_mongo_collection('catalog') as collection:
+        reqs = self.requires()
+        bulk_finder = reqs['bulk_finder']
+        site_gen = reqs['site_generator']
 
-            # Try to find each adsorption site in our catalog
+        # Calculate the k-points, if needed
+        bulk_dft_settings = unfreeze_dict(self.bulk_dft_settings)
+        if bulk_dft_settings['kpts'] == 'bulk':
+            bulk_dft_settings['kpts'] = bulk_finder.calculate_bulk_k_points()
+
+        # Grab all of the sites we want in the catalog
+        site_docs = get_task_output(site_gen)
+
+        # Try to find each adsorption site in our catalog
+        with get_mongo_collection('catalog') as collection:
             incumbent_docs = []
             inserted_docs = []
             for site_doc in site_docs:
@@ -233,7 +247,7 @@ class _InsertSitesToCatalog(luigi.Task):
                          'min_xy': self.min_xy,
                          'slab_generator_settings': unfreeze_dict(self.slab_generator_settings),
                          'get_slab_settings': unfreeze_dict(self.get_slab_settings),
-                         'bulk_dft_settings': unfreeze_dict(self.bulk_dft_settings),
+                         'bulk_dft_settings': bulk_dft_settings,
                          'shift': {'$gt': site_doc['shift'] - 0.01,
                                    '$lt': site_doc['shift'] + 0.01},
                          'top': site_doc['top'],
@@ -257,7 +271,7 @@ class _InsertSitesToCatalog(luigi.Task):
                     doc['min_xy'] = self.min_xy
                     doc['slab_generator_settings'] = unfreeze_dict(self.slab_generator_settings)
                     doc['get_slab_settings'] = unfreeze_dict(self.get_slab_settings)
-                    doc['bulk_dft_settings'] = unfreeze_dict(self.bulk_dft_settings)
+                    doc['bulk_dft_settings'] = bulk_dft_settings
                     doc['adsorption_site'] = tuple(doc['adsorption_site'])
                     doc['fwids'] = site_doc['fwids']
                     # Add fingerprint information to the document
