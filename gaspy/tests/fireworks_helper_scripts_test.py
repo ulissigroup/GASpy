@@ -389,9 +389,22 @@ def test___patch_old_atoms(fw_file):
                           ('apalizha', 10),
                           ('zulissi', 20)])
 def test_check_jobs_user(user, n_jobs):
-    ''' This function test if the DataFrame contains only the user inquired '''
-    dataframe = check_jobs_status(user, n_jobs)
+    '''
+    This unit test only runs on GASpy's home system, managed by the Ulissi
+    group. We do this because it assumes that you have certain rockets in your
+    FireWorks database.
 
-    assert isinstance(dataframe, pd.DataFrame)
-    assert user == dataframe['user'].unique()
-    assert n_jobs == len(dataframe.index)
+    Yes, this is a bad practice. No, I don't feel like fixing it. But if you're
+    reading this, then just trust us to manage this function for you.
+    '''
+    # Only run on Cori and if you're in m2775, which is our way of saying that
+    # "Ulissi group is running this"
+    host = socket.gethostname()
+    groups = subprocess.check_output(['groups']).decode('utf-8').strip().split(' ')
+    if 'cori' in host and 'm2755' in groups:
+
+        # The actual test
+        dataframe = check_jobs_status(user, n_jobs)
+        assert isinstance(dataframe, pd.DataFrame)
+        assert user == dataframe['user'].unique()
+        assert n_jobs == len(dataframe.index)
