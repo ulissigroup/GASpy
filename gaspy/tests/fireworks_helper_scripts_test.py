@@ -196,8 +196,8 @@ def test__make_vasp_firework():
 def test__make_qe_firework():
     '''
     Our Quantum Espresso rockets should take three steps:  Clone the
-    espressotools repository; perform the relaxation via epressotools; then
-    delete espressotools after saving the commit hash. We'll pick apart each of
+    espresso_tools repository; perform the relaxation via epressotools; then
+    delete espresso_tools after saving the commit hash. We'll pick apart each of
     these during this test.
     '''
     # Make the firework and pull out the operations so we can inspect them
@@ -213,14 +213,14 @@ def test__make_qe_firework():
     fw_name_expected['user'] == getpass.getuser()
     assert fwork.name == fw_name_expected
 
-    # Make sure we clone espressotools correctly
+    # Make sure we clone espresso_tools correctly
     assert isinstance(clone_espresso_tools, ScriptTask)
     assert 'git clone' in clone_espresso_tools['script'][0]
     assert 'espresso_tools' in clone_espresso_tools['script'][0]
 
-    # Make sure we are calling espressotools
+    # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)
-    assert relax['func'] == 'espressotools.run_qe'
+    assert relax['func'] == 'espresso_tools.run_qe'
     assert relax['args'] == [encode_atoms_to_trajhex(atoms), dft_settings]
 
     # Make sure we start VASP
