@@ -19,6 +19,7 @@ from .. import defaults
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from ..gasdb import get_mongo_collection
 from ..fireworks_helper_scripts import find_n_rockets
+from ..utils import unfreeze_dict
 from .core import (save_task_output,
                    make_task_output_object,
                    get_task_output,
@@ -265,6 +266,15 @@ class FindBulk(FindCalculation):
         Parses and saves Luigi parameters into various class attributes
         required to run this task, as per the parent class `FindCalculation`
         '''
+        # Initialize the queries
+        self.gasdb_query = {'fwname.calculation_type': 'unit cell optimization',
+                            'fwname.mpid': self.mpid}
+        self.fw_query = {'name.calculation_type': 'unit cell optimization',
+                         'name.mpid': self.mpid}
+        for key, value in self.dft_settings.items():
+            self.gasdb_query['fwname.dft_settings.%s' % key] = value
+            self.fw_query['name.dft_settings.%s' % key] = value
+
         # If the k-points is 'bulk', then calculate them
         if self.dft_settings['kpts'] == 'bulk':
             try:  # EAFP to just run the task if we need to
@@ -275,24 +285,17 @@ class FindBulk(FindCalculation):
             bulk_atoms = make_atoms_from_doc(bulk_doc)
             kpts = self.calculate_bulk_k_points(bulk_atoms, self.k_pts_x)
 
-        # Initialize the queries
-        self.gasdb_query = {'fwname.calculation_type': 'unit cell optimization',
-                            'fwname.mpid': self.mpid}
-        self.fw_query = {'name.calculation_type': 'unit cell optimization',
-                         'name.mpid': self.mpid}
-        for key, value in self.dft_settings.items():
-            self.gasdb_query['fwname.dft_settings.%s' % key] = value
-            self.fw_query['name.dft_settings.%s' % key] = value
-
         # Assign the k-points that we calculated
         try:
             self.gasdb_query['fwname.dft_settings.kpts'] = kpts
             self.fw_query['name.dft_settings.kpts'] = kpts
         except NameError:
             pass
+        dft_settings = unfreeze_dict(self.dft_settings)
+        dft_settings['kpts'] = kpts
 
         # Assign the dynamic dependency
-        self.dependency = MakeBulkFW(self.mpid, self.dft_settings)
+        self.dependency = MakeBulkFW(self.mpid, dft_settings)
 
     @staticmethod
     def calculate_bulk_k_points(atoms, k_pts_x=10):
