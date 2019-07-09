@@ -78,13 +78,17 @@ class FindCalculation(luigi.Task):
             _testing    Boolean indicating whether or not you are doing a unit
                         test. You probably shouldn't touch this.
         '''
-        calc_found = self._find_and_save_calculation()
+        # Hacky paragraph to deal with changing FindBulk arguments on-the-fly
+        dft_settings = unfreeze_dict(self.dft_settings)
+        if isinstance(self, FindBulk):
+            dft_settings['kpts'] = self.calculate_bulk_k_points()
 
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
+        calc_found = self._find_and_save_calculation()
         if calc_found is False:
             n_running, n_fizzles = find_n_rockets(self.fw_query,
-                                                  self.dft_settings,
+                                                  dft_settings,
                                                   _testing=_testing)
 
             # If we aren't running yet, then start running
@@ -275,48 +279,41 @@ class FindBulk(FindCalculation):
             self.gasdb_query['fwname.dft_settings.%s' % key] = value
             self.fw_query['name.dft_settings.%s' % key] = value
 
-        # If the k-points is 'bulk', then calculate them
+        # If the k-points is 'bulk', then calculate and assign them
+        dft_settings = unfreeze_dict(self.dft_settings)
         if self.dft_settings['kpts'] == 'bulk':
-            try:  # EAFP to just run the task if we need to
-                bulk_doc = get_task_output(self.requires())
-            except FileNotFoundError:
-                run_task(self.requires())
-                bulk_doc = get_task_output(self.requires())
-            bulk_atoms = make_atoms_from_doc(bulk_doc)
-            kpts = self.calculate_bulk_k_points(bulk_atoms, self.k_pts_x)
-
-        # Assign the k-points that we calculated
-        try:
+            kpts = self.calculate_bulk_k_points()
             self.gasdb_query['fwname.dft_settings.kpts'] = kpts
             self.fw_query['name.dft_settings.kpts'] = kpts
-        except NameError:
-            pass
-        dft_settings = unfreeze_dict(self.dft_settings)
-        dft_settings['kpts'] = kpts
+            dft_settings['kpts'] = kpts
 
         # Assign the dynamic dependency
         self.dependency = MakeBulkFW(self.mpid, dft_settings)
 
-    @staticmethod
-    def calculate_bulk_k_points(atoms, k_pts_x=10):
+    def calculate_bulk_k_points(self):
         '''
         For unit cell calculations, it's a good practice to calculate the
         k-point mesh given the unit cell size. We do that on-the-spot here.
 
-        Args:
-            atoms       The `ase.Atoms` object you want to relax
-            k_pts_x     An integer indicating the number of k points you want in
-                        the x-direction
         Returns:
             k_pts   A 3-tuple of integers indicating the k-point mesh to use
         '''
+        # Get the atoms object of the bulkfirst
+        try:  # EAFP to just run the task if we need to
+            doc = get_task_output(self.requires())
+        except FileNotFoundError:
+            run_task(self.requires())
+            doc = get_task_output(self.requires())
+        atoms = make_atoms_from_doc(doc)
+
+        # Use the atoms object to calculate the k points
         cell = atoms.get_cell()
         a0 = np.linalg.norm(cell[0])
         b0 = np.linalg.norm(cell[1])
         c0 = np.linalg.norm(cell[2])
-        k_pts = (k_pts_x,
-                 max(1, int(k_pts_x*a0/b0)),
-                 max(1, int(k_pts_x*a0/c0)))
+        k_pts = (self.k_pts_x,
+                 max(1, int(self.k_pts_x*a0/b0)),
+                 max(1, int(self.k_pts_x*a0/c0)))
         return k_pts
 
 
