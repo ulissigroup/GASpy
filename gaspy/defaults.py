@@ -82,7 +82,6 @@ def gas_settings():
                      xcf='PBE',
                      encut=400.,
                      spol=0,
-                     mode='relax',
                      psps='GBRV',
                      kpts=(1, 1, 1),
                      sigma=0.05)
@@ -109,7 +108,6 @@ def bulk_settings():
                      xcf='PBE',
                      encut=400.,
                      spol=0,
-                     mode='relax',
                      psps='GBRV',
                      kpts='bulk',
                      sigma=0.1)
@@ -139,7 +137,6 @@ def surface_energy_bulk_settings():
                      xcf='PBEsol',
                      encut=400.,
                      spol=0,
-                     mode='relax',
                      psps='GBRV',
                      kpts='bulk',
                      sigma=0.1)
@@ -171,7 +168,6 @@ def slab_settings():
                      xcf='PBEsol',
                      encut=400.,
                      spol=0,
-                     mode='relax',
                      psps='GBRV',
                      kpts=(4, 4, 1),
                      sigma=0.1)
@@ -216,7 +212,6 @@ def adslab_settings():
                      xcf='PBE',
                      encut=400.,
                      spol=0,
-                     mode='relax',
                      psps='GBRV',
                      kpts=(4, 4, 1),
                      sigma=0.1)
