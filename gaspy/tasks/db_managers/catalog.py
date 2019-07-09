@@ -15,12 +15,10 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 from datetime import datetime
-import pickle
 import luigi
 import multiprocess
 from pymatgen.ext.matproj import MPRester
 from ..core import (schedule_tasks,
-                    run_task,
                     get_task_output,
                     save_task_output,
                     make_task_output_object)
@@ -159,13 +157,13 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     '''
     task = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller,
                                  bulk_dft_settings=bulk_dft_settings)
-    try:
-        run_task(task)
 
     # We need bulk calculations to enumerate our catalog. If these calculations
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
-    except FileNotFoundError:
+    try:
+        schedule_tasks([task], local_scheduler=True)
+    except RuntimeError:
         pass
 
 
@@ -211,7 +209,7 @@ class _InsertSitesToCatalog(luigi.Task):
 
     def requires(self):
         bulk_finder = FindBulk(mpid=self.mpid,
-                               bulk_dft_settings=self.bulk_dft_settings)
+                               dft_settings=self.bulk_dft_settings)
         site_gen = GenerateAllSitesFromBulk(mpid=self.mpid,
                                             max_miller=self.max_miller,
                                             min_xy=self.min_xy,
