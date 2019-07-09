@@ -547,7 +547,7 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
         return serialized_doc
 
 
-def get_low_coverage_docs(adsorbate, model_tag=defaults.model(), additional_projections = None):
+def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
     '''
     Each surface has many possible adsorption sites. The site with the most
     negative adsorption energy (i.e., the strongest-binding site) will tend to
@@ -572,15 +572,14 @@ def get_low_coverage_docs(adsorbate, model_tag=defaults.model(), additional_proj
                     `predictions.adsorption_energy` key in the catalog
                     documents for valid inputs. Note that these keys are
                     created by the `GASpy_regressions` submodule.
-        additional_projections Additional projections to add to the output
     Returns:
         docs    A dictionary whose keys are 4-tuples of the MPID, Miller index,
                 shift, and top/bottom of a surface and whose values are the
                 aggregated documents we get from either `get_adsorption_docs`
                 or `get_catalog_docs`
     '''
-    docs_dft = get_low_coverage_dft_docs(adsorbate=adsorbate, additional_projections = additional_projections)
-    docs_ml = get_low_coverage_ml_docs(adsorbate=adsorbate, model_tag=model_tag, additional_projections = additional_projections)
+    docs_dft = get_low_coverage_dft_docs(adsorbate=adsorbate)
+    docs_ml = get_low_coverage_ml_docs(adsorbate=adsorbate, model_tag=model_tag)
     docs_dft_by_surface = {get_surface_from_doc(doc): doc for doc in docs_dft}
     docs_ml_by_surface = {get_surface_from_doc(doc): doc for doc in docs_ml}
 
@@ -623,7 +622,7 @@ def get_low_coverage_docs(adsorbate, model_tag=defaults.model(), additional_proj
     return docs
 
 
-def get_low_coverage_dft_docs(adsorbate, filters=None, additional_projections = None):
+def get_low_coverage_dft_docs(adsorbate, filters=None):
     '''
     This function is analogous to the `get_adsorption_docs` function, except it
     only returns documents that represent the low-coverage sites for each
@@ -646,8 +645,6 @@ def get_low_coverage_dft_docs(adsorbate, filters=None, additional_projections = 
                     filters from `gaspy.defaults.adsorption_filters`. If you
                     want to modify them, we suggest simply fetching that
                     object, modifying it, and then passing it here.
-        additional_projections Additional projections to add to the output
-
     Returns:
         docs    A list of aggregated Mongo documents (i.e., dictionaries) from
                 our `adsorption` Mongo collection that happen to have the
@@ -666,11 +663,6 @@ def get_low_coverage_dft_docs(adsorbate, filters=None, additional_projections = 
     projections = defaults.adsorption_projection()
     projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
                                           {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
-    
-    if additional_projections is not None:
-        for field in additional_projections:
-            projections[field] = additional_projections[field]
-            
     project = {'$project': projections}
 
     # Now order the documents so that the low-coverage sites come first (i.e.,
@@ -733,7 +725,7 @@ def round_(n, decimals=0):
     return math.floor(n*multiplier + 0.5) / multiplier
 
 
-def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model(), additional_projections = None):
+def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
     '''
     This function is analogous to the `get_catalog_docs` function, except
     it only returns documents that represent the low-coverage sites for
@@ -747,8 +739,6 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model(), additional_p
                     will *not* get structures with only one of the adsorbates.
         model_tag   A string indicating which model you want to use to predict
                     the adsorption energy.
-        additional_projections Additional projections to add to the output
-
     Returns:
         docs    A list of aggregated Mongo documents (i.e., dictionaries) from
                 our `catalog` Mongo collection that happen to have the lowest
@@ -764,11 +754,6 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model(), additional_p
     # Add the predictions
     data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model_tag)
     projections['energy'] = {'$arrayElemAt': [{'$arrayElemAt': ['$'+data_location, -1]}, 1]}
-    
-    if additional_projections is not None:
-        for field in additional_projections:
-            projections[field] = additional_projections[field]
-            
     project = {'$project': projections}
 
     # Now order the documents so that the low-coverage sites come first (i.e.,
