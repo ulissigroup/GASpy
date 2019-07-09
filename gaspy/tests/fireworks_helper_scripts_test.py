@@ -361,7 +361,6 @@ def test__get_atoms_from_qe_fw(fw_file):
     if fw.name['dft_settings']['_calculator'] == 'qe':
         atoms = _get_atoms_from_qe_fw(fw)
         assert isinstance(atoms, ase.Atoms)
-    assert False, 'We do not actually have any QE fireworks to test currently.'
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
