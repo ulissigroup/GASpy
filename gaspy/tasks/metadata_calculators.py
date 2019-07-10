@@ -68,6 +68,68 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
     schedule_tasks(tasks)
 
 
+def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
+                                        anion_concs, cation_concs, **kwargs):
+    '''
+    Wrapper for submitting RISM-type adsorption calculations given documents
+    from the catalog.
+
+    Arg:
+        adsorbate       A string indicating which adsorbate you want to submit
+                        a calculation for. See `gaspy.defaults.adsorbates` for
+                        possible values.
+        catalog_docs    Any portion of the list of dictionaries obtained from
+                        `gaspy.gasdb.get_catalog_docs` that you want to run.
+        target_fermi    The Fermi level you want to set. This is your effective
+                        knob for applied potential. What you supply here will
+                        override the default target Fermi level in
+                        `gaspy.defaults`.
+        anion_concs     A dictionary whose keys are the anions you want in the
+                        system and whose values are their concentrations in
+                        units of mol/L. What you provide here will override the
+                        default in `gaspy.defaults`.
+        cation_concs    A dictionary whose keys are the cations you want in the
+                        system and whose values are their concentrations in
+                        units of mol/L. What you provide here will override the
+                        default in `gaspy.defaults`.
+        kwargs          If you want to override any arguments for the
+                        `gaspy.tasks.metadata_calculators.CalculateAdsorptionEnergy`
+                        task, then just supply them here. Note that if you
+                        supply a value for a field that is inside one of the
+                        dictionaries in the `site_docs` argument, the site
+                        document will override whatever you provide. This will
+                        prevent the user from trying to do calculations on
+                        sites that are not real sites, which will probably mess
+                        things up downstream.
+    '''
+    tasks = []
+
+    # Take out the basic arguments from each site document
+    for doc in catalog_docs:
+        kwargs['adsorption_site'] = doc['adsorption_site']
+        kwargs['mpid'] = doc['mpid']
+        kwargs['miller_indices'] = doc['miller']
+        kwargs['shift'] = doc['shift']
+        kwargs['top'] = doc['top']
+
+        # Define the RISM settings
+        if 'gas_dft_settings' not in kwargs:
+            kwargs['gas_dft_settings'] = GAS_SETTINGS['rism']
+        if 'bulk_dft_settings' not in kwargs:
+            kwargs['bulk_dft_settings'] = BULK_SETTINGS['rism']
+        if 'adslab_dft_settings' not in kwargs:
+            kwargs['adslab_dft_settings'] = ADSLAB_SETTINGS['rism']
+        for calculation_type in ['gas_dft_settings', 'adslab_dft_settings']:
+            kwargs[calculation_type]['target_fermi'] = target_fermi
+            kwargs[calculation_type]['anion_concs'] = anion_concs
+            kwargs[calculation_type]['cation_concs'] = cation_concs
+
+        # Create and submit the tasks/jobs
+        task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+        tasks.append(task)
+    schedule_tasks(tasks)
+
+
 class CalculateAdsorptionEnergy(luigi.Task):
     '''
     This task will calculate the adsorption energy of a system you specify.
