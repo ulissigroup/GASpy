@@ -46,31 +46,21 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
                         `gaspy.tasks.metadata_calculators.CalculateAdsorptionEnergy`
                         task, then just supply them here. Note that if you
                         supply a value for a field that is inside one of the
-                        dictionaries in the `site_docs` argument, the document
-                        will be overridden by the `kwarg`.
+                        dictionaries in the `site_docs` argument, the site
+                        document will override whatever you provide. This will
+                        prevent the user from trying to do calculations on
+                        sites that are not real sites, which will probably mess
+                        things up downstream.
     '''
     tasks = []
 
     # Take out the basic arguments from each site document
     for doc in catalog_docs:
-        site = doc['adsorption_site']
-        mpid = doc['mpid']
-        miller = doc['miller']
-        shift = doc['shift']
-        top = doc['top']
-
-        # Add the basic arguments to the kwargs, but not if the user wants to
-        # override them
-        if 'adsorption_site' not in kwargs:
-            kwargs['adsorption_site'] = site
-        if 'mpid' not in kwargs:
-            kwargs['mpid'] = mpid
-        if 'miller_indices' not in kwargs:
-            kwargs['miller_indices'] = miller
-        if 'shift' not in kwargs:
-            kwargs['shift'] = shift
-        if 'top' not in kwargs:
-            kwargs['top'] = top
+        kwargs['adsorption_site'] = doc['adsorption_site']
+        kwargs['mpid'] = doc['mpid']
+        kwargs['miller_indices'] = doc['miller']
+        kwargs['shift'] = doc['shift']
+        kwargs['top'] = doc['top']
 
         # Create and submit the tasks/jobs
         task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
