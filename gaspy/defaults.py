@@ -89,7 +89,30 @@ def gas_settings():
                      kpts=(1, 1, 1),
                      sigma=0.05)
 
-    gas_settings = OrderedDict(vasp=vasp, qe=qe)
+    rism = qe.copy()
+    # Should be set by user
+    rism['target_fermi'] = -5.26
+    rism['anion_concs'] = {'Cl-': 1.}
+    rism['cation_concs'] = {'H3O+': 1.}
+    # Used for setting the Fermi level
+    rism['fcp_conv_thr'] = 5e-3
+    rism['freeze_all_atoms'] = False
+    # Convergence thresholds
+    rism['conv_elec'] = 1e-6
+    rism['laue_expand_right'] = 90.
+    rism['rism_convlevel'] = 0.5
+    rism['conv_rism3d'] = 1e-6
+    # Force-field things
+    rism['LJ_epsilon'] = None
+    rism['LJ_sigma'] = None
+    rism['esm_only'] = False
+    # Setting the charge
+    rism['charge'] = 0.
+    rism['starting_charges'] = None
+    # Re-set the sigma for gas-phase
+    rism['sigma'] = 0.01
+
+    gas_settings = OrderedDict(vasp=vasp, qe=qe, rism=rism)
     return gas_settings
 
 
@@ -115,7 +138,9 @@ def bulk_settings():
                      kpts='bulk',
                      sigma=0.1)
 
-    bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
+    rism = qe.copy()
+
+    bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe, rism=rism)
     return bulk_settings
 
 
@@ -144,7 +169,9 @@ def surface_energy_bulk_settings():
                      kpts='bulk',
                      sigma=0.1)
 
-    SE_bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe)
+    rism = qe.copy()
+
+    SE_bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe, rism=rism)
     return SE_bulk_settings
 
 
@@ -175,10 +202,33 @@ def slab_settings():
                      kpts=(4, 4, 1),
                      sigma=0.1)
 
+    rism = qe.copy()
+    # Should be set by user
+    rism['target_fermi'] = -5.26
+    rism['anion_concs'] = {'Cl-': 1.}
+    rism['cation_concs'] = {'H3O+': 1.}
+    # Used for setting the Fermi level
+    rism['fcp_conv_thr'] = 5e-3
+    rism['freeze_all_atoms'] = False
+    # Convergence thresholds
+    rism['conv_elec'] = 1e-6
+    rism['laue_expand_right'] = 90.
+    rism['rism_convlevel'] = 0.5
+    rism['conv_rism3d'] = 5e-5
+    # Force-field things
+    rism['LJ_epsilon'] = None
+    rism['LJ_sigma'] = None
+    rism['esm_only'] = False
+    # Setting the charge
+    rism['charge'] = 0.
+    rism['starting_charges'] = None
+
+
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
                                 vasp=vasp,
                                 qe=qe,
+                                rism=rism,
                                 slab_generator_settings=OrderedDict(min_slab_size=7.,
                                                                     min_vacuum_size=20.,
                                                                     lll_reduce=False,
@@ -219,10 +269,32 @@ def adslab_settings():
                      kpts=(4, 4, 1),
                      sigma=0.1)
 
+    rism = qe.copy()
+    # Should be set by user
+    rism['target_fermi'] = -5.26
+    rism['anion_concs'] = {'Cl-': 1.}
+    rism['cation_concs'] = {'H3O+': 1.}
+    # Used for setting the Fermi level
+    rism['fcp_conv_thr'] = 5e-3
+    rism['freeze_all_atoms'] = False
+    # Convergence thresholds
+    rism['conv_elec'] = 1e-6
+    rism['laue_expand_right'] = 90.
+    rism['rism_convlevel'] = 0.5
+    rism['conv_rism3d'] = 5e-5
+    # Force-field things
+    rism['LJ_epsilon'] = None
+    rism['LJ_sigma'] = None
+    rism['esm_only'] = False
+    # Setting the charge
+    rism['charge'] = 0.
+    rism['starting_charges'] = None
+
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
                                   vasp=vasp,
-                                  qe=qe)
+                                  qe=qe,
+                                  rism=rism)
     return adslab_settings
 
 
