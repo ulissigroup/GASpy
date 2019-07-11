@@ -30,13 +30,14 @@ from ...mongo import make_atoms_from_doc
 from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab
 
+DFT_CALCULATOR = defaults.DFT_CALCULATOR
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
 
 
 def update_catalog_collection(elements, max_miller,
-                              bulk_dft_settings=BULK_SETTINGS['vasp'],
+                              bulk_dft_settings=BULK_SETTINGS[DFT_CALCULATOR],
                               n_processes=1, mp_query=None):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
@@ -205,7 +206,7 @@ class _InsertSitesToCatalog(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
     def requires(self):
         bulk_finder = FindBulk(mpid=self.mpid,
