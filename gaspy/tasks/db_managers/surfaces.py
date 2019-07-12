@@ -11,16 +11,13 @@ import traceback
 import warnings
 from datetime import datetime
 import luigi
-from ... import defaults
 from ..core import get_task_output, run_task
-from ..calculation_finders import FindBulk
 from ..metadata_calculators import CalculateSurfaceEnergy
 from ...utils import unfreeze_dict, multimap
 from ...gasdb import get_mongo_collection
 from ...mongo import make_atoms_from_doc
 from ...atoms_operators import find_max_movement
 
-SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 
 def update_surface_energy_collection(n_processes=1):
     '''
@@ -53,22 +50,20 @@ def update_surface_energy_collection(n_processes=1):
         surface = (mpid, miller_indices, shift, vasp_settings)
         surfaces.add(surface)
 
-    # Create a list of tasks that has `CalculateSurfaceEnergy` task 
-    # and FindBulk task for each surface energy
+    # Create a `CalculateSurfaceEnergy` task for each surface energy
     # calculation that is in-progress.
-    tasks = [[CalculateSurfaceEnergy(mpid=mpid,
+    tasks = [CalculateSurfaceEnergy(mpid=mpid,
                                     miller_indices=miller_indices,
                                     shift=shift,
-                                    vasp_settings={key: value for key, value in vasp_settings}),
-              FindBulk(mpid=mpid, vasp_settings = SE_BULK_SETTINGS['vasp'])]
+                                    vasp_settings={key: value for key, value in vasp_settings})
              for mpid, miller_indices, shift, vasp_settings in surfaces]
 
-    # Run each task and then see which ones' slab relaxation are done
+    # Run each task and then see which ones are done
     print('[%s] Calculating surface energies...' % datetime.now())
     multimap(__run_calculate_surface_energy_task, tasks,
              processes=n_processes, maxtasksperchild=10, chunksize=100,
              n_calcs=len(tasks))
-    completed_tasks = [task for task in tasks if task[0].complete()]
+    completed_tasks = [task for task in tasks if task.complete()]
 
     # Parse the completed tasks into documents for us to save
     print('[%s] Creating surface energy documents...' % datetime.now())
@@ -126,19 +121,13 @@ def __run_calculate_surface_energy_task(task):
     successfully completed.
 
     Args:
-        task    A list of lists that contains `luigi.Task` objects, 
-                preferably ones from
-                `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy` and
-                `gaspy.tasks.calculation_finders.FindBulk`
+        task    A list of `luigi.Task` objects, preferably ones from
+                `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy`
     '''
     # Run each task again in case the relaxations are all done, but we just
     # haven't calculated the surface energy yet
-    slab_task = task[0]
-    bulk_task = task[1]
-    
     try:
-        run_task(slab_task) 
-        run_task(bulk_task) 
+        run_task(task)
 
     # If a task has failed and not produced an output, we don't want that to
     # stop us from updating the successful runs.
@@ -157,19 +146,19 @@ def __run_calculate_surface_energy_task(task):
                       'moved on without updating the collection. Here is '
                       'the offending surface energy calculation information: '
                       ' (%s, %s, %s, %s)'
-                      % (slab_task.mpid, slab_task.miller_indices, slab_task.shift,
+                      % (task.mpid, task.miller_indices, task.shift,
                          unfreeze_dict(task.vasp_settings)))
 
 
-def __create_surface_energy_doc(surface_energy_task_list):
+def __create_surface_energy_doc(surface_energy_task):
     '''
     This function will create a Mongo document for the `surface_energy`
     collection given the output of the `CalculateSurfaceEnergy` task.
 
     Arg:
-        surface_energy_tasks    A list that contains an instance of a completed
+        surface_energy_task     An instance of a completed
                                 `gaspy.tasks.metadata_calculators.CalculateSurfaceEnergy`
-                                task and its bulk relxation task
+                                task
     Returns:
         doc     A modified form of the dictionary created by the
                 `CalculateSurfaceEnergy` task. Will have the following keys:
@@ -193,13 +182,11 @@ def __create_surface_energy_doc(surface_energy_task_list):
                                                     single atom moved during
                                                     relaxation for each of the
                                                     three surfaces.
-                    fwids                           A dictionary containing 2 items.
-                                                    One is a list contains three
+                    fwids                           A list containing three
                                                     integers, where each
                                                     integer is the FireWork ID
                                                     of each of the three
-                                                    surfaces. Another is the fwid of 
-                                                    the bulk relxation.
+                                                    surfaces.
                     calculation_dates               A list containing three
                                                     `datetime.datetime`
                                                     objects, where each
@@ -207,24 +194,19 @@ def __create_surface_energy_doc(surface_energy_task_list):
                                                     each of the three surface
                                                     calculations were
                                                     completed.
-                    fw_directories                  A dictionary containing 2 items.
-                                                    One is a list containing three
+                    fw_directories                  A list containing three
                                                     strings corresponding to
                                                     the FireWorks directories
                                                     where each of the surface
                                                     relaxations were performed.
-                                                    Another is the string of bulk relxation 
-                                                    fw directory. 
     '''
     # The output of the task to calculate surface energies will provide the
     # template for the document in our Mongo collection
-    surface_energy_task = surface_energy_task_list[0]
-    bulk_relaxation_task = surface_energy_task_list[1]
     doc = get_task_output(surface_energy_task)
     doc['max_atom_movement'] = []
-    doc['fwids'] = {'slabs':[], 'bulk':''}
+    doc['fwids'] = []
     doc['calculation_dates'] = []
-    doc['fw_directories'] = {'slabs':[], 'bulk':''}
+    doc['fw_directories'] = []
 
     # Figure out how far each of the structures moved during relaxation.
     for surface_doc in doc['surface_structures']:
@@ -235,9 +217,9 @@ def __create_surface_energy_doc(surface_energy_task_list):
 
         # Move some information from the individual surface documents to the
         # higher-level surface energy document
-        doc['fwids']['slabs'].append(surface_doc['fwid'])
+        doc['fwids'].append(surface_doc['fwid'])
         doc['calculation_dates'].append(surface_doc['calculation_date'])
-        doc['fw_directories']['slabs'].append(surface_doc['directory'])
+        doc['fw_directories'].append(surface_doc['directory'])
         del surface_doc['fwid']
         del surface_doc['calculation_date']
         del surface_doc['directory']
@@ -248,9 +230,5 @@ def __create_surface_energy_doc(surface_energy_task_list):
     doc['miller'] = surface_energy_task.miller_indices
     doc['shift'] = surface_energy_task.shift
     doc['vasp_settings'] = unfreeze_dict(surface_energy_task.vasp_settings)
-    
-    # Add the bulk relaxation fwid and fw_directory
-    bulk_doc = get_task_output(bulk_relaxation_task)
-    doc['fwids']['bulk'] = bulk_doc['fwid']
-    doc['fw_directories']['bulk'] = bulk_doc['directory']
+
     return doc

@@ -18,7 +18,6 @@ from ....tasks.db_managers.surfaces import (update_surface_energy_collection,
 import warnings
 import datetime
 import ase
-from .... import defaults
 from ..utils import clean_up_tasks
 from ...test_cases.mongo_test_collections.mongo_utils import populate_unit_testing_collection
 from ....gasdb import get_mongo_collection
@@ -27,7 +26,6 @@ from ....tasks.core import get_task_output, schedule_tasks
 from ....tasks.calculation_finders import FindBulk
 from ....tasks.metadata_calculators import CalculateSurfaceEnergy
 
-SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 
 def test_update_surface_energy_collection():
     '''
@@ -83,26 +81,23 @@ def test___run_calculate_surface_energy_task():
         # Note that we use `run_task` because `schedule_tasks` hangs up on
         # unfinished tasks, and we don't want it to hang up during database
         # updates.
-        bulk_task = FindBulk(mpid='mp-1018129', vasp_settings=SE_BULK_SETTINGS['vasp'])
+        bulk_task = FindBulk(mpid='mp-1018129')
         schedule_tasks([bulk_task], local_scheduler=True)
 
         # Make sure the task can run from scratch
-        task = [CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081),
-                bulk_task]
+        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081)
         __run_calculate_surface_energy_task(task)
-        surface_energy_doc = get_task_output(task[0])
+        surface_energy_doc = get_task_output(task)
         assert isinstance(surface_energy_doc, dict)
 
         # Make sure the task can run multiple timse without error
-        task = [CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081),
-                bulk_task]
+        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081)
         __run_calculate_surface_energy_task(task)
-        surface_energy_doc = get_task_output(task[0])
+        surface_energy_doc = get_task_output(task)
         assert isinstance(surface_energy_doc, dict)
 
         # Make sure the function won't throw an error when the task isn't done
-        task = [CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=9001),
-                bulk_task]
+        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=9001)
         __run_calculate_surface_energy_task(task)
 
     finally:
@@ -112,10 +107,9 @@ def test___run_calculate_surface_energy_task():
 def test___create_surface_energy_doc():
     try:
         # We need to run the task before making a document for it
-        bulk_task = FindBulk(mpid='mp-1018129', vasp_settings=SE_BULK_SETTINGS['vasp'])
+        bulk_task = FindBulk(mpid='mp-1018129')
         schedule_tasks([bulk_task], local_scheduler=True)
-        task = [CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081),
-                bulk_task]
+        task = CalculateSurfaceEnergy(mpid='mp-1018129', miller_indices=(0, 0, 1), shift=0.081)
         __run_calculate_surface_energy_task(task)
 
         doc = __create_surface_energy_doc(task)
@@ -125,14 +119,12 @@ def test___create_surface_energy_doc():
         assert isinstance(doc['surface_energy_standard_error'], float)
         for movement in doc['max_atom_movement']:
             assert isinstance(movement, float)
-        for fwid in doc['fwids']['slabs']:
+        for fwid in doc['fwids']:
             assert isinstance(fwid, int)
-        assert isinstance(doc['fwids']['bulk'], int)
         for date in doc['calculation_dates']:
             assert isinstance(date, datetime.datetime)
-        for directory in doc['fw_directories']['slabs']:
+        for directory in doc['fw_directories']:
             assert isinstance(directory, str)
-        assert isinstance(doc['fw_directories']['bulk'], str)
 
     finally:
         clean_up_tasks()
