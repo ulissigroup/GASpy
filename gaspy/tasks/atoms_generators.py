@@ -186,8 +186,8 @@ class GenerateSlabs(luigi.Task):
             doc['fwids'] = {'bulk': fwid}
             docs.append(doc)
 
-            # If slabs are asymmetric (i.e. cannot be inverted),
-            # then flip it and make another document out of it.
+            # If slabs are asymmetric (i.e. cannot be inverted), then flip it
+            # and make another document out of it.
             if is_structure_invertible(struct) is False:
                 atoms_flipped = flip_atoms(atoms)
                 atoms_flipped_constrained = constrain_slab(atoms_flipped)
