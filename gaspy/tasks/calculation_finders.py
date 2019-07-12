@@ -243,8 +243,6 @@ class FindBulk(FindCalculation):
         mpid            A string indicating the Materials Project ID of the bulk
                         you are looking for (e.g., 'mp-30')
         dft_settings    A dictionary containing your DFT settings
-        k_pts_x         The number of k-points you want in the x-direction. It
-                        is only used if `dft_settings['kpts'] == 'bulk'`.
     saved output:
         doc     When the calculation is found in our auxiliary Mongo database
                 successfully, then this task's output will be the matching
@@ -255,7 +253,6 @@ class FindBulk(FindCalculation):
     '''
     mpid = luigi.Parameter()
     dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
-    k_pts_x = luigi.IntParameter(10)
 
     def requires(self):
         '''
@@ -312,9 +309,10 @@ class FindBulk(FindCalculation):
         a0 = np.linalg.norm(cell[0])
         b0 = np.linalg.norm(cell[1])
         c0 = np.linalg.norm(cell[2])
-        k_pts = (self.k_pts_x,
-                 max(1, int(self.k_pts_x*a0/b0)),
-                 max(1, int(self.k_pts_x*a0/c0)))
+        k_pts_x = int(30/a0)
+        k_pts = (k_pts_x,
+                 max(1, int(k_pts_x*a0/b0)),
+                 max(1, int(k_pts_x*a0/c0)))
         return k_pts
 
 
