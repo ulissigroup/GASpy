@@ -379,9 +379,9 @@ def _get_atoms_from_vasp_fw(fw, index=-1):
     # a trajectory file. We'll get the original atoms from this task (in
     # hexstring format). Note that over the course of our use, we have had
     # different names for these FireWorks tasks, so we check for them all.
-    function_names_of_hex_encoders = set(['vasp_functions.hex_to_file',
-                                          'fireworks_helper_scripts.atoms_hex_to_file',
-                                          'fireworks_helper_scripts.atomsHexToFile'])
+    function_names_of_hex_encoders = {'vasp_functions.hex_to_file',
+                                      'fireworks_helper_scripts.atoms_hex_to_file',
+                                      'fireworks_helper_scripts.atomsHexToFile'}
     trajhexes = [task['args'][1] for task in fw.spec['_tasks']
                  if task.get('func', '') in function_names_of_hex_encoders]
 
@@ -428,6 +428,34 @@ def _get_atoms_from_qe_fw(fw, index=-1):
     # Get the `ase.Atoms` object from FireWork's results
     atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
     atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
+
+    # Get the Firework task that was meant to run Quantum Espresso. It takes
+    # the atoms object hexstring as an argument. We'll get the original atoms
+    # from this argument.
+    trajhexes = [task['args'][0] for task in fw.spec['_tasks']
+                 if task.get('func', '') == 'espresso_tools.run_qe']
+
+    # If there was no match, then we're screwed
+    if len(trajhexes) != 1:
+        raise RuntimeError('We tried to get the atoms object\'s trajhex from a '
+                           'FireWork, but could not find the FireWork task '
+                           'argument that contains the trajhex (FWID %i)'
+                           % fw.fw_id)
+
+    # We can grab the original trajhex and then transfer its tags & constraints
+    # to the newly decoded atoms
+    original_atoms = decode_trajhex_to_atoms(trajhexes[0])
+    try:
+        atoms.set_tags(original_atoms.get_tags())
+        atoms.set_constraint(original_atoms.constraints)
+
+    # Sometimes the length of the initial atoms and the final atoms are
+    # different. If this happens, then add a more useful error message.
+    except ValueError as error:
+        raise ValueError('The number of atoms from beginning to end of '
+                         'calculation has changed for FireWork ID %i'
+                         % fw.fw_id).with_traceback(error.__traceback__)
+
     return atoms
 
 
