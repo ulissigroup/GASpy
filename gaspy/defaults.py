@@ -140,7 +140,6 @@ def bulk_settings():
                      sigma=0.1)
 
     rism = qe.copy()
-    rism['_calculator'] = 'rism'
 
     bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe, rism=rism)
     return bulk_settings
@@ -172,7 +171,6 @@ def surface_energy_bulk_settings():
                      sigma=0.1)
 
     rism = qe.copy()
-    rism['_calculator'] = 'rism'
 
     SE_bulk_settings = OrderedDict(max_atoms=80, vasp=vasp, qe=qe, rism=rism)
     return SE_bulk_settings
