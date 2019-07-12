@@ -273,8 +273,9 @@ def adsorption_filters(adsorbate=None):
         energy_range = (-4., 9.)
     elif adsorbate == 'OH':
         energy_range = (-3.5, 4.)
-    elif adsorbate == 'OOH':
+    elif adsorbate == 'OOH': 
         energy_range = (0., 9.)
+        ads_move_max = 4.5
     elif adsorbate == 'N':
         # We're going to be more lenient with nitrogen movement because it
         # tends to adsorb closely to the surface, but we don't want to put it
