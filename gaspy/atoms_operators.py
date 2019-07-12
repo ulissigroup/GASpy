@@ -143,6 +143,38 @@ def constrain_slab(atoms, z_cutoff=3.):
     atoms.constraints += [FixAtoms(mask=mask)]
     return atoms
 
+
+def is_structure_invertible(structure):
+    '''
+    This function figures out whether or not an `pymatgen.Structure`
+    object has symmetricity.
+    In this function, the affine matrix is a rotation matrix
+    that is multiplied with the XYZ positions of the crystal.
+    If the z,z component of that is negative,
+    it means symmetry operation exist, it could be a mirror operation,
+    or one that involves multiple rotations/etc.
+    Regardless, it means that the top becomes the bottom and vice-versa,
+    and the structure is the symmetric.
+    i.e. structure_XYZ = structure_XYZ*M.
+
+    Arg:
+        structure   A `pymatgen.Structure` object.
+    Returns
+        A boolean indicating whether or not your `ase.Atoms` object is
+        symmetric in z-direction (i.e. symmetric with respect to x-y plane).
+    '''
+    # If any of the operations involve a transformation in the z-direction,
+    # then the structure is invertible.
+    sga = SpacegroupAnalyzer(structure, symprec=0.1)
+    for operation in sga.get_symmetry_operations():
+        xform_matrix = operation.affine_matrix
+        z_xform = xform_matrix[2, 2]
+        if z_xform == -1:
+            return True
+
+    return False
+
+
 def flip_atoms(atoms):
     '''
     Flips an atoms object upside down. Normally used to flip slabs.

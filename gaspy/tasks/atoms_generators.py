@@ -16,12 +16,13 @@ from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.core.surface import Slab, get_symmetrically_distinct_miller_indices
+from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from .core import save_task_output, make_task_output_object, get_task_output
 from ..mongo import make_doc_from_atoms, make_atoms_from_doc
 from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                orient_atoms_upwards,
                                constrain_slab,
+                               is_structure_invertible,
                                flip_atoms,
                                tile_atoms,
                                find_adsorption_sites,
@@ -185,9 +186,9 @@ class GenerateSlabs(luigi.Task):
             doc['fwids'] = {'bulk': fwid}
             docs.append(doc)
 
-            # If slabs are asymmetric (i.e., are not symmetric about the x-y
-            # plane), then flip it and make another document out of it.
-            if Slab.is_symmetric(struct) is False:
+            # If slabs are asymmetric (i.e. cannot be inverted),
+            # then flip it and make another document out of it.
+            if is_structure_invertible(struct) is False:
                 atoms_flipped = flip_atoms(atoms)
                 atoms_flipped_constrained = constrain_slab(atoms_flipped)
                 doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
