@@ -434,13 +434,9 @@ def adsorption_filters(adsorbate=None, dft_calculator=DFT_CALCULATOR):
     filters['movement_data.max_slab_movement'] = {'$lt': slab_move_max}
 
     # Use different filters for different DFT calculation settings
+    filters['dft_settings._calculator'] = dft_calculator
     if dft_calculator == 'vasp':
         filters['dft_settings.gga'] = vasp_xc_settings()['gga']
-    elif dft_calculator == 'qe':
-        pass
-    else:
-        raise SyntaxError('The dft_calculator setting of "%s" is not '
-                          'recognized.' % dft_calculator)
 
     return filters
 
@@ -501,13 +497,9 @@ def surface_filters(dft_calculator=DFT_CALCULATOR):
     filters['max_atom_movement.2'] = {'$lt': max_surface_movement}
 
     # Use different filters for different DFT calculation settings
+    filters['dft_settings._calculator'] = dft_calculator
     if dft_calculator == 'vasp':
         filters['dft_settings.gga'] = vasp_xc_settings('pbesol')['gga']
-    elif dft_calculator == 'qe':
-        pass
-    else:
-        raise SyntaxError('The dft_calculator setting of "%s" is not '
-                          'recognized.' % dft_calculator)
 
     return filters
 
