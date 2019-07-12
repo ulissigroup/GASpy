@@ -121,9 +121,9 @@ def test_MakeAdslabFW():
     that you use `run_task_locally` appropriately.
     '''
     clean_up_tasks()
-    adsorption_site = (1.48564485e-23, 1.40646118e+00, 2.08958465e+01)
+    adsorption_site = (1.4064611759169474, 2.8129223518338944, 20.895846464363103)
     shift = 0.25
-    top = False
+    top = True
     vasp_settings = ADSLAB_SETTINGS['vasp']
     adsorbate_name = 'OH'
     rotation = ADSLAB_SETTINGS['rotation']
@@ -198,12 +198,12 @@ def test__find_matching_adslab_doc():
     run_task_locally(task)
     docs = get_task_output(task)
     doc = MakeAdslabFW._find_matching_adslab_doc(docs,
-                                                 adsorption_site=(1.48564485e-23,
-                                                                  1.40646118e+00,
-                                                                  2.08958465e+01),
-                                                 shift=0.25, top=False)
+                                                 adsorption_site=(1.4064611759169474,
+                                                                  2.8129223518338944,
+                                                                  20.895846464363103),
+                                                 shift=0.25, top=True)
     # I know what it should have found because I did this by hand
-    expected_doc = docs[3]
+    expected_doc = docs[2]
     assert doc == expected_doc
 
     # Try a fail-to-find
