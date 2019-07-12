@@ -14,7 +14,7 @@
         "lpad_path": "/path/to/fireworks/launchpad.yaml",
         "lpad":{
             "host": "host.name",
-            "nome": "name",
+            "name": "name",
             "username": "username",
             "password": "pw",
             "port": "99999"

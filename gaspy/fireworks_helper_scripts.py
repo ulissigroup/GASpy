@@ -426,5 +426,7 @@ def check_jobs_status(user_ID, num_jobs):
                    'state',
                    'launch_dir')
     dataframe = pd.DataFrame(fireworks_info, columns=data_labels)
-
+    pd.set_option('display.max_colwidth', -1)
+    pd.options.display.max_rows = None
+    
     return dataframe
