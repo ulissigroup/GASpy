@@ -142,11 +142,21 @@ def make_firework(atoms, fw_name, dft_settings):
                       'take awhile.' % len(atoms), RuntimeWarning)
 
     # We'll make one type of firework rocket for VASP, and another for Quantum
-    # Espresso
+    # Espresso. And there's a QE subtype for RISM, too.
     if dft_settings['_calculator'] == 'vasp':
         firework = _make_vasp_firework(atoms, fw_name, dft_settings)
-    if dft_settings['_calculator'] == 'qe':
-        firework = _make_qe_firework(atoms, fw_name, dft_settings)
+    elif dft_settings['_calculator'] == 'qe':
+        firework = _make_qe_firework(atoms, fw_name, dft_settings,
+                                     espresso_function='espresso_tools.run_qe')
+    elif dft_settings['_calculator'] == 'rism':
+        firework = _make_qe_firework(atoms, fw_name, dft_settings,
+                                     espresso_function='espresso_tools.run_rism')
+
+    # Yell if we try to run anything else
+    else:
+        raise RuntimeError('The %s calculator is not recognized, so we do not '
+                           'know how the make a FireWork.'
+                           % dft_settings['_calculator'])
 
     return firework
 
@@ -189,16 +199,18 @@ def _make_vasp_firework(atoms, fw_name, vasp_settings):
     return firework
 
 
-def _make_qe_firework(atoms, fw_name, qe_settings):
+def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
     '''
     This function creates a FireWorks rocket specifically tailored to do
     Quantum Espresso calculations.
 
     Args:
-        atoms           `ase.Atoms` object to relax
-        fw_name         Dictionary of tags/etc to use as the FireWorks name
-        qe_settings     Dictionary of settings to pass to espresso_tools/Quantum
-                        Espresso
+        atoms               `ase.Atoms` object to relax
+        fw_name             Dictionary of tags/etc to use as the FireWorks name
+        qe_settings         Dictionary of settings to pass to
+                            espresso_tools/Quantum Espresso
+        espresso_function   A string indicating the full path of the function
+                            within espresso_tools that you want to run
     Returns:
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
@@ -211,7 +223,7 @@ def _make_qe_firework(atoms, fw_name, qe_settings):
 
     # Tell the FireWork rocket to run the job using espresso_tools
     atom_trajhex = encode_atoms_to_trajhex(atoms)
-    relax = PyTask(func='espresso_tools.run_qe',
+    relax = PyTask(func=espresso_function,
                    args=[atom_trajhex, qe_settings],
                    stored_data_varname='opt_results')
 

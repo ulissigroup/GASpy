@@ -134,25 +134,40 @@ def test___warn_about_fizzles():
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
 
 
-@pytest.mark.parametrize('dft_method', ['vasp', 'qe'])
+@pytest.mark.parametrize('dft_method', ['vasp', 'qe', 'rism'])
 def test_make_firework(dft_method):
     '''
-    We make two different types of FireWorks rockets right now:  VASP ones and
-    Quantum Espresso ones. The `make_firework` function is just a syntax
-    wrapper around two functions built for each rocket type. So our testing
-    here is just to make sure that one of the warnings is thrown.
+    The `make_firework` function is just a syntax wrapper around various
+    functions built for each rocket type. So our testing here is just to make
+    sure that it runs cleanly and also yells at you for submitting big atoms.
     '''
     # Make the firework and pull out the operations so we can inspect them
     big_atoms = ase.Atoms('CO'*41)
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
     dft_settings = defaults.gas_settings()[dft_method]
 
+    # Make sure that it'll yell at you for submitting a big calculation
     with warnings.catch_warnings(record=True) as warning_manager:
         warnings.simplefilter('always')
         _ = make_firework(big_atoms, fw_name, dft_settings)  # noqa: F841
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'You are making a firework with' in str(warning_manager[-1].message)
+
+
+def test_make_firework_error():
+    '''
+    Make sure the function yells if you try to give it a new calculator
+    '''
+    # Setup
+    atoms = ase.Atoms('CO')
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    dft_settings = defaults.gas_settings()['vasp']
+    dft_settings['_calculator'] = 'foo'
+
+    # Make sure it fails
+    with pytest.raises(RuntimeError):
+        assert make_firework(atoms, fw_name, dft_settings)  # noqa: F841
 
 
 def test__make_vasp_firework():
@@ -195,7 +210,8 @@ def test__make_vasp_firework():
     assert relax['stored_data_varname'] == 'opt_results'
 
 
-def test__make_qe_firework():
+@pytest.mark.parametrize('qe_type', ['qe', 'rism'])
+def test__make_qe_firework(qe_type):
     '''
     Our Quantum Espresso rockets should take three steps:  Clone the
     espresso_tools repository; perform the relaxation via epressotools; then
@@ -205,8 +221,10 @@ def test__make_qe_firework():
     # Make the firework and pull out the operations so we can inspect them
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    dft_settings = defaults.gas_settings()['qe']
-    fwork = _make_qe_firework(atoms, fw_name, dft_settings)
+    dft_settings = defaults.gas_settings()[qe_type]
+    esp_fun = 'espresso_tools.run_' + qe_type
+    fwork = _make_qe_firework(atoms, fw_name, dft_settings,
+                              espresso_function=esp_fun)
     clone_espresso_tools, relax, clean_up = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
@@ -222,7 +240,7 @@ def test__make_qe_firework():
 
     # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)
-    assert relax['func'] == 'espresso_tools.run_qe'
+    assert relax['func'] == esp_fun
     assert relax['args'] == [encode_atoms_to_trajhex(atoms), dft_settings]
 
     # Make sure we start VASP
