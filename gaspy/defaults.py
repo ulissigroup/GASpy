@@ -91,6 +91,7 @@ def gas_settings():
 
     rism = qe.copy()
     rism['_calculator'] = 'rism'
+    rism['molecule'] = True
     # Should be set by user
     rism['target_fermi'] = -5.26
     rism['anion_concs'] = {'Cl-': 1.}
@@ -412,7 +413,7 @@ def adsorption_filters(adsorbate=None, dft_calculator=DFT_CALCULATOR):
         energy_range = (-4., 9.)
     elif adsorbate == 'OH':
         energy_range = (-3.5, 4.)
-    elif adsorbate == 'OOH': 
+    elif adsorbate == 'OOH':
         energy_range = (0., 9.)
         ads_move_max = 4.5
     elif adsorbate == 'N':
