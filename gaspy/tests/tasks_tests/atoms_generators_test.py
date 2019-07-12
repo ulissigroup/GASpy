@@ -159,17 +159,21 @@ def test__make_slab_docs_from_structs():
                                              SLAB_SETTINGS['get_slab_settings'])
         docs = GenerateSlabs('', tuple())._make_slab_docs_from_structs(structs, 'mp-foo')
 
-    # Get the regression baseline
-    bulk_name = file_name.split('.')[0]
-    with open(REGRESSION_BASELINES_LOCATION + 'slab_docs_%s.pkl' % bulk_name, 'rb') as file_handle:
-        expected_docs = pickle.load(file_handle)
+        # Get the regression baseline
+        bulk_name = file_name.split('.')[0]
+        with open(REGRESSION_BASELINES_LOCATION + 'slab_docs_%s.pkl' % bulk_name, 'rb') as file_handle:
+            expected_docs = pickle.load(file_handle)
 
-    # Remove creation and modification times because we don't care about
-    # those... and they will be wrong
-    for doc in docs + expected_docs:
-        doc.pop('ctime', None)
-        doc.pop('mtime', None)
-    assert docs == expected_docs
+        # Remove creation and modification times because we don't care about
+        # those... and they will be wrong
+        # Also, modify the user all to 'ktran'
+        # else we will get an Assertion error is someone other than
+        # Kevin is testing this
+        for doc in docs + expected_docs:
+            doc['user'] = 'ktran'
+            doc.pop('ctime', None)
+            doc.pop('mtime', None)
+        assert docs == expected_docs
 
 
 def test_GenerateAdsorptionSites():
