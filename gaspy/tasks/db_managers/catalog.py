@@ -159,7 +159,7 @@ def __run_insert_to_catalog_task(mpid, max_miller):
     # We need bulk calculations to enumerate our catalog. If these calculations
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         pass
 
 
