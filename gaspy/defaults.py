@@ -105,8 +105,8 @@ def gas_settings():
     rism['rism_convlevel'] = 0.5
     rism['conv_rism3d'] = 1e-6
     # Force-field things
-    rism['LJ_epsilon'] = None
-    rism['LJ_sigma'] = None
+    rism['LJ_epsilons'] = None
+    rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
     rism['charge'] = 0.
@@ -219,8 +219,8 @@ def slab_settings():
     rism['rism_convlevel'] = 0.5
     rism['conv_rism3d'] = 5e-5
     # Force-field things
-    rism['LJ_epsilon'] = None
-    rism['LJ_sigma'] = None
+    rism['LJ_epsilons'] = None
+    rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
     rism['charge'] = 0.
