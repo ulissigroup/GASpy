@@ -82,7 +82,7 @@ def gas_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='PBE',
+                     xcf='rpbe',
                      encut=400.,
                      spol=0,
                      psps='GBRV',
@@ -133,7 +133,7 @@ def bulk_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='PBE',
+                     xcf='rpbe',
                      encut=400.,
                      spol=0,
                      psps='GBRV',
@@ -265,7 +265,7 @@ def adslab_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
-                     xcf='PBE',
+                     xcf='rpbe',
                      encut=400.,
                      spol=0,
                      psps='GBRV',
