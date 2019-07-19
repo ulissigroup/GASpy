@@ -20,8 +20,7 @@
             "username": "username",
             "password": "pw",
             "port": "99999"
-            },
-        "backup_directory": "/home/GASpy/gaspy/tests/test_cases/launches_backup_directory"
+            }
     },
     "mongo_info":{
         "atoms":{
