@@ -1,0 +1,352 @@
+{
+	"_id" : ObjectId("5d291e3796ee957190563635"),
+	"atoms" : {
+		"atoms" : [
+			{
+				"symbol" : "Ca",
+				"position" : [
+					5.0841434358293425,
+					2.9353315812747396,
+					14.0102518465152
+				],
+				"tag" : 0,
+				"index" : 0,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Ca",
+				"position" : [
+					0,
+					0,
+					18.161437578816003
+				],
+				"tag" : 0,
+				"index" : 1,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Ca",
+				"position" : [
+					2.542071717914671,
+					1.4676657906373696,
+					16.0858447126656
+				],
+				"tag" : 0,
+				"index" : 2,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					5.0841434358293425,
+					2.9353315812747396,
+					17.1236411457408
+				],
+				"tag" : 0,
+				"index" : 3,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					2.8222665514772926e-16,
+					2.4441545298304385e-16,
+					15.0480482795904
+				],
+				"tag" : 0,
+				"index" : 4,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					2.542071717914671,
+					1.4676657906373698,
+					12.97245541344
+				],
+				"tag" : 0,
+				"index" : 5,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Ca",
+				"position" : [
+					5.0841434358293425,
+					2.9353315812747396,
+					20.2370304449664
+				],
+				"tag" : 0,
+				"index" : 6,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Ca",
+				"position" : [
+					0,
+					0,
+					24.3882161772672
+				],
+				"tag" : 0,
+				"index" : 7,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Ca",
+				"position" : [
+					2.542071717914671,
+					1.4676657906373696,
+					22.312623311116802
+				],
+				"tag" : 0,
+				"index" : 8,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					5.0841434358293425,
+					2.9353315812747396,
+					23.350419744192
+				],
+				"tag" : 0,
+				"index" : 9,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					2.8222665514772926e-16,
+					2.4441545298304385e-16,
+					21.274826878041598
+				],
+				"tag" : 0,
+				"index" : 10,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "Pd",
+				"position" : [
+					2.542071717914671,
+					1.4676657906373698,
+					19.199234011891203
+				],
+				"tag" : 0,
+				"index" : 11,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			},
+			{
+				"symbol" : "U",
+				"position" : [
+					0,
+					-7.070501591499381e-17,
+					26.3882161772672
+				],
+				"tag" : 1,
+				"index" : 12,
+				"charge" : 0,
+				"momentum" : [
+					0,
+					0,
+					0
+				],
+				"magmom" : 0
+			}
+		],
+		"cell" : [
+			[
+				5.084143435829342,
+				0,
+				0
+			],
+			[
+				2.5420717179146695,
+				4.402997371912109,
+				1.5565699962736082e-16
+			],
+			[
+				0,
+				0,
+				37.3606715907072
+			]
+		],
+		"pbc" : [
+			true,
+			true,
+			true
+		],
+		"info" : {
+			
+		},
+		"constraints" : [
+			{
+				"name" : "FixAtoms",
+				"kwargs" : {
+					"indices" : [
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						10,
+						11
+					]
+				}
+			}
+		],
+		"natoms" : 13,
+		"mass" : 1117.0169099999998,
+		"spacegroup" : "P1 (1)",
+		"chemical_symbols" : [
+			"Ca",
+			"U",
+			"Pd"
+		],
+		"symbol_counts" : {
+			"Ca" : 6,
+			"Pd" : 6,
+			"U" : 1
+		},
+		"volume" : 836.3362000369401
+	},
+	"calc" : {
+		
+	},
+	"results" : {
+		
+	},
+	"user" : "ktran",
+	"ctime" : ISODate("2019-07-12T23:55:59.187Z"),
+	"mtime" : ISODate("2019-07-12T23:55:59.187Z"),
+	"fwids" : {
+		"bulk" : 247822
+	},
+	"shift" : 0.08333333333333337,
+	"top" : true,
+	"slab_repeat" : [
+		1,
+		1
+	],
+	"adsorption_site" : [
+		0,
+		-7.070501591499381e-17,
+		26.3882161772672
+	],
+	"miller" : [
+		1,
+		1,
+		1
+	],
+	"mpid" : "mp-213",
+	"min_xy" : 4.5,
+	"slab_generator_settings" : {
+		"min_slab_size" : 7,
+		"min_vacuum_size" : 20,
+		"lll_reduce" : false,
+		"center_slab" : true,
+		"primitive" : true,
+		"max_normal_search" : 1
+	},
+	"get_slab_settings" : {
+		"tol" : 0.3,
+		"bonds" : null,
+		"max_broken_bonds" : 0,
+		"symmetrize" : false
+	},
+	"bulk_dft_settings" : {
+        "_calculator": "vasp",
+		"ibrion" : 1,
+		"nsw" : 100,
+		"isif" : 7,
+		"isym" : 0,
+		"ediff" : 1e-8,
+		"kpts" : [
+			10,
+			10,
+			10
+		],
+		"prec" : "Accurate",
+		"encut" : 500,
+		"pp_version" : "5.4",
+		"gga" : "RP",
+		"pp" : "PBE"
+	},
+	"coordination" : "Ca",
+	"neighborcoord" : [
+		"Ca:Pd-Pd-Pd-Pd"
+	],
+	"nextnearestcoordination" : "Ca"
+}
