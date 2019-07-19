@@ -11,7 +11,7 @@ Here is what you need to set up for the administrative container:
 
 1. A locally [cloned](https://help.github.com/en/articles/cloning-a-repository) version of this repository
 
-2. Something to open [Docker](https://www.docker.com/) images such as:  Docker itself, [Shifter](https://github.com/NERSC/shifter), or [Singularity](https://singularity.lbl.gov/). If none of these are available to you, then you might be able to simply create your own [miniconda](https://docs.conda.io/en/latest/miniconda.html) environment with the correct [dependencies](../docker/Dockerfile)
+2. Something to open [Docker](https://www.docker.com/) images such as:  Docker itself, [Shifter](https://github.com/NERSC/shifter), or [Singularity](https://singularity.lbl.gov/). If none of these are available to you, then you might be able to simply create your own [miniconda](https://docs.conda.io/en/latest/miniconda.html) environment with the correct [dependencies](../dockerfile/Dockerfile)
 
 3. A [MongoDB](https://www.mongodb.com/) server
 
@@ -37,7 +37,7 @@ If you want to use GASpy-RISM, please contact us.
 
 # DFT wrapper
 
-Our original VASP wrapper is inside [`gaspy.vasp_functions`](../gaspy/vasp_functions.py`).
+Our original VASP wrapper is inside [`gaspy.vasp_functions`](../gaspy/vasp_functions.py).
 This is contains the scripts that we use to run VASP on our computing clusters.
 You will find that they are hard-coded for our clusters.
 There is no way to get around this.
@@ -67,7 +67,7 @@ You will need to set up your own Mongo database and then put the appropriate inf
 You will need to make the following collections in your database:
 
 - `atoms` will contain one document for every DFT calculation you run.
-- `catalog` will contain one document for every adsorption site you [enumerate](../examples/populate_catlog.py).
+- `catalog` will contain one document for every adsorption site you [enumerate](../examples/populate_catalog.py).
 - `adsorption` will contain one document for every adsorption energy you calculate.
 - `surface_energy` will contain one document for every surface energy you calculate.
 
@@ -84,14 +84,14 @@ Please refer to [Fireworks'](https://materialsproject.github.io/fireworks/) [ins
 
 In addition to the aforementioned items you need to populate in your `.gaspyrc.json` file, you will also need to set up a few other things:
 
-- `temp_directory`:  Some sort of folder that will be used to write files temporarily. This will likely be `/tmp/`. GASpy uses this directory to perform [atomic writing operations](https://en.wikipedia.org/wiki/Atomicity_(database_systems).
+- `temp_directory`:  Some sort of folder that will be used to write files temporarily. This will likely be `/tmp/`. GASpy uses this directory to perform [atomic writing operations](https://en.wikipedia.org/wiki/Atomicity_(database_systems)).
 - `luigi_host`:  You need to set up a constantly running Luigi daemon. You can do this by running `nohup docker run -v "/local/path/to/GASpy:/home/GASpy" ulissigorup/gaspy:latest /miniconda3/bin/luigid &`. Then you enter the IP address of the machine that you ran that command on into the `luigi_host` field.
 - `gasdb_path`:  A dedicated folder to store various cache files, including the [pickles](https://docs.python.org/3/library/pickle.html) that Luigi will use to manage the task dependencies. If you have a [scratch directory](https://en.wikipedia.org/wiki/Scratch_space) on your computing cluster, then it would be safe to put this pickle file in there.
 - `matproj_api_key`:  You will need to get an API key from [The Materials Project](https://materialsproject.org/) and then enter it into this field. This will let you fetch bulk materials from their database, which will be the seed for all of GASpy's calculations.
 - `dft_calculator`:  The default DFT calculator you want to use. Currently supports values of `vasp`, `qe`, and `rism`. Note that this only supplies the default. You will still be able to run VASP and Quantum Espresso concurrently if you want to.
 - `plotly_login_info`:  Our `../GASpy_regressions` submodule uses this field to push our analyses into public websites. If you only plan to use GASpy to run calculations, then you will not need to populate this field.
 - `gasdb_server`:  This field is something we use to interface with a web-based data viewing service that we still have under development. It is still experimental, and you will not need to populate it.
-- `fireworks_info`:  You will need to point to your FireWorks `launchpad.yaml` file, as well as enter the login information for your FireWorks Mongo server. If you plan to perform regular [backups](../maintenance/backup_launches.py) of your FireWorks
+- `fireworks_info`:  You will need to point to your FireWorks `launchpad.yaml` file, as well as enter the login information for your FireWorks Mongo server.
 - `mongo_info`:  You will need to add the login information for your Mongo collections here. Note that they are separated so that you can technically have different Mongo servers hosting the different collections.
 
 

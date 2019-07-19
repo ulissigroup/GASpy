@@ -93,7 +93,7 @@ This can be very annoying for those of us accustomed to using [pdb](https://docs
 To work around this, we created the [`gaspy.tasks.core.run_task`](../gaspy/tasks/core.py) function.
 This function works similar to `schedule_tasks` function, except it takes only one task at a time and executes it locally in a rather hacky fashion.
 Since `run_task` executes the task locally, you'll have access to the stack and using `pdb` will be successful.
-We ofter combine `run_task` with the [`%debug`](https://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-debug) [Jupyter](https://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-debug) command.
+We ofter combine `run_task` with the [`%debug`](https://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-debug) [Jupyter](https://jupyter.org/) command.
 
 Be warned:  The `run_task` function is not as stable as the `schedule_tasks` function, and is therefore not guaranteed to work as intended in all situations.
 Please use it only for debugging purposes.

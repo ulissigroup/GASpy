@@ -20,7 +20,7 @@ We created various Python classes (referred to as [tasks](https://github.com/uli
 We use Luigi to manage the dependencies between these tasks, and we use FireWorks to manage/submit our DFT simulations across multiple clusters.
 This means that we can simply tell GASpy to "calculate the adsorption energy of CO on Pt", and it automatically performs all of the necessary steps (e.g., fetch Pt from Materials Project; cut slabs; relax the slabs; add CO onto the slab and then relax; then calculate the adsorption energy).
 
-![dag](./documentation/gaspy_dag.pdf)
+![](./documentation/gaspy_dag.pdf)
 
 To submit calculations, the simplest thing to do is to use our wrapper functions as such:
 
@@ -53,7 +53,7 @@ Please refer to our documentation for [installation](./documentation/installatio
 
 # Submodules
 
-You may notice that we have two submodules: [GASpy\_regressions](./GASpy_regressions) and [GASpy\_feedback](./GASpy_feedback).
+You may notice that we have two submodules: [GASpy\_regressions](https://github.com/ulissigroup/GASpy_regressions) and [GASpy\_feedback](https://github.com/ulissigroup/GASpy_feedback).
 We use our regression submodule to analyze and perform regressions on our DFT data, and we use our feedback submodule to choose which calculations to \[automatically\] perform next.
 
 
