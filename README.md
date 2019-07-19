@@ -20,7 +20,7 @@ We created various Python classes (referred to as [tasks](https://github.com/uli
 We use Luigi to manage the dependencies between these tasks, and we use FireWorks to manage/submit our DFT simulations across multiple clusters.
 This means that we can simply tell GASpy to "calculate the adsorption energy of CO on Pt", and it automatically performs all of the necessary steps (e.g., fetch Pt from Materials Project; cut slabs; relax the slabs; add CO onto the slab and then relax; then calculate the adsorption energy).
 
-![](./documentation/gaspy_dag.pdf)
+![DAG](./documentation/gaspy_dag.png)
 
 To submit calculations, the simplest thing to do is to use our wrapper functions as such:
 
