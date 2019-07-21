@@ -133,6 +133,7 @@ def bulk_settings():
                        **vasp_xc_settings())
 
     qe = OrderedDict(_calculator='qe',
+                     calcmode='vc-relax',
                      xcf='rpbe',
                      encut=700.,
                      spol=0,
@@ -164,6 +165,7 @@ def surface_energy_bulk_settings():
                        **vasp_xc_settings('pbesol'))
 
     qe = OrderedDict(_calculator='qe',
+                     calcmode='vc-relax',
                      xcf='PBEsol',
                      encut=700.,
                      spol=0,
