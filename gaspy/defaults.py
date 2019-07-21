@@ -134,7 +134,7 @@ def bulk_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='rpbe',
-                     encut=400.,
+                     encut=700.,
                      spol=0,
                      psps='GBRV',
                      kpts='bulk',
@@ -165,7 +165,7 @@ def surface_energy_bulk_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='PBEsol',
-                     encut=400.,
+                     encut=700.,
                      spol=0,
                      psps='GBRV',
                      kpts='bulk',
