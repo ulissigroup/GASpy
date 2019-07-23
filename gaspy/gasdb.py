@@ -710,7 +710,7 @@ def get_surface_from_doc(doc):
                 formatted as a string, and the shift will be rounded to 2
                 decimal places.
     '''
-    surface = (doc['mpid'], str(doc['miller']), round_(doc['shift'], 2), doc['top'])
+    surface = (doc['mpid'], str(doc['miller']), round_(doc['shift'], 3), doc['top'])
     return surface
 
 
