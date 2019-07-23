@@ -59,9 +59,11 @@ We use our regression submodule to analyze and perform regressions on our DFT da
 
 # References
 
-[Dynamic Workflows for Routine Materials Discovery in Surface Science](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.8b00386)
+[Dynamic Workflows for Routine Materials Discovery in Surface Science](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.8b00386).
+We were using GASpy [v0.1](https://github.com/ulissigroup/GASpy/releases/tag/v0.1) for this paper.
 
-[Active learning across intermetallics to guide discovery of electrocatalysts for CO2 reduction and H2 evolution](https://www.nature.com/articles/s41929-018-0142-1). Note that the repository which we reference in this paper is version 0.1 of GASpy, which can stil be found [here](https://github.com/ulissigroup/GASpy/tree/v0.1).
+[Active learning across intermetallics to guide discovery of electrocatalysts for CO2 reduction and H2 evolution](https://www.nature.com/articles/s41929-018-0142-1).
+We were using GASpy [v0.1](https://github.com/ulissigroup/GASpy/releases/tag/v0.1) for this paper.
 
 
 # Version updates
@@ -72,6 +74,6 @@ v0.30:  Added capability to run [Quantum Espresso](https://www.quantum-espresso.
 
 v0.20:  Heavy refactoring and added capability to calculate surface energies.
 
-v0.10:  Initial commits
+[v0.10](https://github.com/ulissigroup/GASpy/releases/tag/v0.1):  Initial commits
 
 For an up-to-date list of our software dependencies, you can simply check out how we build our docker image [here](https://github.com/ulissigroup/GASpy/blob/master/dockerfile/Dockerfile).
