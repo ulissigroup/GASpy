@@ -13,10 +13,15 @@ from pymongo import MongoClient
 from ..utils import read_testing_rc
 from ....gasdb import ConnectableCollection
 
-LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/test_cases/fireworks/unit_testing_fireworks.pkl'
+LOCATION_OF_DOCS = {'unit_testing_fireworks': ('/home/GASpy/gaspy/tests'
+                                               '/test_cases/fireworks'
+                                               '/unit_testing_fireworks.pkl'),
+                    'unit_testing_launches': ('/home/GASpy/gaspy/tests'
+                                              '/test_cases/fireworks'
+                                              '/unit_testing_launches.pkl')}
 
 
-def get_fireworks_testing_collection():
+def get_testing_collection(collection_name):
     '''
     Gets you an Pymongo collection instance for our unit testing fireworks
     collection.
@@ -32,7 +37,6 @@ def get_fireworks_testing_collection():
     database_name = fireworks_info['name']
     user = fireworks_info['username']
     password = fireworks_info['password']
-    collection_name = 'unit_testing_fireworks'
 
     # Connect to the database/collection
     client = MongoClient(host=host, port=port)
@@ -43,17 +47,20 @@ def get_fireworks_testing_collection():
     return collection
 
 
-def create_and_populate_unit_testing_collection():
+def create_and_populate_unit_testing_collection(collection_name):
     '''
     This function will create and populate a mock collection for unit testing.
     '''
-    create_unit_testing_collection()
-    populate_unit_testing_collection()
+    create_unit_testing_collection(collection_name)
+    populate_unit_testing_collection(collection_name)
 
 
-def create_unit_testing_collection():
+def create_unit_testing_collection(collection_name):
     '''
     This function will create a mock collection for unit testing.
+
+    Arg:
+        collection_name The name of the unit testing collection you want to use
     '''
     # Get the information needed to [re]create the collection
     fireworks_info = read_testing_rc('fireworks_info.lpad')
@@ -62,7 +69,6 @@ def create_unit_testing_collection():
     database_name = fireworks_info['name']
     user = fireworks_info['username']
     password = fireworks_info['password']
-    collection_name = 'unit_testing_fireworks'
 
     # Create the collection
     with MongoClient(host=host, port=port) as client:
@@ -71,39 +77,44 @@ def create_unit_testing_collection():
         database.create_collection(collection_name)
 
 
-def populate_unit_testing_collection():
+def populate_unit_testing_collection(collection_name):
     '''
     This function will populate a unit testing collection with the contents
     that it's "supposed" to have.
+
+    Arg:
+        collection_name The name of the unit testing collection you want to use
     '''
     # Get the documents that are supposed to be in the collection
-    with open(LOCATION_OF_DOCS, 'rb') as file_handle:
+    with open(LOCATION_OF_DOCS[collection_name], 'rb') as file_handle:
         docs = pickle.load(file_handle)
 
     # Put the documents in
-    with get_fireworks_testing_collection() as collection:
+    with get_testing_collection(collection_name) as collection:
         collection.insert_many(docs)
 
 
-def get_and_push_doc(mongo_id):
+def get_and_push_doc(mongo_id, collection_name):
     '''
     This function will get one document from a collection for you and then
     push/write it to its corresponding unit testing collection.
 
     Args:
         mongo_id        Mongo _id for the document you want to get
+        collection_name The name of the unit testing collection you want to use
     '''
-    doc = get_doc(mongo_id)
-    push_doc(doc)
+    doc = get_doc(mongo_id, collection_name)
+    push_doc(doc, collection_name)
 
 
-def get_doc(mongo_id):
+def get_doc(mongo_id, collection_name):
     '''
     This function will get one full document from the "live" Mongo database.
 
     Args:
         mongo_id        Mongo _id for the document you want to get. Can
                         be a string or a bjson.objectid.ObjectId object.
+        collection_name The name of the unit testing collection you want to use
     Returns:
         doc     A dictionary of the document with the corresponding mongo ID
     '''
@@ -111,7 +122,7 @@ def get_doc(mongo_id):
     if isinstance(mongo_id, str):
         mongo_id = ObjectId(mongo_id)
 
-    with get_fireworks_testing_collection() as collection:
+    with get_testing_collection(collection_name) as collection:
         live_collection = collection.database.fireworks
         docs = list(live_collection.find({'_id': mongo_id}))
 
@@ -125,25 +136,29 @@ def get_doc(mongo_id):
     return doc
 
 
-def push_doc(doc):
+def push_doc(doc, collection_name):
     '''
     This function will push/write one document to the testing database.
 
     Args:
-        doc             Dictionary/document that you want to write
+        doc     Dictionary/document that you want to write
+        collection_name The name of the unit testing collection you want to use
     '''
-    with get_fireworks_testing_collection() as collection:
+    with get_testing_collection(collection_name) as collection:
         collection.insert_one(doc)
 
 
-def dump_collection_to_pickle():
+def dump_collection_to_pickle(collection_name):
     '''
     If you've updated a unit testing collection in Mongo but have not yet
     updated the corresponding pickle cache, then you can use this function
     to do so.
+
+    Arg:
+        collection_name     The name of the unit testing collection you want to use
     '''
-    with get_fireworks_testing_collection() as collection:
+    with get_testing_collection(collection_name) as collection:
         docs = list(collection.find())
 
-    with open(LOCATION_OF_DOCS, 'wb') as file_handle:
+    with open(LOCATION_OF_DOCS[collection_name], 'wb') as file_handle:
         pickle.dump(docs, file_handle)

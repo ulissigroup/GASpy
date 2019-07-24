@@ -15,10 +15,25 @@ You will then need to wait for them to finish and then be [updated to the `atoms
 Once the bulk relaxations are added to this database, you can rerun the [population script](../examples/populate_catalog.py) and it should add the sites to the catalog.
 
 ## Submit adsorption calculation
-Afterwards, `gaspy.gasdb.get_catalog_docs` will return the enumerated sites.
-From there you can use one of our wrappers:
+Afterwards, `gaspy.gasdb.get_catalog_docs` will return a list of dictionaries, where each dictionary represents one of the the enumerated sites.
+Here is an example of one:
+
+    {'adsorption_site': [3.6382062367640263e-16,
+                         4.180407573039446e-16,
+                         31.432295816723716],
+     'coordination': 'Cu',
+     'miller': [1, 1, 1],
+     'mongo_id': ObjectId('5d378707e3a7f078783c4552'),
+     'mpid': 'mp-30',
+     'natoms': 4,
+     'neighborcoord': ['Cu:Cu-Cu-Cu'],
+     'shift': 0.16666666666666666,
+     'top': True}
+
+Here is an example of how you parse through these sites to submit a calculation:
+
     from gaspy.gasdb import get_catalog_docs
-    from gaspy.tasks.metadata_calculators import submit_cism_adsorption_calculations
+    from gaspy.tasks.metadata_calculators import submit_adsorption_calculations
     
     
     # Get all of the sites that we have enumerated
@@ -31,7 +46,7 @@ From there you can use one of our wrappers:
                                   doc['miller'] == [1, 1, 1])]
     
     adsorbate = 'CO'
-    submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc)
+    submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc))
 
 ## Reading data
 As you may have noticed, we use the term "doc" in the GASpy API.
@@ -39,18 +54,37 @@ We [inherited this term from MongoDB](https://docs.mongodb.com/manual/core/docum
 This means that if you see a function that says `get_*_doc`, then it is reading information from the MongoDB you set up.
 The primary functions of interest are all in the [`gaspy.gasdb`](../gaspy/gasdb.py) submodule, and include `get_catalog_docs`, `get_adsorption_docs`, `get_surface_docs`.
 They get the enumerated adsorption sites; get the information about adsorption energies you've calculated; and get the information about surface energies you've calculated, respectively.
-For example:  This is how you find all of the `CO` adsorption energies you have:
+For example:  This is how you get a list of all of the `CO` adsorption energies you have:
+
     from gaspy.gasdb import get_adsorption_docs
 
     docs = get_adsorption_docs(adsorbate='CO')
 
+Here is what one of these adsorption documents/dictionaries look like:
+
+    {'adsorbate': 'CO',
+     'coordination': 'Ni-Ni-Ni-Ni-Pt',
+     'energy': -0.67283776999998416,
+     'miller': [1, 0, 0],
+     'mongo_id': ObjectId('5d38288f38bc9b2cc322e8ec'),
+     'mpid': 'mp-945',
+     'neighborcoord': ['Ni:Ni-Ni-Ni-Ni-Pt-Pt-Pt-Pt',
+                       'Ni:Ni-Ni-Ni-Ni-Pt-Pt-Pt-Pt',
+                       'Pt:Ni-Ni-Ni-Ni-Ni-Ni-Ni-Ni-Pt-Pt-Pt',
+                       'Ni:Ni-Ni-Ni-Ni-Pt-Pt-Pt-Pt',
+                       'Ni:Ni-Ni-Ni-Ni-Pt-Pt-Pt-Pt'],
+     'shift': 0.,
+     'top': False}
+
 ## Getting [`Atoms`](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects
 If you are accustomed to working with `ase.Atoms` objects, then you can convert any document from the GASpy collections into an `Atoms` object one using the [`gaspy.mongo.make_atoms_from_doc`](../gaspy/mongo.py) function.
 For example:
+
     from gaspy.mongo import make_atoms_from_doc
     from gsapy.gasdb import get_adsorption_docs
 
-    docs = get_adsorption_docs()
+
+    docs = get_adsorption_docs(extra_projections={'atoms': '$atoms', 'results': '$results'})
     atoms = make_atoms_from_doc(docs[0])
 
 
@@ -70,7 +104,8 @@ If a task fails, then you must read the traceback to see why it failed.
 The traceback is likely to show you exactly why something went wrong.
 If the traceback does not show you the error in an apparent way, then we recommend finding the first task in the dependency tree that failed.
 We recommend using [Luigi's API](https://luigi.readthedocs.io/en/stable/central_scheduler.html) for finding the first failed task.
-You will need to [tunnel](https://www.ssh.com/ssh/tunneling/) to your Luigi Daemon to use this API.
+You will need to [tunnel](https://www.ssh.com/ssh/tunneling/) to your Luigi Daemon to use this API---e.g., `ssh -gnNT -L 8082:host.ip.address:8082 username@host.address`.
+
 Or you could stay inside of Python.
 If you execute the `task.requires()` method of a task, it will give you its upstream dependencies.
 Then if you execute the `task.complete()` method of a task, it will tell you whether the task is complete.
@@ -87,7 +122,7 @@ As a side-note:  The "finder" tasks will return as `task.complete() == True` eve
 This is an artifact of how we use both static and dynamic dependencies, and we have not yet found a way to avoid it.
 Please be wary of this when debugging.
 
-### Debugging
+### Debugging tasks
 Since all of the work is delegated to the daemon, you will not have direct access to stack for debugging.
 This can be very annoying for those of us accustomed to using [pdb](https://docs.python.org/3/library/pdb.html).
 To work around this, we created the [`gaspy.tasks.core.run_task`](../gaspy/tasks/core.py) function.
@@ -97,6 +132,17 @@ We ofter combine `run_task` with the [`%debug`](https://ipython.readthedocs.io/e
 
 Be warned:  The `run_task` function is not as stable as the `schedule_tasks` function, and is therefore not guaranteed to work as intended in all situations.
 Please use it only for debugging purposes.
+
+### Debugging relaxations
+If you realize that one of you tasks is not working, then it might be because the DFT calculation is failing.
+If you realize this and want to figure out why it's failing, you'll need to go to the directory where it ran and parse the error logs.
+To find this directory, simply `schedule_tasks([task])` the job you want to investigate.
+During the process of trying to run the task, GASpy will find the fizzled job and then report the FireWorks ID (fwid), the host that the job ran on, and its launch directory.
+
+Note that if you schedule a task and one of the jobs [fizzled](https://materialsproject.github.io/fireworks/failures_tutorial.html#error-during-run-a-fizzled-firework)/failed, then GASpy may try to redo the calculation.
+This is by design, because in an automated workflow sometimes things fail for random reasons---e.g., server crashed, and we want to automatically resubmit those calculations.
+If you do not want to re-try a calculation, then give the `gaspy.tasks.metadata_calculators.*` task the `max_fizzles=1` argument.
+If you do this, then GASpy will refrain from rerunning jobs.
 
 
 ## Mongo

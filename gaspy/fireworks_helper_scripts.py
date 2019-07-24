@@ -112,14 +112,56 @@ def __get_n_fizzles(docs):
     Returns:
         An integer for how many times this FireWork has fizzled.
     '''
+    # Find the FireWork IDs of each of the fizzles
     docs_fizzled = [doc for doc in docs if doc['state'] == 'FIZZLED']
-    fwids_fizzled = [str(doc['fw_id']) for doc in docs_fizzled]
+    fwids_fizzled = [doc['fw_id'] for doc in docs_fizzled]
     if len(docs_fizzled) > 0:
-        message = ('We have fizzled a calculation %i time[s] so far. '
-                   'The FireWork IDs are:  %s'
-                   % (len(docs_fizzled), ', '.join(fwids_fizzled)))
+        message = ('    We have fizzled a calculation %i time[s] so far:\n'
+                   % (len(fwids_fizzled)))
+
+        # Print out where it failed
+        launch_docs = _get_launch_docs(fwids_fizzled)
+        for launch_doc in launch_docs:
+            fwid = launch_doc['fw_id']
+            host = launch_doc['host']
+            launch_dir = launch_doc['launch_dir']
+            message += ('       fwid:  %i\n'
+                        '           host:  %s\n'
+                        '           launch_dir:  %s\n'
+                        % (fwid, host, launch_dir))
         warnings.warn(message, RuntimeWarning)
     return len(fwids_fizzled)
+
+
+def _get_launch_docs(fwids, _testing=False):
+    '''
+    Gets the document from the FireWorks launch collection
+
+    Arg:
+        fwids   A sequence of integers of the FireWorks ID number of the rocket
+                you're trying to get information for.
+    Returns:
+        docs    A list of dictionaries from the FireWorks `launches` collection
+                that have the keys 'fw_id', 'host', and 'launch_dir'.
+    '''
+    lpad = get_launchpad()
+
+    # Grab the correct collection, depending on whether or not we are
+    # unit testing
+    if _testing is False:
+        collection = lpad.launches
+    else:
+        collection = lpad.launches.database.get_collection('unit_testing_launches')
+
+    try:
+        docs = list(collection.find({'fw_id': {'$in': fwids}},
+                                    {'fw_id': 1,
+                                     'host': 1,
+                                     'launch_dir': 1,
+                                     '_id': 0}))
+    finally:    # Make sure we close the connection
+        collection.database.client.close()
+    return docs
 
 
 def make_firework(atoms, fw_name, dft_settings):

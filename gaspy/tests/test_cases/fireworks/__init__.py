@@ -7,7 +7,7 @@ __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
 # flake8: noqa
-from .fireworks_utils import (get_fireworks_testing_collection,
+from .fireworks_utils import (get_testing_collection,
                               create_and_populate_unit_testing_collection,
                               create_unit_testing_collection,
                               populate_unit_testing_collection,

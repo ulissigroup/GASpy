@@ -15,6 +15,7 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         find_n_rockets,
                                         _get_firework_docs,
                                         __get_n_fizzles,
+                                        _get_launch_docs,
                                         make_firework,
                                         _make_vasp_firework,
                                         _make_qe_firework,
@@ -132,6 +133,15 @@ def test___warn_about_fizzles():
         assert len(warning_manager) == 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
+
+
+def test__get_launch_docs():
+    fwids = list(range(1, 100))
+    launch_docs = _get_launch_docs(fwids, _testing=True)
+    for doc in launch_docs:
+        assert isinstance(doc['fw_id'], int)
+        assert isinstance(doc['host'], str)
+        assert isinstance(doc['launch_dir'], str)
 
 
 @pytest.mark.parametrize('dft_method', ['vasp', 'qe', 'rism'])
