@@ -12,6 +12,7 @@ import ase.constraints
 from .utils import read_rc
 
 DFT_CALCULATOR = read_rc('dft_calculator')
+MAX_FIZZLES = 5
 
 
 def pp_version():

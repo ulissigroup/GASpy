@@ -29,6 +29,7 @@ BULK_SETTINGS = defaults.bulk_settings()
 SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
+MAX_FIZZLES = defaults.MAX_FIZZLES
 
 
 def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
@@ -192,10 +193,12 @@ class CalculateAdsorptionEnergy(luigi.Task):
     gas_dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
     bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
     adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def requires(self):
         return {'adsorbate_energy': CalculateAdsorbateEnergy(self.adsorbate_name,
-                                                             self.gas_dft_settings),
+                                                             self.gas_dft_settings,
+                                                             max_fizzles=self.max_fizzles),
                 'bare_slab_doc': FindAdslab(adsorption_site=(0., 0., 0.),
                                             shift=self.shift,
                                             top=self.top,
@@ -207,7 +210,8 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                             min_xy=self.min_xy,
                                             slab_generator_settings=self.slab_generator_settings,
                                             get_slab_settings=self.get_slab_settings,
-                                            bulk_dft_settings=self.bulk_dft_settings),
+                                            bulk_dft_settings=self.bulk_dft_settings,
+                                            max_fizzles=self.max_fizzles),
                 'adslab_doc': FindAdslab(adsorption_site=self.adsorption_site,
                                          shift=self.shift,
                                          top=self.top,
@@ -219,7 +223,8 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                          min_xy=self.min_xy,
                                          slab_generator_settings=self.slab_generator_settings,
                                          get_slab_settings=self.get_slab_settings,
-                                         bulk_dft_settings=self.bulk_dft_settings)}
+                                         bulk_dft_settings=self.bulk_dft_settings,
+                                         max_fizzles=self.max_fizzles)}
 
     def run(self):
         with open(self.input()['adsorbate_energy'].path, 'rb') as file_handle:
@@ -260,6 +265,7 @@ class CalculateAdsorbateEnergy(luigi.Task):
     '''
     adsorbate_name = luigi.Parameter()
     dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def requires(self):
         return CalculateAdsorbateBasisEnergies(self.dft_settings)
@@ -305,12 +311,17 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
                         {'H': foo, 'O': bar}
     '''
     dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def requires(self):
-        return {'CO': FindGas(gas_name='CO', dft_settings=self.dft_settings),
-                'H2': FindGas(gas_name='H2', dft_settings=self.dft_settings),
-                'H2O': FindGas(gas_name='H2O', dft_settings=self.dft_settings),
-                'N2': FindGas(gas_name='N2', dft_settings=self.dft_settings)}
+        return {'CO': FindGas(gas_name='CO', dft_settings=self.dft_settings,
+                              max_fizzles=self.max_fizzles),
+                'H2': FindGas(gas_name='H2', dft_settings=self.dft_settings,
+                              max_fizzles=self.max_fizzles),
+                'H2O': FindGas(gas_name='H2O', dft_settings=self.dft_settings,
+                               max_fizzles=self.max_fizzles),
+                'N2': FindGas(gas_name='N2', dft_settings=self.dft_settings,
+                              max_fizzles=self.max_fizzles)}
 
     def run(self):
         # Load each gas and calculate their energies
@@ -378,6 +389,7 @@ class CalculateSurfaceEnergy(luigi.Task):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     dft_settings = luigi.DictParameter(SLAB_SETTINGS[DFT_CALCULATOR])
     bulk_dft_settings = luigi.DictParameter(SE_BULK_SETTINGS[DFT_CALCULATOR])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def _static_requires(self):
         '''
@@ -387,7 +399,9 @@ class CalculateSurfaceEnergy(luigi.Task):
         then just call it first in `run`.
         '''
         # Define our static dependency, the bulk relaxation
-        find_bulk_task = FindBulk(mpid=self.mpid, dft_settings=self.bulk_dft_settings)
+        find_bulk_task = FindBulk(mpid=self.mpid,
+                                  dft_settings=self.bulk_dft_settings,
+                                  max_fizzles=self.max_fizzles)
 
         # If our dependency is done, then save the relaxed bulk atoms object as
         # an attribute for use by the other methods
@@ -498,7 +512,8 @@ class CalculateSurfaceEnergy(luigi.Task):
                                shift=self.shift,
                                min_height=min_height,
                                dft_settings=self.dft_settings,
-                               bulk_dft_settings=self.bulk_dft_settings)
+                               bulk_dft_settings=self.bulk_dft_settings,
+                               max_fizzles=self.max_fizzles)
             surface_relaxation_tasks.append(task)
 
         # Save these tasks as an attribute so we can use the actual tasks later.

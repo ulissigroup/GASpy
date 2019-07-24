@@ -35,6 +35,7 @@ GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
 SLAB_SETTINGS = defaults.slab_settings()
 ADSLAB_SETTINGS = defaults.adslab_settings()
+MAX_FIZZLES = defaults.MAX_FIZZLES
 
 
 class FindCalculation(luigi.Task):
@@ -71,7 +72,7 @@ class FindCalculation(luigi.Task):
                             attributes to the class. This method will be
                             called automatically at the start of `run`.
     '''
-    max_fizzles = luigi.IntParameter(5)
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def run(self, _testing=False):
         '''
@@ -108,6 +109,10 @@ class FindCalculation(luigi.Task):
 
             # If we're already running, then just move on
             else:
+                print('    You just tried to find a calculation that has not '
+                      'yet finished running. Please try again later. If you '
+                      'know it has finished running, then try updating the '
+                      '`atoms` collection of GASdb.')
                 pass
 
     def _find_and_save_calculation(self):
