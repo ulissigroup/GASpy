@@ -11,7 +11,7 @@ To enumerate a site, you first need to relax the bulk structure and then add it 
 An example script for doing this is included [here](../examples/populate_catalog.py).
 Note that you will need to be inside a GASpy container for it to work.
 That script will submit any bulk relaxation calculations you may need.
-You will then need to wait for them to finish and then be [updated to the `atoms` collection.](../examples/update_collections.py).
+You will then need to wait for them to finish and then be [updated to the `atoms` collection](../examples/update_collections.py).
 Once the bulk relaxations are added to this database, you can rerun the [population script](../examples/populate_catalog.py) and it should add the sites to the catalog.
 
 ## Submit adsorption calculation
@@ -48,13 +48,39 @@ Here is an example of how you parse through these sites to submit a calculation:
     adsorbate = 'CO'
     submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc))
 
+## Submit surface energy calculation
+We do not yet have a wrapper for this, so you will need to make your own task and then schedule it.
+At minimum, you need to specify the Materials Project ID, the Miller indices, and the shift.
+To get the shift information, you can reference the slabs you have enumerated in your catalog.
+For example:
+
+    from gaspy.gasdb import get_catalog_docs, get_surface_from_doc
+    from gaspy.tasks import schedule_tasks
+    from gaspy.tasks.metadata_calculators import CalculateSurfaceEnergy
+
+
+    # Find the pure Pd surfaces that exist
+    surfaces = [surface for get_surface_from_doc(doc) in get_catalog_docs()]
+    pd_surfaces = [(mpid, miller, shift)
+                   for (mpid, miller, shift, top) in surfaces
+                   if mpid == 'mp-2']
+
+    # Create and schedule the tasks
+    tasks = [CalculateSurfaceEnergy(mpid, miller, shift)
+             for mpid, miller, shift in pd_surfaces]
+    schedule_tasks(tasks)
+
 ## Reading data
 As you may have noticed, we use the term "doc" in the GASpy API.
 We [inherited this term from MongoDB](https://docs.mongodb.com/manual/core/document/).
 This means that if you see a function that says `get_*_doc`, then it is reading information from the MongoDB you set up.
 The primary functions of interest are all in the [`gaspy.gasdb`](../gaspy/gasdb.py) submodule, and include `get_catalog_docs`, `get_adsorption_docs`, `get_surface_docs`.
 They get the enumerated adsorption sites; get the information about adsorption energies you've calculated; and get the information about surface energies you've calculated, respectively.
+<<<<<<< HEAD
 For example:  This is how you get a list of all of the `CO` adsorption energies you have:
+=======
+For example:  This is how you find all of the `CO` adsorption energies you have:
+>>>>>>> c1a4b1945fbfb745ea08bb7d889959e2f268acfe
 
     from gaspy.gasdb import get_adsorption_docs
 
