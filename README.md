@@ -25,7 +25,7 @@ This means that we can simply tell GASpy to "calculate the adsorption energy of 
 To submit calculations, the simplest thing to do is to use our wrapper functions as such:
 
     from gaspy.gasdb import get_catalog_docs
-    from gaspy.tasks.metadata_calculators import submit_cism_adsorption_calculations
+    from gaspy.tasks.metadata_calculators import submit_adsorption_calculations
     
     
     # Get all of the sites that we have enumerated
@@ -38,7 +38,7 @@ To submit calculations, the simplest thing to do is to use our wrapper functions
                                   doc['miller'] == [1, 1, 1])]
     
     adsorbate = 'CO'
-    submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc)
+    submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc))
 
 This snippet will calculate CO adsorption energies of all sites on the (1, 1, 1) facet of [Pd](https://materialsproject.org/materials/mp-2/).
 
