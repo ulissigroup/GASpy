@@ -118,12 +118,18 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
             kwargs['gas_dft_settings'] = GAS_SETTINGS['rism']
         if 'bulk_dft_settings' not in kwargs:
             kwargs['bulk_dft_settings'] = BULK_SETTINGS['rism']
+        if 'bare_slab_dft_settings' not in kwargs:
+            kwargs['bare_slab_dft_settings'] = ADSLAB_SETTINGS['rism']
         if 'adslab_dft_settings' not in kwargs:
             kwargs['adslab_dft_settings'] = ADSLAB_SETTINGS['rism']
-        for calculation_type in ['gas_dft_settings', 'adslab_dft_settings']:
-            kwargs[calculation_type]['target_fermi'] = target_fermi
+        # Override default RISM settings with user-supplied ones
+        for calculation_type in ['gas_dft_settings',
+                                 'bare_slab_dft_settings',
+                                 'adslab_dft_settings']:
             kwargs[calculation_type]['anion_concs'] = anion_concs
             kwargs[calculation_type]['cation_concs'] = cation_concs
+            if calculation_type != 'gas_dft_settings':
+                kwargs[calculation_type]['target_fermi'] = target_fermi
 
         # Create and submit the tasks/jobs
         task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
@@ -192,6 +198,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     gas_dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
     bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
+    bare_slab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
     adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
@@ -202,7 +209,7 @@ class CalculateAdsorptionEnergy(luigi.Task):
                 'bare_slab_doc': FindAdslab(adsorption_site=(0., 0., 0.),
                                             shift=self.shift,
                                             top=self.top,
-                                            dft_settings=self.adslab_dft_settings,
+                                            dft_settings=self.bare_slab_dft_settings,
                                             adsorbate_name='',
                                             rotation={'phi': 0., 'theta': 0., 'psi': 0.},
                                             mpid=self.mpid,
