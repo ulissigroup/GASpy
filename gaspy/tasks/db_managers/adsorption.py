@@ -79,7 +79,7 @@ def _find_atoms_docs_not_in_adsorption_collection():
     # Find the FWIDs of the documents inside our adsorption collection
     with get_mongo_collection('adsorption') as collection:
         docs_adsorption = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
-    fwids_in_adsorption = set(doc['fwids']['slab+adsorbate'] for doc in docs_adsorption)
+    fwids_in_adsorption = {doc['fwids']['slab+adsorbate'] for doc in docs_adsorption}
 
     # Find the FWIDs of the documents inside our atoms collection
     with get_mongo_collection('atoms') as collection:
@@ -87,7 +87,7 @@ def _find_atoms_docs_not_in_adsorption_collection():
                  'fwname.adsorbate': {'$ne': ''}}
         projection = {'fwid': 'fwid', '_id': 0}
         docs_atoms = list(collection.find(query, projection))
-        fwids_in_atoms = set(doc['fwid'] for doc in docs_atoms)
+        fwids_in_atoms = {doc['fwid'] for doc in docs_atoms}
 
         # Pull the atoms documents of everything that's missing from our
         # adsorption collection. Although we use `find` a second time, this
@@ -170,7 +170,7 @@ def __clean_calc_energy_docs(docs, missing_docs):
         cleaned_docs    The `docs` arguments, but with empty and duplicate
                         documents removed
     '''
-    missing_fwids = set(doc['fwid'] for doc in missing_docs)
+    missing_fwids = {doc['fwid'] for doc in missing_docs}
     cleaned_docs = []
     for doc in docs:
         if doc is not None:
@@ -234,7 +234,7 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
                                'slab': slab_doc['fwid']}
     adsorption_doc['fw_directories'] = {'slab+adsorbate': adslab_doc['directory'],
-                                        'slab':slab_doc['directory']}
+                                        'slab': slab_doc['directory']}
     adsorption_doc['fp_final'] = fp_final
     adsorption_doc['fp_init'] = fp_init
     adsorption_doc['movement_data'] = {'max_bare_slab_movement': max_bare_slab_movement,
