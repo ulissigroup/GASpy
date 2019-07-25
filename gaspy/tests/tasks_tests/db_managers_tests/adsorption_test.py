@@ -120,6 +120,7 @@ def test___create_adsorption_doc():
     assert all(isinstance(repeat, int) for repeat in doc['slab_repeat'])
     assert isinstance(doc['dft_settings'], dict)
     assert all(isinstance(fwid, int) for fwid in doc['fwids'].values())
+    assert all(isinstance(fw_directory, str) for fw_directory in doc['fw_directories'].values())
     assert 'fp_init' in doc
     assert 'fp_final' in doc
     assert all(isinstance(datum, float) for datum in doc['movement_data'].values())

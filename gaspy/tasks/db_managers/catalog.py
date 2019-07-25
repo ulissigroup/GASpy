@@ -19,6 +19,7 @@ import luigi
 import multiprocess
 from pymatgen.ext.matproj import MPRester
 from ..core import (schedule_tasks,
+                    run_task,
                     get_task_output,
                     save_task_output,
                     make_task_output_object)
@@ -163,8 +164,8 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
     try:
-        schedule_tasks([task], local_scheduler=True)
-    except RuntimeError:
+        run_task(task)
+    except (FileNotFoundError, ValueError):
         pass
 
 

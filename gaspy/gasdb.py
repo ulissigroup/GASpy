@@ -660,8 +660,8 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
     # Get the standard document projection, then round the shift so that we can
     # group more easily. Credit to Vince Browdren on Stack Exchange
     projections = defaults.adsorption_projection()
-    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
-                                          {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
+    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0004999999999999999]},
+                                          {'$mod': [{'$add': ['$shift', 0.0004999999999999999]}, 0.001]}]}
     project = {'$project': projections}
 
     # Now order the documents so that the low-coverage sites come first (i.e.,
@@ -747,8 +747,8 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
     # Get the standard document projection, then round the shift so that we can
     # group more easily. Credit to Vince Browdren on Stack Exchange
     projections = defaults.catalog_projection()
-    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0049999999999999999]},
-                                          {'$mod': [{'$add': ['$shift', 0.0049999999999999999]}, 0.01]}]}
+    projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0004999999999999999]},
+                                          {'$mod': [{'$add': ['$shift', 0.0004999999999999999]}, 0.001]}]}
 
     # Add the predictions
     data_location = 'predictions.adsorption_energy.%s.%s' % (adsorbate, model_tag)

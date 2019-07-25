@@ -233,6 +233,8 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['dft_settings'] = adslab_doc['fwname']['dft_settings']
     adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
                                'slab': slab_doc['fwid']}
+    adsorption_doc['fw_directories'] = {'slab+adsorbate': adslab_doc['directory'],
+                                        'slab':slab_doc['directory']}
     adsorption_doc['fp_final'] = fp_final
     adsorption_doc['fp_init'] = fp_init
     adsorption_doc['movement_data'] = {'max_bare_slab_movement': max_bare_slab_movement,

@@ -482,7 +482,7 @@ def test_get_surface_from_doc():
            'top': True}
     surface = get_surface_from_doc(doc)
 
-    expected_surface = ('mp-23', '[1, 0, 0]', 0., True)
+    expected_surface = ('mp-23', '[1, 0, 0]', 0.001, True)
     assert surface == expected_surface
 
 
