@@ -177,8 +177,12 @@ class CalculateAdsorptionEnergy(luigi.Task):
                                 the gas relaxation of the adsorbate
         bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate slabs from
+        bare_slab_dft_settings  A dictionary containing your DFT settings
+                                for the bare slab relaxation
         adslab_dft_settings     A dictionary containing your DFT settings
                                 for the adslab relaxation
+        max_fizzles             The maximum number of times you want any single
+                                DFT calculation to fail before giving up on this.
     Returns:
         doc A dictionary with the following keys:
                 adsorption_energy   A float indicating the adsorption energy
@@ -267,6 +271,8 @@ class CalculateAdsorbateEnergy(luigi.Task):
                         want to calculate the energy of
         dft_settings    A dictionary containing the DFT settings you want to
                         use for the DFT relaxations of the basis set
+        max_fizzles     The maximum number of times you want any single
+                        DFT calculation to fail before giving up on this.
     Returns:
         energy  The DFT-calculated energy of the adsorbate
     '''
@@ -312,6 +318,8 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
     Arg:
         dft_settings    A dictionary containing the DFT settings you want to
                         use for the DFT relaxations of the gases.
+        max_fizzles     The maximum number of times you want any single
+                        DFT calculation to fail before giving up on this.
     Returns:
         basis_energies  A dictionary whose keys are the basis elements and
                         whose values are their respective energies, e.g.,
@@ -375,6 +383,8 @@ class CalculateSurfaceEnergy(luigi.Task):
                                 the surface relaxation
         bulk_dft_settings       A dictionary containing the DFT settings of
                                 the relaxed bulk to enumerate surfaces from
+        max_fizzles             The maximum number of times you want any single
+                                DFT calculation to fail before giving up on this.
     Returns::
         doc A dictionary with the following keys:
                 surface_structures              A list of three dictionaries

@@ -50,6 +50,10 @@ class FindCalculation(luigi.Task):
     This class requires some attributes, Luigi arguments, and method
     definitions before it can be used.
 
+    Arg:
+        max_fizzles     The maximum number of times you want any single DFT
+                        calculation to fail before giving up on this.
+
     Required Luigi argument:
         dft_settings    A dictionary containing the DFT settings of the
                         calculation you want to find. You can probably find
