@@ -76,11 +76,7 @@ We [inherited this term from MongoDB](https://docs.mongodb.com/manual/core/docum
 This means that if you see a function that says `get_*_doc`, then it is reading information from the MongoDB you set up.
 The primary functions of interest are all in the [`gaspy.gasdb`](../gaspy/gasdb.py) submodule, and include `get_catalog_docs`, `get_adsorption_docs`, `get_surface_docs`.
 They get the enumerated adsorption sites; get the information about adsorption energies you've calculated; and get the information about surface energies you've calculated, respectively.
-<<<<<<< HEAD
 For example:  This is how you get a list of all of the `CO` adsorption energies you have:
-=======
-For example:  This is how you find all of the `CO` adsorption energies you have:
->>>>>>> c1a4b1945fbfb745ea08bb7d889959e2f268acfe
 
     from gaspy.gasdb import get_adsorption_docs
 
