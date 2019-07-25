@@ -94,7 +94,7 @@ def gas_settings():
     rism['_calculator'] = 'rism'
     rism['molecule'] = True
     # Should be set by user
-    rism['target_fermi'] = -5.26
+    rism['target_fermi'] = None
     rism['anion_concs'] = {'Cl-': 1.}
     rism['cation_concs'] = {'H3O+': 1.}
     # Used for setting the Fermi level
