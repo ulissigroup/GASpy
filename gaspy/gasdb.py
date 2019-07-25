@@ -108,9 +108,8 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
     # Get the documents and clean them up
     pipeline = [match, project]
     with get_mongo_collection(collection_tag='adsorption') as collection:
-        print('Now pulling adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Adsorption docs', unit='doc')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
@@ -210,9 +209,8 @@ def get_surface_docs(extra_projections=None, filters=None):
     # Get the documents and clean them up
     pipeline = [match, project]
     with get_mongo_collection(collection_tag='surface_energy') as collection:
-        print('Now pulling surface documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Surface docs', unit='doc')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
@@ -252,9 +250,8 @@ def _pull_catalog_from_mongo(pipeline):
                 your pipeline.
     '''
     with get_mongo_collection(collection_tag='catalog_readonly') as collection:
-        print('Now pulling catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Catalog docs', unit='doc')]
     return docs
 
 
@@ -398,9 +395,8 @@ def get_unsimulated_catalog_docs(adsorbate,
 
     # Hash all of the documents, which we will use to check if something
     # in the catalog has been simulated or not
-    print('Hashing catalog documents...')
     catalog_dict = {}
-    for doc in tqdm(docs_catalog_with_rotation):
+    for doc in tqdm(docs_catalog_with_rotation, desc='Hashing catalog', unit='doc'):
         hash_ = _hash_doc(doc, ignore_keys=['natoms'])
         catalog_dict[hash_] = doc
 
@@ -440,7 +436,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
             print('Making catalog copy number %i of %i...'
                   % (i+1, len(adsorbate_rotation_list)))
             docs_copy = deepcopy(docs)  # To make sure we don't modify the parent docs
-            for doc in tqdm(docs_copy):
+            for doc in tqdm(docs_copy, desc='Enumerating adsorbate orientations', unit='doc'):
                 doc['adsorbate_rotation'] = adsorbate_rotation
             docs_with_rotation += docs_copy
         return docs_with_rotation
@@ -501,9 +497,8 @@ def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
     # Get the documents and clean them up
     pipeline = [match, project]
     with get_mongo_collection(collection_tag='adsorption') as collection:
-        print('Now pulling adsorption documents for sites we have attempted...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Attempted adsorption docs', unit='doc')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
@@ -682,9 +677,8 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
     # Pull the documents
     pipeline = [match, project, sort, group]
     with get_mongo_collection(collection_tag='adsorption') as collection:
-        print('Now pulling low coverage adsorption documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Low-coverage adsorption docs', unit='doc')]
 
     # Clean and return the documents
     for doc in docs:
@@ -773,9 +767,8 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
     # Get the documents
     pipeline = [project, sort, group]
     with get_mongo_collection(collection_tag='catalog') as collection:
-        print('Now pulling low coverage catalog documents...')
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor)]
+        docs = [doc for doc in tqdm(cursor, desc='Low-coverage catalog docs', unit='doc')]
 
     # Clean the documents up
     for doc in docs:
@@ -794,8 +787,7 @@ def purge_adslabs(fwids):
     '''
     lpad = get_launchpad()
 
-    print('Defusing FWs...')
-    for fwid in tqdm(fwids):
+    for fwid in tqdm(fwids, desc='Defusing rockets', unit='fw'):
         lpad.defuse_fw(fwid)
 
     print('Removing FWs from atoms collection...')

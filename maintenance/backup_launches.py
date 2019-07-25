@@ -48,11 +48,12 @@ lpad = get_launchpad()
 all_fw_ids = lpad.get_fw_ids({"state": "COMPLETED"})
 
 launch_list = []
-for fwid in tqdm(all_fw_ids):
+for fwid in tqdm(all_fw_ids, decs='Finding launch IDs', unit='fw'):
     fw = lpad.get_fw_by_id(fwid)
     for launch in fw.launches:
         launch_list.append(launch.launch_id)
 
 
 with multiprocess.Pool(4) as pool:
-    list(tqdm(pool.imap(fetch_tar_file, launch_list, chunksize=20), total=len(launch_list)))
+    iterator = pool.imap(fetch_tar_file, launch_list, chunksize=20)
+    list(tqdm(iterator, desc='Getting tar files', total=len(launch_list)), unit='fw')
