@@ -19,6 +19,7 @@ from ....tasks.db_managers.adsorption import (update_adsorption_collection,
 import ase
 from ..utils import clean_up_tasks
 from ...test_cases.mongo_test_collections.mongo_utils import populate_unit_testing_collection
+from ....defaults import DFT_CALCULATOR
 from ....mongo import make_atoms_from_doc
 from ....gasdb import get_mongo_collection
 
@@ -30,23 +31,23 @@ def test_update_adsorption_collection():
     '''
     try:
         # Clear out the adsorption collection before testing
-        with get_mongo_collection('adsorption') as collection:
+        with get_mongo_collection('adsorption_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
 
         # See if we can actually add anything
         update_adsorption_collection()
-        with get_mongo_collection('adsorption') as collection:
+        with get_mongo_collection('adsorption_%s' % DFT_CALCULATOR) as collection:
             assert collection.count_documents({}) > 0
 
     # Reset the adsorption collection behind us
     finally:
-        with get_mongo_collection('adsorption') as collection:
+        with get_mongo_collection('adsorption_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
-        populate_unit_testing_collection('adsorption')
+        populate_unit_testing_collection('adsorption_%s' % DFT_CALCULATOR)
 
 
 def test__find_atoms_docs_not_in_adsorption_collection():
-    docs = _find_atoms_docs_not_in_adsorption_collection()
+    docs = _find_atoms_docs_not_in_adsorption_collection(DFT_CALCULATOR)
 
     # Make sure these "documents" are actually `atoms` docs that can be turned
     # into `ase.Atoms` objects
@@ -57,7 +58,7 @@ def test__find_atoms_docs_not_in_adsorption_collection():
     # Make sure that everything we found actually isn't in our `adsorption`
     # collection
     fwids = [doc['fwid'] for doc in docs]
-    with get_mongo_collection('adsorption') as collection:
+    with get_mongo_collection('adsorption_%s' % DFT_CALCULATOR) as collection:
         ads_docs = list(collection.find({'fwids.adsorption': {'$in': fwids}}, {'_id': 1}))
     assert len(ads_docs) == 0
 

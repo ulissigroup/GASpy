@@ -32,7 +32,7 @@
             "user": "user",
             "password": "pw"
             },
-        "adsorption":{
+        "adsorption_vasp":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

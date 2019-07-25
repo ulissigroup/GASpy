@@ -32,7 +32,23 @@
             "user": "user",
             "password": "pw"
             },
-        "adsorption":{
+        "adsorption_vasp":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "adsorption_qe":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "adsorption_rism":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

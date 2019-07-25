@@ -13,19 +13,24 @@ from datetime import datetime
 import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy
+from ...defaults import DFT_CALCULATOR
 from ...utils import print_dict, multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab, find_max_movement
 
 
-def update_adsorption_collection(n_processes=1):
+def update_adsorption_collection(dft_calculator=DFT_CALCULATOR, n_processes=1):
     '''
     This function will parse and dump all of the completed adsorption
     calculations in our `atoms` Mongo collection into our `adsorption`
     collection. It will not dump anything that is already there.
 
     Args:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        parse data for---e.g., 'vasp', 'qe', or 'rism'. This
+                        function will find the appropriate data and update
+                        the appropriate adsorption collection.
         n_processes     An integer indicating how many threads you want to use
                         when running the tasks. If you do not expect many
                         updates, stick to the default of 1, or go up to 4. If
@@ -34,10 +39,11 @@ def update_adsorption_collection(n_processes=1):
                         you can.
     '''
     # Figure out what we need to dump
-    missing_docs = _find_atoms_docs_not_in_adsorption_collection()
+    missing_docs = _find_atoms_docs_not_in_adsorption_collection(dft_calculator)
 
     # Calculate adsorption energies
-    print('[%s] Calculating adsorption energies...' % datetime.now())
+    print('[%s] Calculating adsorption_%s energies...'
+          % (datetime.now(), dft_calculator))
     calc_energy_docs = multimap(__run_calculate_adsorption_energy_task,
                                 missing_docs, processes=n_processes,
                                 maxtasksperchild=10, chunksize=100,
@@ -47,7 +53,8 @@ def update_adsorption_collection(n_processes=1):
                                                         missing_docs)
 
     # Turn the adsorption energies into `adsorption` documents, then save them
-    print('[%s] Creating adsorption documents...' % datetime.now())
+    print('[%s] Creating adsorption_%s documents...'
+          % (datetime.now(), dft_calculator))
     adsorption_docs = multimap(__create_adsorption_doc,
                                cleaned_calc_energy_docs,
                                processes=n_processes,
@@ -57,33 +64,39 @@ def update_adsorption_collection(n_processes=1):
 
     # Now write the documents
     if len(adsorption_docs) > 0:
-        print('[%s] Creating %i new entries in the adsorption collection...'
-              % (datetime.now(), len(adsorption_docs)))
-        with get_mongo_collection('adsorption') as collection:
+        print('[%s] Creating %i new entries in the adsorption_%s collection...'
+              % (datetime.now(), len(adsorption_docs), dft_calculator))
+        with get_mongo_collection('adsorption_%s' % dft_calculator) as collection:
             collection.insert_many(adsorption_docs)
-        print('[%s] Created %i new entries in the adsorption collection'
-              % (datetime.now(), len(adsorption_docs)))
+        print('[%s] Created %i new entries in the adsorption_%s collection'
+              % (datetime.now(), len(adsorption_docs), dft_calculator))
 
 
-def _find_atoms_docs_not_in_adsorption_collection():
+def _find_atoms_docs_not_in_adsorption_collection(dft_calculator):
     '''
     This function will get the Mongo documents of adsorption calculations that
     are inside our `atoms` collection, but not inside our `adsorption`
     collection.
 
+    Arg:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        parse data for---e.g., 'vasp', 'qe', or 'rism'. This
+                        function will find the data from the appropriate
+                        collection.
     Returns:
         missing_ads_docs    A list of adsorption documents from the `atoms`
                             collection that have not yet been added to the
                             `adsorption` collection.
     '''
     # Find the FWIDs of the documents inside our adsorption collection
-    with get_mongo_collection('adsorption') as collection:
+    with get_mongo_collection('adsorption_' + dft_calculator) as collection:
         docs_adsorption = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
     fwids_in_adsorption = {doc['fwids']['slab+adsorbate'] for doc in docs_adsorption}
 
     # Find the FWIDs of the documents inside our atoms collection
     with get_mongo_collection('atoms') as collection:
         query = {'fwname.calculation_type': 'slab+adsorbate optimization',
+                 'fwname.dft_settings._calculator': dft_calculator,
                  'fwname.adsorbate': {'$ne': ''}}
         projection = {'fwid': 'fwid', '_id': 0}
         docs_atoms = list(collection.find(query, projection))
@@ -121,6 +134,7 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                      rotation=atoms_doc['fwname']['adsorbate_rotation'],
                                      mpid=atoms_doc['fwname']['mpid'],
                                      miller_indices=atoms_doc['fwname']['miller'],
+                                     bare_slab_dft_settings=atoms_doc['fwname']['dft_settings'],
                                      adslab_dft_settings=atoms_doc['fwname']['dft_settings'])
     try:
         run_task(task)
