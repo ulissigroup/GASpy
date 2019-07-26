@@ -97,7 +97,7 @@ def gas_settings():
     rism['target_fermi'] = None
     rism['anion_concs'] = {'Cl-': 1.}
     rism['cation_concs'] = {'H3O+': 1.}
-    # Used for setting the Fermi level
+    # Used for setting the Fermi level. Won't really matter for gases.
     rism['fcp_conv_thr'] = 5e-3
     rism['freeze_all_atoms'] = False
     # Convergence thresholds
@@ -377,7 +377,11 @@ def adsorption_projection():
                     'top': '$top',
                     'coordination': '$fp_final.coordination',
                     'neighborcoord': '$fp_final.neighborcoord',
-                    'energy': '$adsorption_energy'}
+                    'fermi_level': '$dft_settings.target_fermi',
+                    'cation_concs': '$dft_settings.cation_concs',
+                    'anion_concs': '$dft_settings.anion_concs',
+                    'energy': '$adsorption_energy',
+                    'fwids': 'fwids'}
     return fingerprints
 
 
@@ -470,6 +474,9 @@ def surface_projection():
                     'intercept': '$surface_energy',
                     'intercept_uncertainty': '$surface_energy_standard_error',
                     'thinnest_structure': {'$arrayElemAt': ['$surface_structures', 0]},
+                    'fermi_level': '$dft_settings.target_fermi',
+                    'cation_concs': '$dft_settings.cation_concs',
+                    'anion_concs': '$dft_settings.anion_concs',
                     'FW_info': '$fwids'}
     return fingerprints
 
