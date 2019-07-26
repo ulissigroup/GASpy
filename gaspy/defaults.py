@@ -11,6 +11,7 @@ from ase import Atoms
 import ase.constraints
 from .utils import read_rc
 
+MODEL = 'model0'
 DFT_CALCULATOR = read_rc('dft_calculator')
 MAX_FIZZLES = 5
 
@@ -354,7 +355,7 @@ def adsorbates():
     return adsorbates
 
 
-def adsorption_projection():
+def adsorption_projection(dft_calculator=DFT_CALCULATOR):
     '''
     WARNING:  A lot of code depends on this. Do not add or remove anything out
     without thinking very hard about it. If you do add something, consider
@@ -377,11 +378,15 @@ def adsorption_projection():
                     'top': '$top',
                     'coordination': '$fp_final.coordination',
                     'neighborcoord': '$fp_final.neighborcoord',
-                    'fermi_level': '$dft_settings.target_fermi',
-                    'cation_concs': '$dft_settings.cation_concs',
-                    'anion_concs': '$dft_settings.anion_concs',
                     'energy': '$adsorption_energy',
-                    'fwids': 'fwids'}
+                    'fwids': '$fwids'}
+
+    # Add potential and solvation fields for RISM
+    if dft_calculator == 'rism':
+        fingerprints['fermi_level'] = '$dft_settings.target_fermi'
+        fingerprints['cation_concs'] = '$dft_settings.cation_concs'
+        fingerprints['anion_concs'] = '$dft_settings.anion_concs'
+
     return fingerprints
 
 
@@ -397,8 +402,8 @@ def adsorption_filters(adsorbate=None, dft_calculator=DFT_CALCULATOR):
         adsorbate       A string of the adsorbate that you want to get
                         calculations for.
         dft_calculator  A string indicating which DFT calculator you want to
-                        check. Can either be 'vasp' or 'qe' (for Quantum
-                        Espresso).
+                        check. Can either be 'vasp', 'qe' (for Quantum
+                        Espresso), or 'rism'.
     Returns:
         filters     A dictionary that is meant to be used as a `query` argument
                     for our `adsorption` Mongo collection's `find` or
@@ -453,11 +458,15 @@ def adsorption_filters(adsorbate=None, dft_calculator=DFT_CALCULATOR):
     return filters
 
 
-def surface_projection():
+def surface_projection(dft_calculator=DFT_CALCULATOR):
     '''
     WARNING:  A lot of code depends on this. Do not take anything out without
     thinking very hard about it.
 
+    Arg:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        check. Can either be 'vasp', 'qe' (for Quantum
+                        Espresso), or 'rism'.
     Returns:
         projection  A dictionary that is meant to be passed as a projection
                     operator to a Mongo `find` or `aggregate` command. The keys
@@ -471,13 +480,17 @@ def surface_projection():
                     'mpid': '$mpid',
                     'miller': '$miller',
                     'shift': '$shift',
-                    'intercept': '$surface_energy',
-                    'intercept_uncertainty': '$surface_energy_standard_error',
+                    'surface_energy': '$surface_energy',
+                    'surface_energy_standard_error': '$surface_energy_standard_error',
                     'thinnest_structure': {'$arrayElemAt': ['$surface_structures', 0]},
-                    'fermi_level': '$dft_settings.target_fermi',
-                    'cation_concs': '$dft_settings.cation_concs',
-                    'anion_concs': '$dft_settings.anion_concs',
-                    'FW_info': '$fwids'}
+                    'fwids': '$fwids'}
+
+    # Add potential and solvation fields for RISM
+    if dft_calculator == 'rism':
+        fingerprints['fermi_level'] = '$dft_settings.target_fermi'
+        fingerprints['cation_concs'] = '$dft_settings.cation_concs'
+        fingerprints['anion_concs'] = '$dft_settings.anion_concs'
+
     return fingerprints
 
 
@@ -488,6 +501,10 @@ def surface_filters(dft_calculator=DFT_CALCULATOR):
     use to sift out these "bad" documents. It also happens to be the `query`
     operator we can pass to Mongo's `find` or `aggregate` commands.
 
+    Arg:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        check. Can either be 'vasp', 'qe' (for Quantum
+                        Espresso), or 'rism'.
     Returns:
         filters         A dictionary that is meant to be used as a `query`
                         argument for our `surface_energy` Mongo collection's
@@ -544,11 +561,3 @@ def catalog_projection():
                   'neighborcoord': '$neighborcoord',
                   'adsorption_site': '$adsorption_site'}
     return projection
-
-
-def model():
-    '''
-    We use surrogate models to make predictions of DFT information. This is the
-    tag associated with our default model.
-    '''
-    return 'model0'

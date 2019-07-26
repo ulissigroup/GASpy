@@ -12,6 +12,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from . import defaults
 from .utils import read_rc
+from .defaults import DFT_CALCULATOR, MODEL
 from .fireworks_helper_scripts import get_launchpad
 
 
@@ -26,10 +27,15 @@ def get_mongo_collection(collection_tag):
                         This argument specifices which branch within that json
                         to parse for the Mongo information needed to access the
                         data. Examples may include (but may not be limited to):
-                            'catalog'
                             'atoms'
-                            'adsorption'
-                            'surface_energy'
+                            'catalog_vasp'
+                            'catalog_qe'
+                            'adsorption_vasp'
+                            'adsorption_qe'
+                            'adsorption_rism'
+                            'surface_energy_vasp'
+                            'surface_energy_qe'
+                            'surface_energy_rism'
     Returns:
         collection  A mongo collection object corresponding to the collection
                     tag you specified, but with `__enter__` and `__exit__`
@@ -62,7 +68,8 @@ class ConnectableCollection(Collection):
         self.database.client.close()
 
 
-def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
+def get_adsorption_docs(adsorbate=None, dft_calculator=DFT_CALCULATOR,
+                        extra_projections=None, filters=None):
     '''
     A wrapper for the `aggregate` command that is tailored specifically for the
     `adsorption` collection.
@@ -71,6 +78,8 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
         adsorbate           [optional] A string of the adsorbate that you want
                             to get calculations for. If you pass nothing, then
                             we get all documents regardless of adsorbate.
+        dft_calculator      A string indicating which DFT calculator you want
+                            to parse data for---e.g., 'vasp', 'qe', or 'rism'.
         extra_projections   A dictionary with key/value pairings that
                             correspond to a new projection you want to fetch
                             and its location in the Mongo docs, respectively.
@@ -99,7 +108,7 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
 
     # Establish the information that'll be contained in the documents we'll be
     # getting. Also add anything the user asked for.
-    projection = defaults.adsorption_projection()
+    projection = defaults.adsorption_projection(dft_calculator)
     if extra_projections:
         for key, value in extra_projections.items():
             projection[key] = value
@@ -107,11 +116,13 @@ def get_adsorption_docs(adsorbate=None, extra_projections=None, filters=None):
 
     # Get the documents and clean them up
     pipeline = [match, project]
-    with get_mongo_collection(collection_tag='adsorption') as collection:
+    with get_mongo_collection('adsorption_%s' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Adsorption docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, desc='Pulling adsorption docs', unit=' docs')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
+    #import pdb
+    #pdb.set_trace()
     return cleaned_docs
 
 
@@ -169,7 +180,8 @@ def _clean_up_aggregated_docs(docs, expected_keys):
     return cleaned_docs
 
 
-def get_surface_docs(extra_projections=None, filters=None):
+def get_surface_docs(extra_projections=None, filters=None,
+                     dft_calculator=DFT_CALCULATOR):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `surface_energy`.
@@ -188,6 +200,8 @@ def get_surface_docs(extra_projections=None, filters=None):
                             `gaspy.defaults.surface_filters`. If you want to
                             modify them, we suggest simply fetching that
                             object, modifying it, and then passing it here.
+        dft_calculator      A string indicating which DFT calculator you want
+                            to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the
                 ones given by `gaspy.defaults.adsorption_projection` and who
@@ -200,7 +214,7 @@ def get_surface_docs(extra_projections=None, filters=None):
 
     # Establish the information that'll be contained in the documents we'll be getting
     # Also add anything the user asked for.
-    projection = defaults.surface_projection()
+    projection = defaults.surface_projection(dft_calculator)
     if extra_projections:
         for key, value in extra_projections.items():
             projection[key] = value
@@ -208,54 +222,67 @@ def get_surface_docs(extra_projections=None, filters=None):
 
     # Get the documents and clean them up
     pipeline = [match, project]
-    with get_mongo_collection(collection_tag='surface_energy') as collection:
+    with get_mongo_collection('surface_energy_%s' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Surface docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, unit=' docs',
+                                    desc='Pulling surface energy docs')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
 
 
-def get_catalog_docs():
+def get_catalog_docs(dft_calculator=DFT_CALCULATOR):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `catalog`.
 
+    Arg:
+        dft_calculator  A string indicating which DFT calculator you want
+                        to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the ones
                 given by `gaspy.defaults.catalog_projection`
     '''
+    # If you're looking  for the RISM catalog, it's the same as the QE catalog
+    # because RISM bulks don't have applied potentials or solvents
+    if dft_calculator == 'rism':
+        dft_calculator = 'qe'
+
     # Reorganize the documents to the way we want
     projection = defaults.catalog_projection()
     project = {'$project': projection}
 
     # Pull and clean the documents
     pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
+    docs = _pull_catalog_from_mongo(pipeline, dft_calculator)
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
 
 
-def _pull_catalog_from_mongo(pipeline):
+def _pull_catalog_from_mongo(pipeline, dft_calculator):
     '''
     Given a Mongo pipeline, get the catalog documents.
 
     Arg:
-        pipeline    A list object containing the pipeline of Mongo operations
-                    that you want to use during Mongo aggregation. Refer to
-                    pymongo documentation on aggregation.
+        pipeline        A list object containing the pipeline of Mongo
+                        operations that you want to use during Mongo
+                        aggregation. Refer to pymongo documentation on
+                        aggregation.
+        dft_calculator  A string indicating which DFT calculator you want
+                        to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     Returns:
         docs    A list of dictionaries containing the catalog documents as per
                 your pipeline.
     '''
-    with get_mongo_collection(collection_tag='catalog_readonly') as collection:
+    with get_mongo_collection('catalog_%s_readonly' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Catalog docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, desc='Pulling catalog docs', unit=' docs')]
     return docs
 
 
-def get_catalog_docs_with_predictions(latest_predictions=True):
+def get_catalog_docs_with_predictions(latest_predictions=True,
+                                      dft_calculator=DFT_CALCULATOR):
     '''
     Nearly identical to `get_catalog_docs`, except it also pulls our surrogate
     modeling predictions for adsorption energies.
@@ -263,22 +290,33 @@ def get_catalog_docs_with_predictions(latest_predictions=True):
     Args:
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
+        dft_calculator      A string indicating which DFT calculator you want
+                            to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     Returns:
         docs    A list of dictionaries whose key/value pairings are the ones
                 given by `gaspy.defaults.catalog_projection`, along with a
                 'predictions' key that has the surrogate modeling predictions
                 of adsorption energy.
     '''
+    # If you're looking  for the RISM catalog, it's the same as the QE catalog
+    # because RISM bulks don't have applied potentials or solvents
+    if dft_calculator == 'rism':
+        dft_calculator = 'qe'
+
     # Get the default catalog projection, then append the projections we
     # need to get the predictions.
     projection = defaults.catalog_projection()
-    projection = _add_adsorption_energy_predictions_to_projection(projection, latest_predictions)
-    projection = _add_orr_predictions_to_projection(projection, latest_predictions)
+    projection = _add_adsorption_energy_predictions_to_projection(projection,
+                                                                  latest_predictions,
+                                                                  dft_calculator)
+    projection = _add_orr_predictions_to_projection(projection,
+                                                    latest_predictions,
+                                                    dft_calculator)
 
     # Get the documents
     project = {'$project': projection}
     pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
+    docs = _pull_catalog_from_mongo(pipeline, dft_calculator)
 
     # Clean the documents up
     expected_keys = set(defaults.catalog_projection())
@@ -288,7 +326,9 @@ def get_catalog_docs_with_predictions(latest_predictions=True):
     return cleaned_docs
 
 
-def _add_adsorption_energy_predictions_to_projection(projection, latest_predictions):
+def _add_adsorption_energy_predictions_to_projection(projection,
+                                                     latest_predictions,
+                                                     dft_calculator):
     '''
     This function will add particular keys to a `projection` dictionary that
     can be used in a Mongo projection to get the adsorption energy predictions
@@ -299,11 +339,13 @@ def _add_adsorption_energy_predictions_to_projection(projection, latest_predicti
                             command to a pymongo collection aggregation.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
+        dft_calculator      A string indicating which DFT calculator you want
+                            to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     '''
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('catalog_%s' % dft_calculator) as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['adsorption_energy']
@@ -323,7 +365,9 @@ def _add_adsorption_energy_predictions_to_projection(projection, latest_predicti
     return projection
 
 
-def _add_orr_predictions_to_projection(projection, latest_predictions):
+def _add_orr_predictions_to_projection(projection,
+                                       latest_predictions,
+                                       dft_calculator):
     '''
     This function will add particular keys to a `projection` dictionary that
     can be used in a Mongo projection to get the ORR chemistry predictions from
@@ -334,11 +378,13 @@ def _add_orr_predictions_to_projection(projection, latest_predictions):
                             command to a pymongo collection aggregation.
         lastest_predictions Boolean indicating whether or not you want either
                             the latest predictions or all of them.
+        dft_calculator      A string indicating which DFT calculator you want
+                            to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     '''
     # Figure out what type of json structure our adsorption energy predictions
     # have. We do that by looking at the structure of one random document. Note
     # that this assumes that all documents are structure identically.
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('catalog_%s' % dft_calculator) as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         example_doc = list(cursor)[0]
     predictions = example_doc['predictions']['orr_onset_potential_4e']
@@ -357,6 +403,7 @@ def _add_orr_predictions_to_projection(projection, latest_predictions):
 
 def get_unsimulated_catalog_docs(adsorbate,
                                  adsorbate_rotation_list=None,
+                                 dft_calculator=DFT_CALCULATOR,
                                  dft_settings=None):
     '''
     Gets the same documents from `get_catalog_docs`, but then filters out all
@@ -373,12 +420,14 @@ def get_unsimulated_catalog_docs(adsorbate,
                                 will add another set of sites to the output
                                 list. If you add nothing, then we'll just check
                                 for the default rotation only.
+        dft_calculator          A string indicating which DFT calculator you
+                                want to parse data for---e.g., 'vasp', 'qe', or
+                                'rism'.
         dft_settings            [optional] An OrderedDict containing the DFT
                                 settings to use. This should be obtained (and
                                 modified, if necessary) from
-                                `gaspy.defaults.adslab_settings()['vasp']` or
-                                `gaspy.defaults.adslab_settings()['qe']`.  If
-                                `None`, then pulls default settings.
+                                `gaspy.defaults.adslab_settings()`. If `None`,
+                                then pulls default settings.
     Returns:
         docs    A list of dictionaries for various projection.
     '''
@@ -388,15 +437,16 @@ def get_unsimulated_catalog_docs(adsorbate,
     if adsorbate_rotation_list is None:
         adsorbate_rotation_list = [defaults.adslab_settings()['rotation']]
 
-    docs_catalog = get_catalog_docs()
+    docs_catalog = get_catalog_docs(dft_calculator)
     docs_catalog_with_rotation = _duplicate_docs_per_rotations(docs_catalog, adsorbate_rotation_list)
     docs_simulated = _get_attempted_adsorption_docs(adsorbate=adsorbate,
+                                                    dft_calculator=dft_calculator,
                                                     dft_settings=dft_settings)
 
     # Hash all of the documents, which we will use to check if something
     # in the catalog has been simulated or not
     catalog_dict = {}
-    for doc in tqdm(docs_catalog_with_rotation, desc='Hashing catalog', unit='doc'):
+    for doc in tqdm(docs_catalog_with_rotation, desc='Hashing catalog', unit=' docs'):
         hash_ = _hash_doc(doc, ignore_keys=['natoms'])
         catalog_dict[hash_] = doc
 
@@ -436,7 +486,8 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
             print('Making catalog copy number %i of %i...'
                   % (i+1, len(adsorbate_rotation_list)))
             docs_copy = deepcopy(docs)  # To make sure we don't modify the parent docs
-            for doc in tqdm(docs_copy, desc='Enumerating adsorbate orientations', unit='doc'):
+            for doc in tqdm(docs_copy, unit=' docs',
+                            desc='Enumerating adsorbate orientations'):
                 doc['adsorbate_rotation'] = adsorbate_rotation
             docs_with_rotation += docs_copy
         return docs_with_rotation
@@ -449,7 +500,7 @@ def _duplicate_docs_per_rotations(docs, adsorbate_rotation_list):
         return docs
 
 
-def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
+def _get_attempted_adsorption_docs(adsorbate, dft_calculator, dft_settings=None):
     '''
     A wrapper for `collection.aggregate` that is tailored specifically for the
     collection that's tagged `adsorption`. This differs from
@@ -461,6 +512,8 @@ def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
     Args:
         adsorbate       A string indicating the adsorbate that you want to find
                         the attempted calculations for.
+        dft_calculator  A string indicating which DFT calculator you want
+                        to parse data for---e.g., 'vasp', 'qe', or 'rism'.
         dft_settings    [optional] An OrderedDict containing the DFT settings
                         to use. This should be obtained (and modified, if
                         necessary) from
@@ -476,7 +529,7 @@ def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
     # Get only the documents that have the right calculation settings and
     # adsorbates
     if dft_settings is None:
-        dft_settings = defaults.adslab_settings()['vasp']
+        dft_settings = defaults.adslab_settings()[dft_calculator]
     filters = {'dft_settings.%s' % setting: value
                for setting, value in dft_settings.items()}
     if adsorbate:
@@ -485,7 +538,7 @@ def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
 
     # Point the fingerprint at the unrelaxed structure instead of the relaxed
     # structure
-    projection = defaults.adsorption_projection()
+    projection = defaults.adsorption_projection(dft_calculator)
     projection['coordination'] = '$fp_init.coordination'
     projection['neighborcoord'] = '$fp_init.neighborcoord'
     projection['nextnearestcoordination'] = '$fp_init.nextnearestcoordination'
@@ -496,9 +549,10 @@ def _get_attempted_adsorption_docs(adsorbate, dft_settings=None):
 
     # Get the documents and clean them up
     pipeline = [match, project]
-    with get_mongo_collection(collection_tag='adsorption') as collection:
+    with get_mongo_collection(collection_tag='adsorption_%s' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Attempted adsorption docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, unit=' docs',
+                                    desc='Finding attempted adsorption docs')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
     return cleaned_docs
@@ -541,7 +595,7 @@ def _hash_doc(doc, ignore_keys=None, _return_hash=True):
         return serialized_doc
 
 
-def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
+def get_low_coverage_docs(adsorbate, model_tag=MODEL, dft_calculator=DFT_CALCULATOR):
     '''
     Each surface has many possible adsorption sites. The site with the most
     negative adsorption energy (i.e., the strongest-binding site) will tend to
@@ -559,21 +613,26 @@ def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
     one consistent location.
 
     Args:
-        adsorbate   A string indicating the adsorbate you want to get the
-                    low-coverage sites for, e.g., 'CO' or 'H'
-        model_tag   A string indicating which model you want to use when using
-                    non-DFT, predicted energies. Check out the
-                    `predictions.adsorption_energy` key in the catalog
-                    documents for valid inputs. Note that these keys are
-                    created by the `GASpy_regressions` submodule.
+        adsorbate       A string indicating the adsorbate you want to get the
+                        low-coverage sites for, e.g., 'CO' or 'H'
+        model_tag       A string indicating which model you want to use when
+                        using non-DFT, predicted energies. Check out the
+                        `predictions.adsorption_energy` key in the catalog
+                        documents for valid inputs. Note that these keys are
+                        created by the `GASpy_regressions` submodule.
+        dft_calculator  A string indicating which DFT calculator you want
+                        to parse data for---e.g., 'vasp', 'qe', or 'rism'.
     Returns:
         docs    A dictionary whose keys are 4-tuples of the MPID, Miller index,
                 shift, and top/bottom of a surface and whose values are the
                 aggregated documents we get from either `get_adsorption_docs`
                 or `get_catalog_docs`
     '''
-    docs_dft = get_low_coverage_dft_docs(adsorbate=adsorbate)
-    docs_ml = get_low_coverage_ml_docs(adsorbate=adsorbate, model_tag=model_tag)
+    docs_dft = get_low_coverage_dft_docs(adsorbate=adsorbate,
+                                         dft_calculator=dft_calculator)
+    docs_ml = get_low_coverage_ml_docs(adsorbate=adsorbate,
+                                       model_tag=model_tag,
+                                       dft_calculator=dft_calculator)
     docs_dft_by_surface = {get_surface_from_doc(doc): doc for doc in docs_dft}
     docs_ml_by_surface = {get_surface_from_doc(doc): doc for doc in docs_ml}
 
@@ -616,7 +675,7 @@ def get_low_coverage_docs(adsorbate, model_tag=defaults.model()):
     return docs
 
 
-def get_low_coverage_dft_docs(adsorbate, filters=None):
+def get_low_coverage_dft_docs(adsorbate, filters=None, dft_calculator=DFT_CALCULATOR):
     '''
     This function is analogous to the `get_adsorption_docs` function, except it
     only returns documents that represent the low-coverage sites for each
@@ -624,21 +683,18 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
     surface).
 
     Arg:
-        adsorbate   A string of the adsorbate that you want to get calculations
-                    for.
-        adsorbate   A list of the adsorbates that you need to be present in
-                    each document's corresponding atomic structure. Note that
-                    if you pass a list with two adsorbates, then you will only
-                    get matches for structures with *both* of those adsorbates;
-                    you will *not* get structures with only one of the
-                    adsorbates.
-        filters     A dictionary whose keys are the locations of elements in
-                    the Mongo collection and whose values are Mongo matching
-                    commands. For examples, look up Mongo `match` commands. If
-                    this argument is `None`, then it will fetch the default
-                    filters from `gaspy.defaults.adsorption_filters`. If you
-                    want to modify them, we suggest simply fetching that
-                    object, modifying it, and then passing it here.
+        adsorbate       A string of the adsorbate that you want to get
+                        calculations for.
+        dft_calculator  A string indicating which DFT calculator you want to
+                        parse data for---e.g., 'vasp', 'qe', or 'rism'.
+        filters         A dictionary whose keys are the locations of elements
+                        in the Mongo collection and whose values are Mongo
+                        matching commands. For examples, look up Mongo `match`
+                        commands. If this argument is `None`, then it will
+                        fetch the default filters from
+                        `gaspy.defaults.adsorption_filters`. If you want to
+                        modify them, we suggest simply fetching that object,
+                        modifying it, and then passing it here.
     Returns:
         docs    A list of aggregated Mongo documents (i.e., dictionaries) from
                 our `adsorption` Mongo collection that happen to have the
@@ -654,7 +710,7 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
 
     # Get the standard document projection, then round the shift so that we can
     # group more easily. Credit to Vince Browdren on Stack Exchange
-    projections = defaults.adsorption_projection()
+    projections = defaults.adsorption_projection(dft_calculator)
     projections['shift'] = {'$subtract': [{'$add': ['$shift', 0.0004999999999999999]},
                                           {'$mod': [{'$add': ['$shift', 0.0004999999999999999]}, 0.001]}]}
     project = {'$project': projections}
@@ -676,9 +732,10 @@ def get_low_coverage_dft_docs(adsorbate, filters=None):
 
     # Pull the documents
     pipeline = [match, project, sort, group]
-    with get_mongo_collection(collection_tag='adsorption') as collection:
+    with get_mongo_collection('adsorption_%s' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Low-coverage adsorption docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, unit=' docs',
+                                    desc='Pulling low-coverage adsorption docs')]
 
     # Clean and return the documents
     for doc in docs:
@@ -718,7 +775,7 @@ def round_(n, decimals=0):
     return math.floor(n*multiplier + 0.5) / multiplier
 
 
-def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
+def get_low_coverage_ml_docs(adsorbate, model_tag=MODEL, dft_calculator=DFT_CALCULATOR):
     '''
     This function is analogous to the `get_catalog_docs` function, except
     it only returns documents that represent the low-coverage sites for
@@ -766,9 +823,10 @@ def get_low_coverage_ml_docs(adsorbate, model_tag=defaults.model()):
 
     # Get the documents
     pipeline = [project, sort, group]
-    with get_mongo_collection(collection_tag='catalog') as collection:
+    with get_mongo_collection('catalog_%s' % dft_calculator) as collection:
         cursor = collection.aggregate(pipeline=pipeline, allowDiskUse=True)
-        docs = [doc for doc in tqdm(cursor, desc='Low-coverage catalog docs', unit='doc')]
+        docs = [doc for doc in tqdm(cursor, unit=' docs',
+                                    desc='Pulling low-coverage catalog docs')]
 
     # Clean the documents up
     for doc in docs:
@@ -787,13 +845,14 @@ def purge_adslabs(fwids):
     '''
     lpad = get_launchpad()
 
-    for fwid in tqdm(fwids, desc='Defusing rockets', unit='fw'):
+    for fwid in tqdm(fwids, desc='Defusing rockets', unit=' fws'):
         lpad.defuse_fw(fwid)
 
     print('Removing FWs from atoms collection...')
     with get_mongo_collection('atoms') as collection:
         collection.delete_many({'fwid': {'$in': fwids}})
 
-    print('Removing FWs from adsorption collection...')
-    with get_mongo_collection('adsorption') as collection:
-        collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})
+    print('Removing FWs from adsorption collections...')
+    for calculation_type in ['vasp', 'qe', 'rism']:
+        with get_mongo_collection('adsorption_%s' % calculation_type) as collection:
+            collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})

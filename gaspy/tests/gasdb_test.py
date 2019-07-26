@@ -48,13 +48,13 @@ from pymongo.collection import Collection
 from pymongo.errors import OperationFailure
 import ase
 from ..utils import read_rc
-from ..defaults import catalog_projection, adslab_settings
+from ..defaults import catalog_projection, adslab_settings, DFT_CALCULATOR
 from ..mongo import make_atoms_from_doc
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/gasdb/'
 
 
-@pytest.mark.parametrize('collection_tag', ['adsorption'])
+@pytest.mark.parametrize('collection_tag', ['adsorption_vasp'])
 def test_get_mongo_collection(collection_tag):
     collection = get_mongo_collection(collection_tag=collection_tag)
 
@@ -68,7 +68,7 @@ def test_get_mongo_collection(collection_tag):
         assert False
 
 
-@pytest.mark.parametrize('collection_tag', ['adsorption'])
+@pytest.mark.parametrize('collection_tag', ['adsorption_vasp'])
 def test_ConnectableCollection(collection_tag):
     '''
     Verify that the extended `ConnectableCollection` class
@@ -115,10 +115,12 @@ def test_get_adsorption_docs(adsorbate, extra_projections):
         with pytest.warns(UserWarning, match='You are using adsorption document '
                           'filters for an adsorbate'):
             docs = get_adsorption_docs(adsorbate=adsorbate,
+                                       dft_calculator=DFT_CALCULATOR,
                                        extra_projections=extra_projections)
     # If they specify an adsorbate, then proceed as normal
     else:
         docs = get_adsorption_docs(adsorbate=adsorbate,
+                                   dft_calculator=DFT_CALCULATOR,
                                    extra_projections=extra_projections)
 
     assert len(docs) > 0
@@ -188,16 +190,15 @@ def test_get_surface_docs(extra_projections):
         assert len(doc['miller']) == 3
         assert all(isinstance(miller, int) for miller in doc['miller'])
         assert isinstance(doc['shift'], (float, int))
-        assert isinstance(doc['intercept'], float)
-        assert isinstance(doc['intercept_uncertainty'], float)
+        assert isinstance(doc['surface_energy'], float)
+        assert isinstance(doc['surface_energy_standard_error'], float)
         assert isinstance(make_atoms_from_doc(doc['thinnest_structure']), ase.Atoms)
         assert isinstance(make_atoms_from_doc(doc['thinnest_structure']['initial_configuration']), ase.Atoms)
-        assert len(doc['FW_info']) == 3
-        assert all(isinstance(fwid, int) for fwid in doc['FW_info'])
+        assert len(doc['fwids']) == 3
+        assert all(isinstance(fwid, int) for fwid in doc['fwids'])
         if extra_projections is not None:
             for projection in extra_projections:
                 assert projection in doc
-
 
 
 def test_get_catalog_docs():
@@ -221,7 +222,7 @@ def test__pull_catalog_from_mongo():
     projection = catalog_projection()
     project = {'$project': projection}
     pipeline = [project]
-    docs = _pull_catalog_from_mongo(pipeline)
+    docs = _pull_catalog_from_mongo(pipeline, DFT_CALCULATOR)
 
     assert len(docs) > 0
     for doc in docs:
@@ -257,10 +258,12 @@ def test_get_catalog_docs_with_predictions(latest_predictions):
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test__add_adsorption_energy_predictions_to_projections(latest_predictions):
     default_projections = catalog_projection()
-    projections = _add_adsorption_energy_predictions_to_projection(default_projections, latest_predictions)
+    projections = _add_adsorption_energy_predictions_to_projection(default_projections,
+                                                                   latest_predictions,
+                                                                   DFT_CALCULATOR)
 
     # Get ALL of the adsorbates and models in the unit testing collection
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('catalog_vasp') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         docs = list(cursor)
     adsorbates = set()
@@ -285,10 +288,12 @@ def test__add_adsorption_energy_predictions_to_projections(latest_predictions):
 @pytest.mark.parametrize('latest_predictions', [True, False])
 def test__add_orr_predictions_to_projections(latest_predictions):
     default_projections = catalog_projection()
-    projections = _add_orr_predictions_to_projection(default_projections, latest_predictions)
+    projections = _add_orr_predictions_to_projection(default_projections,
+                                                     latest_predictions,
+                                                     DFT_CALCULATOR)
 
     # Get ALL of the models in the unit testing collection
-    with get_mongo_collection('catalog') as collection:
+    with get_mongo_collection('catalog_vasp') as collection:
         cursor = collection.aggregate([{"$sample": {"size": 1}}])
         docs = list(cursor)
     models = set()
@@ -371,7 +376,7 @@ def test__duplicate_docs_per_rotation():
 
 @pytest.mark.parametrize('adsorbate', ['H', 'CO'])
 def test__get_attempted_adsorption_docs(adsorbate):
-    attempted_docs = _get_attempted_adsorption_docs(adsorbate=adsorbate)
+    attempted_docs = _get_attempted_adsorption_docs(adsorbate, DFT_CALCULATOR)
 
     filters = {'dft_settings.%s' % setting: value
                for setting, value in adslab_settings()['vasp'].items()}
