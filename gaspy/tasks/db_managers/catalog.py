@@ -238,7 +238,8 @@ class _InsertSitesToCatalog(luigi.Task):
         site_docs = get_task_output(site_gen)
 
         # Try to find each adsorption site in our catalog
-        with get_mongo_collection('catalog') as collection:
+        collection_name = 'catalog_%s' % self.bulk_dft_settings['_calculator']
+        with get_mongo_collection(collection_name) as collection:
             incumbent_docs = []
             inserted_docs = []
             for site_doc in site_docs:

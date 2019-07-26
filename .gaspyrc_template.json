@@ -64,7 +64,7 @@
             "user": "user",
             "password": "pw"
             },
-        "catalog":{
+        "catalog_vasp":{
             "host": "host.name",
             "port": "99999",
             "database": "database",
@@ -72,7 +72,23 @@
             "user": "user",
             "password": "pw"
             },
-        "catalog_readonly":{
+        "catalog_qe":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "catalog_vasp_readonly":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "catalog_qe_readonly":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

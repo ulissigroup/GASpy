@@ -22,7 +22,7 @@ from ....gasdb import get_mongo_collection
 from ....utils import unfreeze_dict, read_rc
 from ....mongo import make_atoms_from_doc
 from ....tasks import get_task_output
-from ....defaults import bulk_settings
+from ....defaults import bulk_settings, DFT_CALCULATOR
 
 BULK_SETTINGS = bulk_settings()
 
@@ -34,21 +34,21 @@ def test_update_catalog_collection():
     try:
         # Clear out the catalog so we know that anything new was added by
         # this function
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
 
             # Add some sites and check that they're there
             update_catalog_collection(elements=elements,
                                       max_miller=max_miller,
-                                      bulk_dft_settings=BULK_SETTINGS['vasp'])
+                                      bulk_dft_settings=BULK_SETTINGS[DFT_CALCULATOR])
             docs = list(collection.find({'mpid': 'mp-2'}))
         assert len(docs) > 0
 
     # Reset the unit testing catalog and clear any pickles we made
     finally:
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
-        populate_unit_testing_collection('catalog')
+        populate_unit_testing_collection('catalog_%s' % DFT_CALCULATOR)
         clean_up_tasks()
 
 
@@ -92,7 +92,7 @@ def test_catalog_update_with_custom_mp_query():
     try:
         # Clear out the catalog so we know that anything new was added by this
         # function
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
 
             # Add some sites and check that they're there
@@ -105,9 +105,9 @@ def test_catalog_update_with_custom_mp_query():
 
     # Reset the unit testing catalog and clear any pickles we made
     finally:
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
-        populate_unit_testing_collection('catalog')
+        populate_unit_testing_collection('catalog_%s' % DFT_CALCULATOR)
         clean_up_tasks()
 
 
@@ -122,7 +122,7 @@ def test__InsertAllSitesFromBulkToCatalog():
     try:
         # Need to clear out the current catalog before checking that we can add
         # more
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
 
         mpid = 'mp-2'
@@ -157,6 +157,6 @@ def test__InsertAllSitesFromBulkToCatalog():
     # Reset the pickles and the collection
     finally:
         clean_up_tasks()
-        with get_mongo_collection('catalog') as collection:
+        with get_mongo_collection('catalog_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
-        populate_unit_testing_collection('catalog')
+        populate_unit_testing_collection('catalog_%s' % DFT_CALCULATOR)
