@@ -237,8 +237,13 @@ class _InsertSitesToCatalog(luigi.Task):
         # Grab all of the sites we want in the catalog
         site_docs = get_task_output(site_gen)
 
+        # Figure out exactly which collection to dump to
+        dft_calculator = self.bulk_dft_settings['_calculator']
+        if dft_calculator == 'rism':
+            dft_calculator = 'qe'  # Because bulks have no solvents
+        collection_name = 'catalog_%s' % dft_calculator
+
         # Try to find each adsorption site in our catalog
-        collection_name = 'catalog_%s' % self.bulk_dft_settings['_calculator']
         with get_mongo_collection(collection_name) as collection:
             incumbent_docs = []
             inserted_docs = []
