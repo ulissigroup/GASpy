@@ -34,17 +34,17 @@ Here is an example of how you parse through these sites to submit a calculation:
 
     from gaspy.gasdb import get_catalog_docs
     from gaspy.tasks.metadata_calculators import submit_adsorption_calculations
-    
-    
+
+
     # Get all of the sites that we have enumerated
     docs = get_catalog_docs()
-    
+
     # Pick the sites that we want to run. In this case, it'll be sites on
     # palladium (as per Materials Project ID 2, mp-2) on (111) facets.
     site_documents_to_calc = [doc for doc in all_site_documents
                               if (doc['mpid'] == 'mp-2' and
                                   doc['miller'] == [1, 1, 1])]
-    
+
     adsorbate = 'CO'
     submit_adsorption_calculations((adsorbate='CO', catalog_docs=site_documents_to_calc))
 
@@ -175,11 +175,13 @@ If you are adept with Mongo and want to pull the information yourself, then you 
 We have also provided a small helper function in [`gaspy.gasdb.get_mongo_collection`](../gaspy/gasdb.py).
 This function will give you child class of the pymongo [`collection`](https://api.mongodb.com/python/current/api/pymongo/collection.html) object that is already authenticated with your GASpy Mongo database credentials and has an `__exit__` method.
 Thus proper usage would be like this:
+
     from gaspy.gasdb import get_mongo_collection
 
     with get_mongo_collection('atoms') as collection:
         cursor = collection.find({}, {'fwname': 1, '_id': 0})
         docs = list(cursor)
+
 This will get you all of the unparsed run information of all of your successful DFT calculations.
 
 ### Document structures
@@ -196,6 +198,16 @@ This field/sequence will have three dictionaries inside of it.
 The first dictionary contains both the final and initial structure of the thinnest slab in the surface energy calculation, where you can get the `ase.Atoms` structures just like you do with the `atoms` or `adsorption` documents.
 The second dictionary is the same as the first dictionary, but for the second-thinnest slab.
 The third and final dictionary corresponds to the thickest slab.
+
+### Using multiple DFT calculators
+If you want to use more than one DFT calculator---e.g., both VASP and RISM---then GASpy still allows you to do this.
+You simply need to create additional `catalog_X`, `adsorption_X`, and `surface_energy_X` MongoDB collections, where `X` is the DFT calculators you want to use---e.g., 'vasp', 'qe', or 'rism'.
+Then when you run functions like `update_catalog_collection` or `get_adsorption_docs`, supply the `dft_calculator=X` argument accordingly.
+GASpy will then perform the appropriate calculations/parsing.
+
+### Indexes
+MongoDB is able to use [indexes](https://docs.mongodb.com/manual/indexes/) to accelerate queries and aggregations.
+If you find that the GASpy queries are becoming slow, then it might help to create indexes for your collections.
 
 
 ## FireWorks

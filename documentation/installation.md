@@ -67,9 +67,9 @@ You will need to set up your own Mongo database and then put the appropriate inf
 You will need to make the following collections in your database:
 
 - `atoms` will contain one document for every DFT calculation you run.
-- `catalog` will contain one document for every adsorption site you [enumerate](../examples/populate_catalog.py).
-- `adsorption` will contain one document for every adsorption energy you calculate.
-- `surface_energy` will contain one document for every surface energy you calculate.
+- `catalog_X` will contain one document for every adsorption site you [enumerate](../examples/populate_catalog.py), where `X` is the DFT calculator you choose---e.g., 'vasp', 'qe', or 'rism'.
+- `adsorption_X` will contain one document for every adsorption energy you calculate, where `X` is the DFT calculator you choose---e.g., 'vasp', 'qe', or 'rism'.
+- `surface_energy_X` will contain one document for every surface energy you calculate, where `X` is the DFT calculator you choose---e.g., 'vasp', 'qe', or 'rism'.
 
 We also have read-only mirrors to our catalog collections that allow for faster reading.
 If you do not want to set this up, simply re-enter your catalog collection's information into the readonly sections of the `.gaspyrc.json` file.
