@@ -56,7 +56,23 @@
             "user": "user",
             "password": "pw"
             },
-        "surface_energy":{
+        "surface_energy_vasp":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "surface_energy_qe":{
+            "host": "host.name",
+            "port": "99999",
+            "database": "database",
+            "collection_name": "collection_name",
+            "user": "user",
+            "password": "pw"
+            },
+        "surface_energy_rism":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

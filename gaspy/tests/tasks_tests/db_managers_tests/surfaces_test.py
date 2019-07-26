@@ -22,6 +22,7 @@ import ase
 from ..utils import clean_up_tasks
 from ...test_cases.mongo_test_collections.mongo_utils import populate_unit_testing_collection
 from ....gasdb import get_mongo_collection
+from ....defaults import DFT_CALCULATOR
 from ....mongo import make_atoms_from_doc
 from ....tasks.core import get_task_output, schedule_tasks
 from ....tasks.calculation_finders import FindBulk
@@ -35,7 +36,7 @@ def test_update_surface_energy_collection():
     '''
     try:
         # Clear out the surface energy collection before testing
-        with get_mongo_collection('surface_energy') as collection:
+        with get_mongo_collection('surface_energy_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
 
         # Try to add documents to the collection
@@ -44,18 +45,18 @@ def test_update_surface_energy_collection():
             update_surface_energy_collection()
 
         # Test if we did add anything
-        with get_mongo_collection('surface_energy') as collection:
+        with get_mongo_collection('surface_energy_%s' % DFT_CALCULATOR) as collection:
             assert collection.count_documents({}) > 0
 
     # Reset the surface energy collection behind us
     finally:
-        with get_mongo_collection('surface_energy') as collection:
+        with get_mongo_collection('surface_energy_%s' % DFT_CALCULATOR) as collection:
             collection.delete_many({})
-        populate_unit_testing_collection('surface_energy')
+        populate_unit_testing_collection('surface_energy_%s' % DFT_CALCULATOR)
 
 
 def test__find_surfaces_from_docs():
-    docs = _find_atoms_docs_not_in_surface_energy_collection()
+    docs = _find_atoms_docs_not_in_surface_energy_collection(DFT_CALCULATOR)
     surfaces = _find_surfaces_from_docs(docs)
 
     # Find all of the surfaces manually
@@ -73,7 +74,7 @@ def test__find_surfaces_from_docs():
 
 
 def test__find_atoms_docs_not_in_surface_energy_collection():
-    docs = _find_atoms_docs_not_in_surface_energy_collection()
+    docs = _find_atoms_docs_not_in_surface_energy_collection(DFT_CALCULATOR)
 
     # Make sure these "documents" are actually `atoms` docs that can be turned
     # into `ase.Atoms` objects
@@ -84,7 +85,7 @@ def test__find_atoms_docs_not_in_surface_energy_collection():
     # Make sure that everything we found actually isn't in our `surface_energy`
     # collection
     fwids_in_atoms = {doc['fwid'] for doc in docs}
-    with get_mongo_collection('surface_energy') as collection:
+    with get_mongo_collection('surface_energy_%s' % DFT_CALCULATOR) as collection:
         surf_docs = list(collection.find({}, {'fwids': 1, '_id': 0}))
     fwids_in_surf = {fwid for doc in surf_docs for fwid in doc['fwids']}
     assert fwids_in_atoms.isdisjoint(fwids_in_surf)

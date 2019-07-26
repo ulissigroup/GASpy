@@ -40,7 +40,7 @@
             "user": "user",
             "password": "pw"
             },
-        "surface_energy":{
+        "surface_energy_vasp":{
             "host": "host.name",
             "port": "99999",
             "database": "database",
@@ -57,22 +57,6 @@
             "password": "pw"
             },
         "catalog_vasp_readonly":{
-            "host": "host.name",
-            "port": "99999",
-            "database": "database",
-            "collection_name": "unit_testing_catalog",
-            "user": "user",
-            "password": "pw"
-            },
-        "catalog_qe":{
-            "host": "host.name",
-            "port": "99999",
-            "database": "database",
-            "collection_name": "unit_testing_catalog",
-            "user": "user",
-            "password": "pw"
-            },
-        "catalog_qe_readonly":{
             "host": "host.name",
             "port": "99999",
             "database": "database",

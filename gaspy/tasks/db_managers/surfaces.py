@@ -14,18 +14,23 @@ import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateSurfaceEnergy
 from ...utils import unfreeze_dict, multimap
+from ...defaults import DFT_CALCULATOR
 from ...gasdb import get_mongo_collection
 from ...mongo import make_atoms_from_doc
 from ...atoms_operators import find_max_movement
 
 
-def update_surface_energy_collection(n_processes=1):
+def update_surface_energy_collection(dft_calculator=DFT_CALCULATOR, n_processes=1):
     '''
     This function will parse and dump all of the completed surface energy
     calculations in our `atoms` Mongo collection into our `surface_energy`
     collection. It will not dump anything that is already there.
 
     Args:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        parse data for---e.g., 'vasp', 'qe', or 'rism'. This
+                        function will find the data from the appropriate
+                        collection.
         n_processes     An integer indicating how many threads you want to use
                         when running the tasks. If you do not expect many
                         updates, stick to the default of 1, or go up to 4. If
@@ -35,7 +40,7 @@ def update_surface_energy_collection(n_processes=1):
     '''
     # Identify the surfaces that have been at least partially calculated, but
     # not yet added to the surface energy collection
-    atoms_docs = _find_atoms_docs_not_in_surface_energy_collection()
+    atoms_docs = _find_atoms_docs_not_in_surface_energy_collection(dft_calculator)
     surfaces = _find_surfaces_from_docs(atoms_docs)
 
     # Create a `CalculateSurfaceEnergy` task for each surface energy
@@ -65,7 +70,7 @@ def update_surface_energy_collection(n_processes=1):
     if len(surface_energy_docs) > 0:
         print('[%s] Creating %i new entries in the surface energy collection...'
               % (datetime.now(), len(surface_energy_docs)))
-        with get_mongo_collection('surface_energy') as collection:
+        with get_mongo_collection('surface_energy_%s' % dft_calculator) as collection:
             collection.insert_many(surface_energy_docs)
         print('[%s] Created %i new entries in the surface energy collection'
               % (datetime.now(), len(surface_energy_docs)))
@@ -109,11 +114,17 @@ def _find_surfaces_from_docs(docs):
     return surfaces
 
 
-def _find_atoms_docs_not_in_surface_energy_collection():
+def _find_atoms_docs_not_in_surface_energy_collection(dft_calculator):
     '''
     This function will get the Mongo documents of surface energy calculations
     that are inside our `atoms` collection, but not inside our `surface_energy`
     collection.
+
+    Arg:
+        dft_calculator  A string indicating which DFT calculator you want to
+                        parse data for---e.g., 'vasp', 'qe', or 'rism'. This
+                        function will find the data from the appropriate
+                        collection.
 
     Returns:
         missing_docs    A list of surface energy documents from the `atoms`
@@ -121,7 +132,7 @@ def _find_atoms_docs_not_in_surface_energy_collection():
                         `surface_energy` collection.
     '''
     # Find the FWIDs of the documents inside our surface energy collection
-    with get_mongo_collection('surface_energy') as collection:
+    with get_mongo_collection('surface_energy_%s' % dft_calculator) as collection:
         surface_energy_docs = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
     fwids_in_se = {fwid for doc in surface_energy_docs for fwid in doc['fwids']}
 
