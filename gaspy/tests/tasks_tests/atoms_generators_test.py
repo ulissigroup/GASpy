@@ -21,6 +21,7 @@ from ...tasks.atoms_generators import (GenerateGas,
 import pytest
 from itertools import combinations
 import pickle
+import numpy as np
 import numpy.testing as npt
 import ase.io
 from ase.collections import g2
@@ -119,6 +120,46 @@ def test_GenerateSlabs():
             assert isinstance(doc['shift'], float)
             assert isinstance(doc['top'], bool)
             _ = make_atoms_from_doc(doc)    # noqa: F841
+
+    finally:
+        clean_up_tasks()
+
+
+def test_GenerateSlabs_for_rism():
+    '''
+    It turns out for each unit cell a * b * c you give to RISM, it checks if c
+    is orthogonal to both a and b. If it is not, RISM won't run. So this means
+    that we need to make sure that our Quantum Espresso catalog---which RISM
+    uses---has slabs that all meet this criterion.
+    '''
+    # Create a GenerateSlabs task that we know---through experience---will
+    # generate a slab with a "c" vector that is non orthogonal to the "a" and
+    # "b" vectors.
+    mpid = 'mp-67'
+    miller_indices = (2, 1, 1)
+    bulk_dft_settings = BULK_SETTINGS['qe']
+    task = GenerateSlabs(mpid=mpid,
+                         miller_indices=miller_indices,
+                         bulk_dft_settings=bulk_dft_settings)
+
+    # Get the atoms object
+    try:
+        run_task_locally(task)
+        docs = get_task_output(task)
+        for doc in docs:
+            atoms = make_atoms_from_doc(doc)
+
+            # Fetch the unit cell
+            unit_cell = atoms.get_cell()
+            a = unit_cell[0, :]
+            b = unit_cell[1, :]
+            c = unit_cell[2, :]
+
+            # "c" should be orthogonal/perpendicular to both "a" and "b". And
+            # we know that if two vectors are perpendical, then their dot
+            # product is zero. So we assert this.
+            npt.assert_almost_equal(np.dot(a, c), 0)
+            npt.assert_almost_equal(np.dot(b, c), 0)
 
     finally:
         clean_up_tasks()

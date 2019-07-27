@@ -137,11 +137,23 @@ class GenerateSlabs(luigi.Task):
     def run(self):
         with open(self.input().path, 'rb') as file_handle:
             bulk_doc = pickle.load(file_handle)
+
+        # Use pymatgen to generate the slab
         bulk_atoms = make_atoms_from_doc(bulk_doc)
         slab_structs = make_slabs_from_bulk_atoms(atoms=bulk_atoms,
                                                   miller_indices=self.miller_indices,
                                                   slab_generator_settings=self.slab_generator_settings,
                                                   get_slab_settings=self.get_slab_settings)
+
+        # If we are using Quantum Espresso, then we want it to be RISM
+        # compatible. And if we're using RISM, the method currently needs the
+        # third vector of the unit cell to be orthogonal to the first two
+        # vectors. We enforce that here.
+        if self.bulk_dft_settings['_calculator'] == 'qe':
+            oriented_slabs = [struct.get_orthogonal_c_slab() for struct in slab_structs]
+            slab_structs = oriented_slabs
+
+        # Save the output
         slab_docs = self._make_slab_docs_from_structs(slab_structs, bulk_doc['fwid'])
         save_task_output(self, slab_docs)
 
