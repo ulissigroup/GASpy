@@ -116,7 +116,7 @@ def __get_n_fizzles(docs):
     docs_fizzled = [doc for doc in docs if doc['state'] == 'FIZZLED']
     fwids_fizzled = [doc['fw_id'] for doc in docs_fizzled]
     if len(docs_fizzled) > 0:
-        message = ('    We have fizzled a calculation %i time[s] so far:\n'
+        message = ('We have fizzled a calculation %i time[s] so far:\n'
                    % (len(fwids_fizzled)))
 
         # Print out where it failed
@@ -125,9 +125,9 @@ def __get_n_fizzles(docs):
             fwid = launch_doc['fw_id']
             host = launch_doc['host']
             launch_dir = launch_doc['launch_dir']
-            message += ('       fwid:  %i\n'
-                        '           host:  %s\n'
-                        '           launch_dir:  %s\n'
+            message += ('    fwid:  %i\n'
+                        '        host:  %s\n'
+                        '        launch_dir:  %s\n'
                         % (fwid, host, launch_dir))
         warnings.warn(message, RuntimeWarning)
     return len(fwids_fizzled)
