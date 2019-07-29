@@ -9,6 +9,7 @@ output.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+import warnings
 import pickle
 import luigi
 import ase
@@ -201,14 +202,25 @@ class GenerateSlabs(luigi.Task):
 
             # If slabs are asymmetric (i.e. cannot be inverted), then flip it
             # and make another document out of it.
-            if is_structure_invertible(struct) is False:
-                atoms_flipped = flip_atoms(atoms)
-                atoms_flipped_constrained = constrain_slab(atoms_flipped)
-                doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
-                doc_flipped['shift'] = struct.shift
-                doc_flipped['top'] = False
-                doc_flipped['fwids'] = {'bulk': fwid}
-                docs.append(doc_flipped)
+            try:
+                if is_structure_invertible(struct) is False:
+                    atoms_flipped = flip_atoms(atoms)
+                    atoms_flipped_constrained = constrain_slab(atoms_flipped)
+                    doc_flipped = make_doc_from_atoms(atoms_flipped_constrained)
+                    doc_flipped['shift'] = struct.shift
+                    doc_flipped['top'] = False
+                    doc_flipped['fwids'] = {'bulk': fwid}
+                    docs.append(doc_flipped)
+
+            # There's some weird bug where if we orient the slab such that the
+            # third unit cell vector is orthogonal to the first two, then the
+            # slab has some symmetry operations that break. This prevents us
+            # from checking for invertibility. So if this happens, let's just
+            # ignore it.
+            except TypeError:
+                warnings.warn('Pymatgen is having problems getting symmetry '
+                              'operations for a slab, so we will be ignoring the '
+                              'slab altogether (%s)' % str(atoms.symbols))
 
         return docs
 
@@ -286,7 +298,19 @@ class GenerateAdsorptionSites(luigi.Task):
             slab_atoms_tiled, slab_repeat = tile_atoms(atoms=slab_atoms,
                                                        min_x=self.min_xy,
                                                        min_y=self.min_xy)
-            sites = find_adsorption_sites(slab_atoms_tiled)
+            try:
+                sites = find_adsorption_sites(slab_atoms_tiled)
+
+            # There's some weird bug where if we orient the slab such that the
+            # third unit cell vector is orthogonal to the first two, then the
+            # slab has some symmetry operations that break. This prevents us
+            # from checking for invertibility. So if this happens, let's just
+            # ignore it.
+            except TypeError:
+                warnings.warn('Pymatgen is having problems getting symmetry '
+                              'operations for a slab, so we will be ignoring the '
+                              'slab altogether (%s)' % str(slab_atoms.symbols))
+                continue
 
             # Place a uranium atom on the adsorption site and then tag it with
             # a `1`, which is our way of saying that it is an adsorbate

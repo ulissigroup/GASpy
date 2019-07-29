@@ -163,6 +163,7 @@ def is_structure_invertible(structure):
     # If any of the operations involve a transformation in the z-direction,
     # then the structure is invertible.
     sga = SpacegroupAnalyzer(structure, symprec=0.1)
+
     for operation in sga.get_symmetry_operations():
         xform_matrix = operation.affine_matrix
         z_xform = xform_matrix[2, 2]
