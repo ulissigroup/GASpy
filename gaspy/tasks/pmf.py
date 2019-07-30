@@ -14,12 +14,12 @@ import luigi
 from .core import make_task_output_object, save_task_output, get_task_output
 from .calculation_finders import FindCalculation
 from .atoms_generators import GenerateAdsorptionSites
+from .make_fireworks import MakeAdslabFW
 from .. import defaults
 from ..utils import unfreeze_dict
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
-from ..atoms_operatiors import add_adsorbate_onto_slab
+from ..atoms_operators import add_adsorbate_onto_slab
 from ..fireworks_helper_scripts import make_firework, submit_fwork
-from ..make_fireworks import MakeAdslabFW
 
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
@@ -440,7 +440,7 @@ class FindFrozenAdslab(FindRelaxedAdslab):
                 or 'results'. This document should  also be able to be turned
                 an `ase.Atoms` object using `gaspy.mongo.make_atoms_from_doc`.
     '''
-    adsorbate_height = luigi.FloatParamete()
+    adsorbate_height = luigi.FloatParameter()
 
     def _load_attributes(self):
         '''
@@ -517,7 +517,7 @@ class MakeFrozenAdslabFW(luigi.Task):
                                     adsorption site.
     '''
     adsorbate = luigi.DictParameter()
-    adsorbate_height = luigi.FloatParamete()
+    adsorbate_height = luigi.FloatParameter()
     adsorption_site = luigi.TupleParameter()
     mpid = luigi.Parameter()
     miller_indices = luigi.TupleParameter()
