@@ -8,13 +8,14 @@ GASpy expertise to use correctly. Use with caution.
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
+import math
 import pickle
 import numpy as np
 import luigi
 from .core import make_task_output_object, save_task_output, get_task_output
 from .calculation_finders import FindCalculation
 from .atoms_generators import GenerateAdsorptionSites
-from .make_fireworks import MakeAdslabFW
+from .make_fireworks import FireworkMaker
 from .. import defaults
 from ..utils import unfreeze_dict
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
@@ -54,11 +55,10 @@ class CalculatePMF(luigi.Task):
         max_fizzles         The maximum number of times you want any single
                             DFT calculation to fail before giving up on this.
     Returns:
-        docs    A list of dictionaries with the following keys:
-                adsorption_energy   A float indicating the adsorption energy
-                fwids               A subdictionary whose keys are 'adslab' and
-                                    'slab', and whose values are the FireWork
-                                    IDs of the respective calculations.
+        relative_energies   A dictionary whose keys are the adsorbate heights
+                            relative to the relaxed height, and whose values
+                            are the slab+adsorbate energies relative to the
+                            energy of the slab+adsorbate at the relaxed height.
     '''
     adsorbate = luigi.DictParameter()
     adsorbate_heights = luigi.ListParameter()
@@ -229,7 +229,7 @@ class FindRelaxedAdslab(FindCalculation):
                                               bulk_dft_settings=self.bulk_dft_settings)
 
 
-class MakeRelaxedAdslabFW(MakeAdslabFW):
+class MakeRelaxedAdslabFW(FireworkMaker):
     '''
     Creates and submits a PMF-type adslab relaxation.
 
@@ -321,6 +321,38 @@ class MakeRelaxedAdslabFW(MakeAdslabFW):
 
         # Let Luigi know that we've made the FireWork
         self._complete = True
+
+    @staticmethod
+    def _find_matching_adslab_doc(adslab_docs, adsorption_site, shift, top):
+        '''
+        This helper function is used to parse through a list of documents
+        created by the `GenerateAdslabs` task, and then find one that has
+        matching values for site, shift, and top. If it doesn't find one, then
+        it'll throw an error.  If there's more than one match, then it will
+        just return the first one without any notification
+
+        Args:
+            adslab_docs     A list of dictionaryies created by
+                            `GenerateAdslabs`
+            adsorption_site A 3-long sequence of floats indicating the
+                            Cartesian coordinates of the adsorption site
+            shift           A float indicating the shift (i.e., slab
+                            termination)
+            top             A Boolean indicating whether or not the site is on
+                            the top or the bottom of the slab
+        Returns:
+            doc     The first dictionary within the `adslab_docs` list that has
+            matching site, shift, and top values
+        '''
+        for doc in adslab_docs:
+            if np.allclose(doc['adsorption_site'], adsorption_site, atol=0.01):
+                if math.isclose(doc['shift'], shift, abs_tol=0.01):
+                    if doc['top'] == top:
+                        return doc
+
+        raise RuntimeError('You just tried to make an adslab FireWork rocket '
+                           'that we could not enumerate. Try changing the '
+                           'adsorption site, shift, top, or miller.')
 
 
 class GenerateUnrelaxedPMFAdslabs(luigi.Task):
@@ -469,7 +501,7 @@ class FindFrozenAdslab(FindRelaxedAdslab):
                                              bulk_dft_settings=self.bulk_dft_settings)
 
 
-class MakeFrozenAdslabFW(luigi.Task):
+class MakeFrozenAdslabFW(FireworkMaker):
     '''
     Creates and submits a PMF-type structure where we change the height of the
     adsorbate and freeze the atoms.
