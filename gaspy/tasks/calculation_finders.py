@@ -111,13 +111,14 @@ class FindCalculation(luigi.Task):
                                      'again.'
                                      % (n_fizzles, self.max_fizzles))
 
-            # If we're already running, then just move on
+            # If we're already running, then throw an error so that Luigi knows
+            # that we couldn't find the calculation
             else:
-                print('    You just tried to find a calculation that has not '
-                      'yet finished running. Please try again later. If you '
-                      'know it has finished running, then try updating the '
-                      '`atoms` collection of GASdb.')
-                pass
+                raise RuntimeError('You just tried to find a calculation that '
+                                   'has not yet finished running. Please try '
+                                   'again later. If you know it has finished '
+                                   'running, then try updating the `atoms` '
+                                   'collection of GASdb.')
 
     def _find_and_save_calculation(self):
         '''

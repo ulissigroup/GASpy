@@ -165,7 +165,7 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     # then we should just move on to the next thing.
     try:
         run_task(task)
-    except (FileNotFoundError, ValueError):
+    except (FileNotFoundError, ValueError, RuntimeError):
         pass
 
 
