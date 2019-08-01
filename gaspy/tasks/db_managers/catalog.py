@@ -39,7 +39,7 @@ ADSLAB_SETTINGS = defaults.adslab_settings()
 
 def update_catalog_collection(elements, max_miller,
                               bulk_dft_settings=BULK_SETTINGS[DFT_CALCULATOR],
-                              n_processes=1, mp_query=None):
+                              n_processes=1, mp_query=None, use_scheduler=False):
     '''
     This function will add enumerate and add adsorption sites to our `catalog`
     Mongo collection.
@@ -64,6 +64,19 @@ def update_catalog_collection(elements, max_miller,
                             automatically filter out bulks whose energies above the
                             hull are greater than 0.1 eV and whose formation energy
                             per atom are above 0 eV.
+        use_scheduler       A Boolean indicating whether you want to use your
+                            Luigi daemon to schedule all of the tasks. This
+                            defaults to `False` because Luigi cannot handle our
+                            typical task workloads for enumerating the catalog,
+                            which usually involves hundreds or possibly
+                            thousands of tasks (because we multi-thread about
+                            30+ processes, each of which will spawn a dozen or
+                            two tasks). When `False`, we hack around the Luigi
+                            scheduler, which makes things run faster. But the
+                            operations become less verbose, more opaque, and
+                            harder to debug. If you plan to enumerate a smaller
+                            catalog and want to know what's going on, then set
+                            to `True`.
     '''
     # Python doesn't like mutable arguments
     if mp_query is None:
@@ -83,7 +96,8 @@ def update_catalog_collection(elements, max_miller,
                            iterable=mpids, chunksize=20))
     else:
         for mpid in mpids:
-            __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings)
+            __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings,
+                                         use_scheduler=use_scheduler)
 
 
 class _GetMpids(luigi.Task):
@@ -146,7 +160,7 @@ class _GetMpids(luigi.Task):
         return make_task_output_object(self)
 
 
-def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
+def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings, use_scheduler):
     '''
     Very light wrapper to instantiate a `_InsertSitesToCatalog` task and then
     run it manually.
@@ -156,6 +170,22 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
                             bulk you want to enumerate sites from
         max_miller          An integer indicating the maximum Miller index to
                             be enumerated
+        bulk_dft_settings   A dictionary of the DFT settings you want to use
+                            for the bulk calculations. See
+                            `gaspy.defaults.bulk_settings` for examples.
+        use_scheduler       A Boolean indicating whether you want to use your
+                            Luigi daemon to schedule all of the tasks. This
+                            defaults to `False` because Luigi cannot handle our
+                            typical task workloads for enumerating the catalog,
+                            which usually involves hundreds or possibly
+                            thousands of tasks (because we multi-thread about
+                            30+ processes, each of which will spawn a dozen or
+                            two tasks). When `False`, we hack around the Luigi
+                            scheduler, which makes things run faster. But the
+                            operations become less verbose, more opaque, and
+                            harder to debug. If you plan to enumerate a smaller
+                            catalog and want to know what's going on, then set
+                            to `True`.
     '''
     task = _InsertSitesToCatalog(mpid=mpid, max_miller=max_miller,
                                  bulk_dft_settings=bulk_dft_settings)
@@ -164,7 +194,13 @@ def __run_insert_to_catalog_task(mpid, max_miller, bulk_dft_settings):
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
     try:
-        run_task(task)
+        if use_scheduler is True:
+            schedule_tasks([task])
+        elif use_scheduler is False:
+            run_task(task)
+        else:
+            raise SyntaxError('The "use_scheduler" argument must be a Boolean, '
+                              'not %s' % type(use_scheduler))
     except (FileNotFoundError, ValueError, RuntimeError):
         pass
 
