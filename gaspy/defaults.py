@@ -221,7 +221,9 @@ def slab_settings():
     rism['conv_elec'] = 1e-6
     rism['laue_expand_right'] = 90.
     rism['rism_convlevel'] = 0.5
-    rism['conv_rism3d'] = 5e-5
+    rism['rism1d_conv_thr'] = 1e-9
+    rism['conv_rism3d'] = 1e-6
+    rism['mdiis3d_step'] = 0.2
     # Force-field things
     rism['LJ_epsilons'] = None
     rism['LJ_sigmas'] = None
@@ -289,7 +291,9 @@ def adslab_settings():
     rism['conv_elec'] = 1e-6
     rism['laue_expand_right'] = 90.
     rism['rism_convlevel'] = 0.5
-    rism['conv_rism3d'] = 5e-5
+    rism['rism1d_conv_thr'] = 1e-9
+    rism['conv_rism3d'] = 1e-6
+    rism['mdiis3d_step'] = 0.2
     # Force-field things
     rism['LJ_epsilons'] = None
     rism['LJ_sigmas'] = None
@@ -297,6 +301,7 @@ def adslab_settings():
     # Setting the charge
     rism['charge'] = 0.
     rism['starting_charges'] = None
+
 
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
