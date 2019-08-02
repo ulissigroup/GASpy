@@ -220,6 +220,7 @@ def slab_settings():
     # Convergence thresholds
     rism['conv_elec'] = 1e-6
     rism['laue_expand_right'] = 90.
+    rism['mdiis1d_step'] = 0.2
     rism['rism1d_conv_thr'] = 1e-9
     rism['rism3d_conv_thr'] = 1e-6
     rism['rism3d_conv_level'] = 0.5
@@ -290,6 +291,7 @@ def adslab_settings():
     # Convergence thresholds
     rism['conv_elec'] = 1e-6
     rism['laue_expand_right'] = 90.
+    rism['mdiis1d_step'] = 0.2
     rism['rism1d_conv_thr'] = 1e-9
     rism['rism3d_conv_thr'] = 1e-6
     rism['rism3d_conv_level'] = 0.5
