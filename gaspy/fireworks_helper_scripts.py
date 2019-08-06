@@ -259,8 +259,8 @@ def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
     '''
     # Clone the espresso_tools repository, which will help create the input
     # files
-    clone_command = ('git clone git@github.com:ulissigroup/espresso_tools.git || '
-                     'git clone https://github.com/ulissigroup/espresso_tools.git')
+    clone_command = ('git clone https://github.com/ulissigroup/espresso_tools.git || '
+                     'git clone git@github.com:ulissigroup/espresso_tools.git')
     clone_espresso_tools = ScriptTask.from_str(clone_command)
 
     # Tell the FireWork rocket to run the job using espresso_tools
