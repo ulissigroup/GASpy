@@ -355,7 +355,7 @@ def submit_fwork(fwork, _testing=False):
     if not _testing:
         lpad = get_launchpad()
         lpad.add_wf(wflow)
-        print('Submitted the following FireWork rocket:')
+        print('Submitted the following FireWork rocket (FWID %i):' % fwork.fw_id)
         print_dict(fwork.name, indent=1)
 
     return wflow
