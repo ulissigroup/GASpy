@@ -35,7 +35,8 @@ MAX_FIZZLES = defaults.MAX_FIZZLES
 def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
     '''
     Light wrapper for submitting adsorption calculations given documents from
-    the catalog.
+    the catalog. This should be used as a reference for beginners. Any advanced
+    usage should be based on the code inside this function.
 
     Arg:
         adsorbate       A string indicating which adsorbate you want to submit
@@ -73,7 +74,8 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
                                         anion_concs, cation_concs, **kwargs):
     '''
     Wrapper for submitting RISM-type adsorption calculations given documents
-    from the catalog.
+    from the catalog. This should be used as a reference for beginners. Any
+    advanced usage should be based on the code inside this function.
 
     Arg:
         adsorbate       A string indicating which adsorbate you want to submit
