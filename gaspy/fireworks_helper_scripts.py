@@ -399,10 +399,15 @@ def get_atoms_from_fw(fw, index=-1):
     # There are different methods to pull it out whether it was a VASP
     # calculation or a Quantum Espresso calculation. Figure out which to use
     # and then call it.
-    if fw.name['dft_settings']['_calculator'] == 'vasp':
+    calculator = fw.name['dft_settings']['_calculator']
+    if calculator == 'vasp':
         atoms = _get_atoms_from_vasp_fw(fw, index)
-    elif fw.name['dft_settings']['_calculator'] == 'qe':
+    elif calculator == 'qe':
         atoms = _get_atoms_from_qe_fw(fw, index)
+    elif calculator == 'rism':
+        atoms = _get_atoms_from_qe_fw(fw, index)
+    else:
+        raise ValueError('The %s DFT calculator is not recognized' % calculator)
     return atoms
 
 
@@ -487,7 +492,8 @@ def _get_atoms_from_qe_fw(fw, index=-1):
     # the atoms object hexstring as an argument. We'll get the original atoms
     # from this argument.
     trajhexes = [task['args'][0] for task in fw.spec['_tasks']
-                 if task.get('func', '') == 'espresso_tools.run_qe']
+                 if (task.get('func', '') == 'espresso_tools.run_qe' or
+                     task.get('func', '') == 'espresso_tools.run_rism')]
 
     # If there was no match, then we're screwed
     if len(trajhexes) != 1:
