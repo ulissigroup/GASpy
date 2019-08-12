@@ -20,7 +20,8 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                fingerprint_adslab,
                                remove_adsorbate,
                                calculate_unit_slab_height,
-                               find_max_movement)
+                               find_max_movement,
+                               get_stoichs_from_mpids)
 
 # Things we need to do the tests
 import pytest
@@ -419,3 +420,17 @@ def test_find_max_movement():
     # same exact thing the function did. So let's just "test" that it ran and
     # returned a float.
     assert isinstance(max_movement, float)
+
+
+def test_get_stoichs_from_mpids():
+    '''
+    Test out three different MPIDs whose stoichiometries we looked up manually and hard-coded here.
+    '''
+    stoichs = get_stoichs_from_mpids(['mp-30'])
+    assert stoichs == [{'Cu': 1}]
+
+    stoichs = get_stoichs_from_mpids(['mp-30', 'mp-12802'])
+    assert stoichs == [{'Cu': 1}, {'Al': 1, 'Cu': 3}]
+
+    stoichs = get_stoichs_from_mpids(['mp-30', 'mp-12802', 'mp-867306'])
+    assert stoichs == [{'Cu': 1}, {'Al': 1, 'Cu': 3}, {'Al': 1, 'Cu': 1, 'Au': 2}]
