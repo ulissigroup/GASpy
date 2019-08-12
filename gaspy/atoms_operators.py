@@ -470,15 +470,15 @@ def find_max_movement(atoms_initial, atoms_final):
 
 def get_stoichs_from_mpids(mpids):
     '''
-    Get the stoichometry of the unit cell of a Materials Project material.
+    Get the reduced stoichiometries of Materials Project bulk materials.
 
     Arg:
         mpids   List of strings for the Materials Project ID numbers---e.g.,
-                'mp-30'
+                ['mp-30', 'mp-12802']
     Returns:
         stoichs     A list of dictionaries whose keys are the elements and
                     whose values are ints of the stoichiometry of that given
-                    element---e.g., {'Cu': 1, 'Al': 2}
+                    element---e.g., [{'Cu': 1}, {'Al': 1, 'Cu': 3}]
     '''
     # Connect to the MPRester once to speed things up
     stoichs = []
