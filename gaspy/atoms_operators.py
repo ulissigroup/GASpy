@@ -487,7 +487,7 @@ def get_stoich_from_mpid(mpid):
         with open(cache_name, 'rb') as file_handle:
             stoich = pickle.load(file_handle)
 
-    except FileNotFoundError:
+    except (FileNotFoundError, EOFError):
         # Get the formula from Materials Project. It'll come out like "CuAl2"
         # or something.
         with MPRester(read_rc('matproj_api_key')) as rester:
