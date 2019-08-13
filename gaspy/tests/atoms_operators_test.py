@@ -21,7 +21,7 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                remove_adsorbate,
                                calculate_unit_slab_height,
                                find_max_movement,
-                               get_stoichs_from_mpids)
+                               get_stoich_from_mpid)
 
 # Things we need to do the tests
 import pytest
@@ -37,6 +37,7 @@ from pymatgen.core.surface import get_symmetrically_distinct_miller_indices
 from . import test_cases
 from .tasks_tests.utils import clean_up_tasks
 from .. import defaults
+from ..utils import read_rc
 from ..tasks import get_task_output, schedule_tasks
 from ..gasdb import get_mongo_collection
 from ..mongo import make_atoms_from_doc
@@ -422,15 +423,39 @@ def test_find_max_movement():
     assert isinstance(max_movement, float)
 
 
-def test_get_stoichs_from_mpids():
+def test_get_stoich_from_mpid():
     '''
-    Test out three different MPIDs whose stoichiometries we looked up manually and hard-coded here.
+    Test out three different MPIDs whose stoichiometries we looked up manually
+    and hard-coded here.
     '''
-    stoichs = get_stoichs_from_mpids(['mp-30'])
-    assert stoichs == [{'Cu': 1}]
+    try:
+        # Delete the cache first
+        cache_dir = read_rc('gasdb_path') + 'mp_stoichs/'
+        for file_name in os.listdir(cache_dir):
+            if file_name != '.gitignore':
+                os.remove(cache_dir + file_name)
 
-    stoichs = get_stoichs_from_mpids(['mp-30', 'mp-12802'])
-    assert stoichs == [{'Cu': 1}, {'Al': 1, 'Cu': 3}]
+        # Try getting the info with no cache
+        stoich = get_stoich_from_mpid('mp-30')
+        assert stoich == {'Cu': 1}
+        stoich = get_stoich_from_mpid('mp-12802')
+        assert stoich == {'Al': 1, 'Cu': 3}
+        stoich = get_stoich_from_mpid('mp-867306')
+        assert stoich == {'Al': 1, 'Cu': 1, 'Au': 2}
 
-    stoichs = get_stoichs_from_mpids(['mp-30', 'mp-12802', 'mp-867306'])
-    assert stoichs == [{'Cu': 1}, {'Al': 1, 'Cu': 3}, {'Al': 1, 'Cu': 1, 'Au': 2}]
+        # Make sure the cache exists
+        assert len(os.listdir(cache_dir)) >= 4
+
+        # Try getting the info using the cache
+        stoich = get_stoich_from_mpid('mp-30')
+        assert stoich == {'Cu': 1}
+        stoich = get_stoich_from_mpid('mp-12802')
+        assert stoich == {'Al': 1, 'Cu': 3}
+        stoich = get_stoich_from_mpid('mp-867306')
+        assert stoich == {'Al': 1, 'Cu': 1, 'Au': 2}
+
+    # Clean up
+    finally:
+        for file_name in os.listdir(cache_dir):
+            if file_name != '.gitignore':
+                os.remove(cache_dir + file_name)
