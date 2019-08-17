@@ -98,7 +98,6 @@ def constrain_slab(atoms, z_cutoff=3.):
     This function fixes sub-surface atoms of a slab. Also works on systems that
     have slabs + adsorbate(s), as long as the slab atoms are tagged with `0`
     and the adsorbate atoms are tagged with positive integers.
-
     Inputs:
         atoms       ASE-atoms class of the slab system. The tags of these atoms
                     must be set such that any slab atom is tagged with `0`, and
@@ -120,33 +119,62 @@ def constrain_slab(atoms, z_cutoff=3.):
     # If the slab is pointing upwards, then fix atoms that are below the
     # threshold
     if atoms.cell[2, 2] > 0:
-        max_height = max(atom.position[2] for atom in atoms if atom.tag == 0)
-        threshold = max_height - z_cutoff
-        for atom in atoms:
-            if atom.tag == 0 and atom.position[2] < threshold:
-                mask.append(True)
-            else:
-                mask.append(False)
+        if np.abs(atoms.cell[0, 2]) < 0.1 and np.abs(atoms.cell[1, 2]) < 0.1:
+            max_height = max(atom.position[2] for atom in atoms if atom.tag == 0)
+            threshold = max_height - z_cutoff
+            for atom in atoms:
+                if atom.tag == 0 and atom.position[2] < threshold:
+                    mask.append(True)
+                else:
+                    mask.append(False)
+        else:
+            vertical = np.linalg.solve(atoms.cell[:2, :2], -atoms.cell[:2, -1])
+            vertical = np.append(vertical, 1)
+            v_norm = vertical/np.linalg.norm(vertical)
+            z_dis = lambda p : (p[2] + p[:2].dot(vertical[:2])) *v_norm[2] # Calculate the vertical distance toward the x-y plane
+            z_distance = [z_dis(atom.position) for atom in atoms if atom.tag == 0]
+            max_height = max(z_distance)
+            min_height = min(z_distance)
+            threshold = max_height - (z_cutoff/7) * (max_height-min_height)
+            for atom in atoms:
+                if atom.tag == 0 and z_dis(atom.position) < threshold:
+                    mask.append(True)
+                else:
+                    mask.append(False)
 
     # If the slab is pointing downwards, then fix atoms that are above the
     # threshold
     elif atoms.cell[2, 2] < 0:
-        min_height = min(atom.position[2] for atom in atoms if atom.tag == 0)
-        threshold = min_height + z_cutoff
-        for atom in atoms:
-            if atom.tag == 0 and atom.position[2] > threshold:
-                mask.append(True)
-            else:
-                mask.append(False)
+        if np.abs(atoms.cell[0, 2]) < 0.1 and np.abs(atoms.cell[1, 2]) < 0.1:
+            min_height = min(atom.position[2] for atom in atoms if atom.tag == 0)
+            threshold = min_height + z_cutoff
+            for atom in atoms:
+                if atom.tag == 0 and atom.position[2] > threshold:
+                    mask.append(True)
+                else:
+                    mask.append(False)
+        else:
+            vertical = np.linalg.solve(atoms.cell[:2, :2], -atoms.cell[:2, -1])
+            vertical = np.append(vertical, 1)
+            v_norm = vertical/np.linalg.norm(vertical)
+            z_dis = lambda p : (-p[2] - p[:2].dot(vertical[:2])) *v_norm[2]
+            z_distance = [z_dis(atom.position) for atom in atoms if atom.tag == 0]
+            max_height = max(z_distance)
+            min_height = min(z_distance)
+            threshold = max_height - (z_cutoff/7) * (max_height-min_height)
+            for atom in atoms:
+                if atom.tag == 0 and z_dis(atom.position) < threshold:
+                    mask.append(True)
+                else:
+                    mask.append(False)
 
     else:
         raise RuntimeError('Tried to constrain a slab that points in neither '
                            'the positive nor negative z directions, so we do '
                            'not know which side to fix')
 
-    atoms.constraints += [FixAtoms(mask=mask)]
+    atoms.constraints = [FixAtoms(mask=mask)]
     return atoms
-
 
 def is_structure_invertible(structure):
     '''
