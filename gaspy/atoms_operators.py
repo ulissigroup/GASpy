@@ -113,13 +113,22 @@ def constrain_slab(atoms, z_cutoff=3.):
     # otherwise
     mask = []
 
+    # If we assume that the third component of the unit cell lattice is
+    # orthogonal to the slab surface, then atoms with higher values in the
+    # third coordinate of their scaled positions are higher in the slab. We make
+    # this assumption here, which means that we will be working with scaled
+    # positions instead of Cartesian ones.
+    scaled_positions = atoms.get_scaled_positions()
+    unit_cell_height = np.linalg.norm(atoms.cell[2])
+
     # If the slab is pointing upwards, then fix atoms that are below the
     # threshold
     if atoms.cell[2, 2] > 0:
-        max_height = max(atom.position[2] for atom in atoms if atom.tag == 0)
-        threshold = max_height - z_cutoff
-        for atom in atoms:
-            if atom.tag == 0 and atom.position[2] < threshold:
+        max_height = max(position[2] for position, atom in zip(scaled_positions, atoms)
+                         if atom.tag == 0)
+        threshold = max_height - z_cutoff / unit_cell_height
+        for position, atom in zip(scaled_positions, atoms):
+            if atom.tag == 0 and position[2] < threshold:
                 mask.append(True)
             else:
                 mask.append(False)
@@ -127,10 +136,11 @@ def constrain_slab(atoms, z_cutoff=3.):
     # If the slab is pointing downwards, then fix atoms that are above the
     # threshold
     elif atoms.cell[2, 2] < 0:
-        min_height = min(atom.position[2] for atom in atoms if atom.tag == 0)
-        threshold = min_height + z_cutoff
-        for atom in atoms:
-            if atom.tag == 0 and atom.position[2] > threshold:
+        min_height = min(position[2] for position, atom in zip(scaled_positions, atoms)
+                         if atom.tag == 0)
+        threshold = min_height + z_cutoff / unit_cell_height
+        for position, atom in zip(scaled_positions, atoms):
+            if atom.tag == 0 and position[2] > threshold:
                 mask.append(True)
             else:
                 mask.append(False)
