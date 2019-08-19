@@ -7,7 +7,10 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import warnings
+from functools import reduce
 import math
+import re
+import pickle
 import numpy as np
 from scipy.spatial.qhull import QhullError
 from ase import Atoms
@@ -15,11 +18,12 @@ from ase.build import rotate
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
 from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.ext.matproj import MPRester
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.analysis.local_env import VoronoiNN
-from .utils import unfreeze_dict
+from .utils import unfreeze_dict, read_rc
 from .defaults import slab_settings
 
 
@@ -473,3 +477,50 @@ def find_max_movement(atoms_initial, atoms_final):
     max_movement = max(movements)
 
     return max_movement
+
+
+def get_stoich_from_mpid(mpid):
+    '''
+    Get the reduced stoichiometry of a Materials Project bulk material.
+
+    Arg:
+        mpid    A string for the Materials Project ID numbers---e.g.,
+                'mp-12802'
+    Returns:
+        stoich  A dictionary whose keys are the elements and whose
+                values are ints of the stoichiometry of that given
+                element---e.g., {'Al': 1, 'Cu': 3}
+    '''
+    # Load the cache of it exists
+    cache_name = read_rc('gasdb_path') + '/mp_stoichs/' + mpid + '.pkl'
+    try:
+        with open(cache_name, 'rb') as file_handle:
+            stoich = pickle.load(file_handle)
+
+    except (FileNotFoundError, EOFError):
+        # Get the formula from Materials Project. It'll come out like "CuAl2"
+        # or something.
+        with MPRester(read_rc('matproj_api_key')) as rester:
+            docs = rester.query({'task_ids': mpid}, ['full_formula'])
+        formula = docs[0]['full_formula']
+
+        # Split the formula up by each element, e.g., ['Cu', 'Al2']
+        element_counts = re.findall('[A-Z][^A-Z]*', formula)
+
+        # Parse each of the elements out into the format we want
+        stoich = {}
+        for element_count in element_counts:
+            element_string = element_count.rstrip('0123456789')
+            count = element_count[len(element_string):]
+            stoich[element_string] = int(count)
+
+        # Divide the counts by the greatest common denominator to simplify the
+        # formula
+        gcd = reduce(math.gcd, stoich.values())
+        for element, count in stoich.items():
+            stoich[element] = count / gcd
+
+        # Cache it because this stuff because querying MP takes awhile
+        with open(cache_name, 'wb') as file_handle:
+            pickle.dump(stoich, file_handle)
+    return stoich
