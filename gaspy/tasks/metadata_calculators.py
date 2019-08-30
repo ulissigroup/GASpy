@@ -70,7 +70,7 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
     schedule_tasks(tasks)
 
 
-def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
+def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                                         anion_concs, cation_concs, **kwargs):
     '''
     Wrapper for submitting RISM-type adsorption calculations given documents
@@ -83,10 +83,6 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
                         possible values.
         catalog_docs    Any portion of the list of dictionaries obtained from
                         `gaspy.gasdb.get_catalog_docs` that you want to run.
-        target_fermi    The Fermi level you want to set. This is your effective
-                        knob for applied potential. What you supply here will
-                        override the default target Fermi level in
-                        `gaspy.defaults`.
         anion_concs     A dictionary whose keys are the anions you want in the
                         system and whose values are their concentrations in
                         units of mol/L. What you provide here will override the
@@ -130,8 +126,6 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs, target_fermi,
                                  'adslab_dft_settings']:
             kwargs[calculation_type]['anion_concs'] = anion_concs
             kwargs[calculation_type]['cation_concs'] = cation_concs
-            if calculation_type != 'gas_dft_settings':
-                kwargs[calculation_type]['target_fermi'] = target_fermi
 
         # Create and submit the tasks/jobs
         task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)

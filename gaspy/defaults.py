@@ -95,7 +95,6 @@ def gas_settings():
     rism['_calculator'] = 'rism'
     rism['molecule'] = True
     # Should be set by user
-    rism['target_fermi'] = None
     rism['anion_concs'] = {'Cl-': 1.}
     rism['cation_concs'] = {'H3O+': 1.}
     # Used for setting the Fermi level. Won't really matter for gases.
@@ -114,7 +113,6 @@ def gas_settings():
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['charge'] = 0.
     rism['starting_charges'] = None
     # Re-set the sigma for gas-phase
     rism['sigma'] = 0.01
@@ -214,7 +212,6 @@ def slab_settings():
     rism = qe.copy()
     rism['_calculator'] = 'rism'
     # Should be set by user
-    rism['target_fermi'] = -5.26
     rism['anion_concs'] = {'Cl-': 1.}
     rism['cation_concs'] = {'H3O+': 1.}
     # Used for setting the Fermi level
@@ -224,18 +221,16 @@ def slab_settings():
     rism['conv_elec'] = 1e-6
     rism['laue_expand_right'] = 90.
     rism['mdiis1d_step'] = 0.1
-    rism['rism1d_conv_thr'] = 1e-9
-    rism['rism3d_conv_thr'] = 1e-6
-    rism['rism3d_conv_level'] = 0.5
+    rism['rism1d_conv_thr'] = 4e-7
+    rism['rism3d_conv_thr'] = 3e-5
+    rism['rism3d_conv_level'] = 0.4
     rism['mdiis3d_step'] = 0.2
     # Force-field things
     rism['LJ_epsilons'] = None
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['charge'] = 0.
     rism['starting_charges'] = None
-
 
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
@@ -282,30 +277,7 @@ def adslab_settings():
                      kpts=(4, 4, 1),
                      sigma=0.1)
 
-    rism = qe.copy()
-    rism['_calculator'] = 'rism'
-    # Should be set by user
-    rism['target_fermi'] = -5.26
-    rism['anion_concs'] = {'Cl-': 1.}
-    rism['cation_concs'] = {'H3O+': 1.}
-    # Used for setting the Fermi level
-    rism['fcp_conv_thr'] = 5e-3
-    rism['freeze_all_atoms'] = False
-    # Convergence thresholds
-    rism['conv_elec'] = 1e-6
-    rism['laue_expand_right'] = 90.
-    rism['mdiis1d_step'] = 0.1
-    rism['rism1d_conv_thr'] = 1e-9
-    rism['rism3d_conv_thr'] = 1e-6
-    rism['rism3d_conv_level'] = 0.5
-    rism['mdiis3d_step'] = 0.2
-    # Force-field things
-    rism['LJ_epsilons'] = None
-    rism['LJ_sigmas'] = None
-    rism['esm_only'] = False
-    # Setting the charge
-    rism['charge'] = 0.
-    rism['starting_charges'] = None
+    rism = slab_settings()['rism']
 
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
@@ -392,7 +364,6 @@ def adsorption_projection(dft_calculator=DFT_CALCULATOR):
 
     # Add potential and solvation fields for RISM
     if dft_calculator == 'rism':
-        fingerprints['fermi_level'] = '$dft_settings.target_fermi'
         fingerprints['cation_concs'] = '$dft_settings.cation_concs'
         fingerprints['anion_concs'] = '$dft_settings.anion_concs'
 
@@ -496,7 +467,6 @@ def surface_projection(dft_calculator=DFT_CALCULATOR):
 
     # Add potential and solvation fields for RISM
     if dft_calculator == 'rism':
-        fingerprints['fermi_level'] = '$dft_settings.target_fermi'
         fingerprints['cation_concs'] = '$dft_settings.cation_concs'
         fingerprints['anion_concs'] = '$dft_settings.anion_concs'
 
