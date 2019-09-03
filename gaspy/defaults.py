@@ -269,15 +269,11 @@ def adslab_settings():
                        pp_version=pp_version(),
                        **vasp_xc_settings())
 
-    qe = OrderedDict(_calculator='qe',
-                     xcf='rpbe',
-                     encut=400.,
-                     spol=0,
-                     psps='GBRV',
-                     kpts=(4, 4, 1),
-                     sigma=0.1)
+    qe = slab_settings()['rism']
+    qe['xcf'] = 'rpbe'
 
     rism = slab_settings()['rism']
+    rism['xcf'] = 'rpbe'
 
     adslab_settings = OrderedDict(min_xy=4.5,
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
