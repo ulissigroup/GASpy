@@ -17,4 +17,4 @@ elements = ['Ag', 'Al', 'As', 'Au', 'Bi', 'Ca', 'Cd', 'Cl', 'Co', 'Cr', 'Cs',
             'Tc', 'Te', 'Ti', 'Tl', 'V', 'W', 'Y', 'Zn', 'Zr']
 max_miller = 2
 
-update_catalog_collection(elements=elements, max_miller=max_miller, n_processes=32)
+update_catalog_collection(elements=elements, max_miller=max_miller, n_processes=68)

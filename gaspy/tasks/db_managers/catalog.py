@@ -20,7 +20,6 @@ import luigi
 import multiprocess
 from pymatgen.ext.matproj import MPRester
 from ..core import (schedule_tasks,
-                    run_task,
                     get_task_output,
                     save_task_output,
                     make_task_output_object)
@@ -154,12 +153,12 @@ def __run_insert_to_catalog_task(mpid, max_miller):
     '''
     task = _InsertSitesToCatalog(mpid, max_miller)
     try:
-        run_task(task)
+        schedule_tasks([task], local_scheduler=True)
 
     # We need bulk calculations to enumerate our catalog. If these calculations
     # aren't done, then we won't find the Luigi task pickles. If this happens,
     # then we should just move on to the next thing.
-    except (FileNotFoundError, ValueError):
+    except (FileNotFoundError, ValueError, RuntimeError):
         pass
 
 
