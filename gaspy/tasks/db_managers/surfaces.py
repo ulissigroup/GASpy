@@ -11,7 +11,7 @@ import traceback
 import warnings
 from datetime import datetime
 import luigi
-from ..core import get_task_output, schedule_tasks
+from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateSurfaceEnergy
 from ...utils import unfreeze_dict, multimap
 from ...gasdb import get_mongo_collection
@@ -127,11 +127,11 @@ def __run_calculate_surface_energy_task(task):
     # Run each task again in case the relaxations are all done, but we just
     # haven't calculated the surface energy yet
     try:
-        schedule_tasks([task], local_scheduler=True)
+        run_task(task)
 
     # If a task has failed and not produced an output, we don't want that to
     # stop us from updating the successful runs.
-    except (FileNotFoundError, RuntimeError):
+    except FileNotFoundError:
         pass
 
     # If the output already exists, then move on
