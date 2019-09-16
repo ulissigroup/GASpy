@@ -332,8 +332,7 @@ def __patch_old_atoms_tags(fw, atoms):
                 should probably get obtained from our Launchpad
         atoms   Instance of the `ase.Atoms` object
     '''
-    if (fw.created_on < datetime(2017, 7, 20) and
-            fw.name['calculation_type'] == 'slab+adsorbate optimization'):
+    if fw.created_on < datetime(2017, 7, 20) and fw.name['calculation_type'] == 'slab+adsorbate optimization':
 
         # In this old version, the adsorbates were added onto the slab. Thus
         # the slab atoms came before the adsorbate atoms in the indexing. We
@@ -428,5 +427,5 @@ def check_jobs_status(user_ID, num_jobs):
     dataframe = pd.DataFrame(fireworks_info, columns=data_labels)
     pd.set_option('display.max_colwidth', -1)
     pd.options.display.max_rows = None
-    
+
     return dataframe

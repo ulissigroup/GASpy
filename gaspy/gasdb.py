@@ -53,9 +53,11 @@ def get_mongo_collection(collection_tag):
     return collection
 
 
-# An extendeded version of the pymongo.collection.Collection class
-# that can be open and closed via a `with` statement
 class ConnectableCollection(Collection):
+    '''
+    An extendeded version of the pymongo.collection.Collection class that can
+    be open and closed via a `with` statement
+    '''
     def __enter__(self):
         return self
     def __exit__(self, exception_type, exception_value, exception_traceback):   # noqa: E301
@@ -148,7 +150,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
             clean = False
         # Clean up documents that have `None` or '' as values
         for key, value in doc.items():
-            if (value is None) or (value is ''):
+            if (value is None) or (value == ''):
                 clean = False
             # Clean up documents that have no second-shell atoms
             if key == 'neighborcoord':

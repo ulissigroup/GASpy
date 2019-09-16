@@ -102,7 +102,7 @@ def _make_atoms_doc_from_fwid(fwid):
 
     # Sometimes the length of the initial atoms and the final atoms are
     # different. If this happens, then defuse the Firework
-    except ValueError as error:
+    except ValueError:
         fwid = fw.fw_id
         lpad.defuse_fw(fwid)
         warnings.warn('Defused FireWork %i because the number of initial '
@@ -199,8 +199,7 @@ def __get_final_atoms_object_with_vasp_forces(launch_id):
     '''
     # We will be opening a temporary directory where we will unzip the
     # FireWorks launch directory
-    fw_launch_file = (read_rc('fireworks_info.backup_directory') +
-                      '/%d.tar.gz' % launch_id)
+    fw_launch_file = (read_rc('fireworks_info.backup_directory') + '/%d.tar.gz' % launch_id)
     temp_loc = __dump_file_to_tmp(fw_launch_file)
 
     # Load the atoms object and then load the correct (DFT) forces from the
