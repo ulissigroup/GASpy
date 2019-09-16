@@ -11,7 +11,7 @@ import traceback
 import warnings
 from datetime import datetime
 import luigi
-from ..core import get_task_output, run_task
+from ..core import get_task_output, schedule_tasks
 from ..metadata_calculators import CalculateAdsorptionEnergy
 from ...utils import print_dict, multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
@@ -123,13 +123,13 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                      miller_indices=atoms_doc['fwname']['miller'],
                                      adslab_vasp_settings=atoms_doc['fwname']['vasp_settings'])
     try:
-        run_task(task)
+        schedule_tasks([task], local_scheduler=True)
         energy_doc = get_task_output(task)
         return energy_doc
 
     # If a task has failed and not produced an output, we don't want that to
     # stop us from updating the successful runs.
-    except FileNotFoundError:
+    except (FileNotFoundError, RuntimeError):
         pass
 
     # If the output already exists, then load and return it
