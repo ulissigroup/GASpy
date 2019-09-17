@@ -28,7 +28,8 @@ from .atoms_generators import GenerateBulk
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
                              MakeAdslabFW,
-                             MakeSurfaceFW)
+                             MakeSurfaceFW,
+                             MakeRismAdslabFW)
 
 DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
@@ -635,3 +636,43 @@ class FindSurface(FindCalculation):
 
         atoms.constraints += [FixAtoms(mask=mask)]
         return atoms
+
+
+class FindRismAdslab(FindAdslab):
+    '''
+    This task will find a RISM-relaxed adsorbate+slab system for you. This is
+    separated out from other adslab systems because we feed pre-relaxed
+    structures to RISM, which is why we have an extra argument.
+
+    Note that it is also a child class of `FindAdslab`, so look to
+    documentation there for more details.
+
+    Additional arg:
+        atoms_dict  A dictionary created by `gaspy.mongo.make_doc_from_atoms`,
+                    but with the 'calc', 'ctime', and 'mtime' key/value pairs
+                    removed (mainly so the values don't mess up Luigi when
+                    Luigi tries to hash datetime objects and whatnot).
+    '''
+    atoms_dict = luigi.DictParameter()
+
+    def _load_attributes(self):
+        '''
+        Rely on the `self._load_attributes` of the parent class to do the
+        FireWorks and GASdb querying, but instead of returning a normal
+        `MakeAdslabFW` dependency, return a `MakeRismAdslabFW` dependency.
+        '''
+        _ = super()._load_attributes()  # noqa: F841
+
+        self.dependency = MakeRismAdslabFW(atoms_dict=self.atoms_dict,
+                                           adsorption_site=self.adsorption_site,
+                                           shift=self.shift,
+                                           top=self.top,
+                                           dft_settings=self.dft_settings,
+                                           adsorbate_name=self.adsorbate_name,
+                                           rotation=self.rotation,
+                                           mpid=self.mpid,
+                                           miller_indices=self.miller_indices,
+                                           min_xy=self.min_xy,
+                                           slab_generator_settings=self.slab_generator_settings,
+                                           get_slab_settings=self.get_slab_settings,
+                                           bulk_dft_settings=self.bulk_dft_settings)

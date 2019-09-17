@@ -347,3 +347,55 @@ class MakeSurfaceFW(FireworkMaker):
         # Pass out the firework for testing, if necessary
         if _testing is True:
             return fwork
+
+
+class MakeRismAdslabFW(MakeAdslabFW):
+    '''
+    This task will create and submit an adsorbate+slab (adslab) calculation
+    using RISM. This is different from `MakeAdslabFW` because it uses the
+    atomic positions of a given, potentially relaxed structure as a seed for
+    the relaxation, which helps RISM converge more easily.
+
+    Note that we still use a bunch of arguments like `adsorbate_name` or
+    `adsorption_site`. These are used only to create a FireWork name that we
+    can query later. These are not actually used to set atomic positions or
+    identities. Those are set implicitly in the `atoms_dict` argument.
+
+    Since this is a child class of `MakeAdslabFW`, you can reference that
+    parent class for additional information.
+
+    Additional args:
+        atoms_dict      A dictionary created by
+                        `gaspy.mongo.make_doc_from_atoms`, but with the 'calc',
+                        'ctime', and 'mtime' key/value pairs removed (mainly so
+                        the values don't mess up Luigi when Luigi tries to hash
+                        datetime objects and whatnot).
+    '''
+    atoms_dict = luigi.DictParameter()
+
+    def run(self, _testing=False):
+        ''' Do not use `_testing=True` unless you are unit testing '''
+        atoms = make_atoms_from_doc(self.atoms_dict)
+
+        # Create, package, and submit the FireWork
+        dft_settings = unfreeze_dict(self.dft_settings)
+        fw_name = {'calculation_type': 'slab+adsorbate optimization',
+                   'adsorbate': self.adsorbate_name,
+                   'adsorbate_rotation': dict(self.rotation),
+                   'adsorption_site': self.adsorption_site,
+                   'mpid': self.mpid,
+                   'miller': self.miller_indices,
+                   'shift': self.shift,
+                   'top': self.top,
+                   'dft_settings': dft_settings}
+        fwork = make_firework(atoms=atoms,
+                              fw_name=fw_name,
+                              dft_settings=dft_settings)
+        _ = submit_fwork(fwork=fwork, _testing=_testing)    # noqa: F841
+
+        # Let Luigi know that we've made the FireWork
+        self._complete = True
+
+        # Pass out the firework for testing, if necessary
+        if _testing is True:
+            return fwork

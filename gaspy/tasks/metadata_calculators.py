@@ -17,7 +17,11 @@ from .core import (schedule_tasks,
                    save_task_output,
                    make_task_output_object,
                    get_task_output)
-from .calculation_finders import FindBulk, FindGas, FindAdslab, FindSurface
+from .calculation_finders import (FindBulk,
+                                  FindGas,
+                                  FindAdslab,
+                                  FindSurface,
+                                  FindRismAdslab)
 from ..mongo import make_atoms_from_doc
 from .. import utils
 from .. import defaults
@@ -128,9 +132,215 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
             kwargs[calculation_type]['cation_concs'] = cation_concs
 
         # Create and submit the tasks/jobs
-        task = CalculateAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+        task = CalculateRismAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
         tasks.append(task)
     schedule_tasks(tasks)
+
+
+class CalculateRismAdsorptionEnergy(luigi.Task):
+    '''
+    This task will calculate the adsorption energy of a solvated system using
+    RISM. It does this by first doing a vanilla Quantum Espresso calculation,
+    and then it uses the atomic positions to seed a RISM calculation. This
+    helps RISM converge faster (theoretically).
+
+    Args:
+        adsorption_site         A 3-tuple of floats containing the Cartesian
+                                coordinates of the adsorption site you want to
+                                make a FW for
+        shift                   A float indicating the shift of the slab
+        top                     A Boolean indicating whether the adsorption
+                                site is on the top or the bottom of the slab
+        adsorbate_name          A string indicating which adsorbate to use. It
+                                should be one of the keys within the
+                                `gaspy.defaults.adsorbates` dictionary. If you
+                                want an adsorbate that is not in the dictionary,
+                                then you will need to add the adsorbate to that
+                                dictionary.
+        rotation                A dictionary containing the angles (in degrees)
+                                in which to rotate the adsorbate after it is
+                                placed at the adsorption site. The keys for
+                                each of the angles are 'phi', 'theta', and
+                                psi'.
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to enumerate sites from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the slab[s] you want to enumerate sites from
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here
+                                as a dictionary.
+        gas_dft_settings        A dictionary containing the DFT settings of
+                                the gas relaxation of the adsorbate
+        bulk_dft_settings       A dictionary containing the DFT settings of
+                                the relaxed bulk to enumerate slabs from
+        bare_slab_dft_settings  A dictionary containing your DFT settings
+                                for the bare slab relaxation
+        adslab_dft_settings     A dictionary containing your DFT settings
+                                for the adslab relaxation
+        max_fizzles             The maximum number of times you want any single
+                                DFT calculation to fail before giving up on this.
+    '''
+    adsorption_site = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    top = luigi.BoolParameter()
+    adsorbate_name = luigi.Parameter()
+    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
+    bare_slab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
+    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
+    requirements = {}
+
+    def _vanilla_qe_requires(self):
+        '''
+        Typical Luigi tasks have a `requires` method. This task has a series of
+        dynamic dependencies. For organizational purposes, we break them up
+        into `_*_requires` methods.
+
+        This one returns the non-RISM, Quantum Espresso calculations.
+        '''
+        reqs = {'vanilla_adsorption': CalculateAdsorptionEnergy(adsorption_site=self.adsorption_site,
+                                                                shift=self.shift,
+                                                                top=self.top,
+                                                                adsorbate_name=self.adsorbate_name,
+                                                                rotation=self.rotation,
+                                                                mpid=self.mpid,
+                                                                miller_indices=self.miller_indices,
+                                                                min_xy=self.min_xy,
+                                                                slab_generator_settings=self.slab_generator_settings,
+                                                                get_slab_settings=self.get_slab_settings,
+                                                                gas_dft_settings=GAS_SETTINGS['qe'],
+                                                                bulk_dft_settings=self.bulk_dft_settings,
+                                                                bare_slab_dft_settings=ADSLAB_SETTINGS['qe'],
+                                                                adslab_dft_settings=ADSLAB_SETTINGS['qe'],
+                                                                max_fizzles=self.max_fizzles)}
+
+        self.__save_requirements(reqs)
+        return reqs
+
+    def _loose_rism_requires(self):
+        '''
+        Typical Luigi tasks have a `requires` method. This task has a series of
+        dynamic dependencies. For organizational purposes, we break them up
+        into `_*_requires` methods.
+
+        This one returns the RISM calculations with loose convergence settings.
+        '''
+        reqs = {}
+
+        # For some reason, Luigi might not run the `_vanilla_qe_requires` before
+        # running this method. If this happens, then call it manually.
+        try:
+            vanilla_adsorption_task = self.requirements['vanilla_adsorption']
+        except KeyError:
+            vanilla_adsorption_task = self._vanilla_qe_requires()['vanilla_adsorption']
+
+        # Get and feed the results of the non-RISM Quantum Espresso relaxation
+        # for the bare slab
+        with open(vanilla_adsorption_task.input()['bare_slab_doc'].path, 'rb') as file_handle:
+            vanilla_slab_doc = pickle.load(file_handle)
+        reqs['bare_slab'] = FindRismAdslab(atoms_dict=vanilla_slab_doc,
+                                           adsorption_site=(0., 0., 0.),
+                                           shift=self.shift,
+                                           top=self.top,
+                                           dft_settings=self.bare_slab_dft_settings,
+                                           adsorbate_name='',
+                                           rotation={'phi': 0., 'theta': 0., 'psi': 0.},
+                                           mpid=self.mpid,
+                                           miller_indices=self.miller_indices,
+                                           min_xy=self.min_xy,
+                                           slab_generator_settings=self.slab_generator_settings,
+                                           get_slab_settings=self.get_slab_settings,
+                                           bulk_dft_settings=self.bulk_dft_settings,
+                                           max_fizzles=self.max_fizzles)
+
+        # Get and feed the results of the non-RISM Quantum Espresso relaxation
+        # for the adslab
+        with open(vanilla_adsorption_task.input()['adslab_doc'].path, 'rb') as file_handle:
+            vanilla_adslab_doc = pickle.load(file_handle)
+        reqs['adslab_doc'] = FindRismAdslab(atoms_dict=vanilla_adslab_doc,
+                                            adsorption_site=self.adsorption_site,
+                                            shift=self.shift,
+                                            top=self.top,
+                                            dft_settings=self.adslab_dft_settings,
+                                            adsorbate_name=self.adsorbate_name,
+                                            rotation=self.rotation,
+                                            mpid=self.mpid,
+                                            miller_indices=self.miller_indices,
+                                            min_xy=self.min_xy,
+                                            slab_generator_settings=self.slab_generator_settings,
+                                            get_slab_settings=self.get_slab_settings,
+                                            bulk_dft_settings=self.bulk_dft_settings,
+                                            max_fizzles=self.max_fizzles)
+
+        # Get the adsorbate energy
+        reqs['adsorbate_energy'] = CalculateAdsorbateEnergy(self.adsorbate_name,
+                                                            self.gas_dft_settings,
+                                                            max_fizzles=self.max_fizzles)
+
+        self.__save_requirements(reqs)
+        return reqs
+
+    def __save_requirements(self, reqs):
+        '''
+        We need to hack Luigi by using `gaspy.tasks.core.run_task` sometimse
+        instead of `gaspy.tasks.core.schedule_tasks`, but `run_task` doesn't
+        play well with dynamic dependencies. To get around this, we have this
+        helper method to save a dictionary of tasks to the class.
+
+        Arg:
+            reqs    A dictionary whose keys are strings and values are
+                    `luigi.Task` dependencies of this task
+        '''
+        for key, value in reqs.items():
+            setattr(self, key, value)
+
+    def run(self):
+        '''
+        We have both static and dynamic dependencies. Luigi only accepts
+        dynamic ones though, so we treat our static dependency as a "first
+        dynamic depenency".
+
+        After we finish the dependencies, we then calculate the adsorption
+        energy.
+        '''
+        yield self._vanilla_qe_requires()
+        yield self._loose_rism_requires()
+
+        with open(self.requirements['adsorbate_energy'].path, 'rb') as file_handle:
+            ads_energy = pickle.load(file_handle)
+
+        with open(self.requirements['bare_slab_doc'].path, 'rb') as file_handle:
+            slab_doc = pickle.load(file_handle)
+        slab_atoms = make_atoms_from_doc(slab_doc)
+        slab_energy = slab_atoms.get_potential_energy(apply_constraint=False)
+
+        with open(self.requirements['adslab_doc'].path, 'rb') as file_handle:
+            adslab_doc = pickle.load(file_handle)
+        adslab_atoms = make_atoms_from_doc(adslab_doc)
+        adslab_energy = adslab_atoms.get_potential_energy(apply_constraint=False)
+
+        adsorption_energy = adslab_energy - slab_energy - ads_energy
+        doc = {'adsorption_energy': adsorption_energy,
+               'fwids': {'adslab': adslab_doc['fwid'],
+                         'slab': slab_doc['fwid']}}
+        save_task_output(self, doc)
+
+    def output(self):
+        return make_task_output_object(self)
 
 
 class CalculateAdsorptionEnergy(luigi.Task):
@@ -503,7 +713,7 @@ class CalculateSurfaceEnergy(luigi.Task):
         We have both static and dynamic depenencies, and Luigi expects us to
         yield them in the `run` method. We put the code for the dynamic
         depenenices here in `_dynamic_requires` for organizational purposes, and
-        then just call it first in `run`.
+        then just call it last in `run`.
         '''
         # For some reason, Luigi might not run the `_static_requires` before
         # running this method. If this happens, then call it manually. This

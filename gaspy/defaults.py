@@ -269,7 +269,7 @@ def adslab_settings():
                        pp_version=pp_version(),
                        **vasp_xc_settings())
 
-    qe = slab_settings()['rism']
+    qe = slab_settings()['qe']
     qe['xcf'] = 'rpbe'
 
     rism = slab_settings()['rism']
