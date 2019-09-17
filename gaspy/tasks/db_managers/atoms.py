@@ -158,9 +158,7 @@ def __patch_old_document(doc, atoms, fw):
     # Warn the user if the backup for an old FireWork is missing, but move on
     # anyway by returning `None`, which should be cleaned up afterwards.
     except FileNotFoundError:
-        warnings.warn('The backup for FW %i is missing; purging it' % fw.fw_id, RuntimeWarning)
-        from ...gasdb import purge_adslabs
-        purge_adslabs([fw.fw_id])
+        warnings.warn('The backup for FW %i is missing' % fw.fw_id, RuntimeWarning)
         return None
 
 
