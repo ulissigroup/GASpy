@@ -142,8 +142,7 @@ def bulk_settings():
                      spol=0,
                      psps='GBRV',
                      kpts='bulk',
-                     sigma=0.1,
-                     nosym=False)
+                     sigma=0.1)
 
     rism = qe.copy()
 
