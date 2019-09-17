@@ -203,11 +203,12 @@ def slab_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='PBEsol',
-                     encut=400.,
+                     encut=544.,
+                     smearing='marzari-vanderbilt',
                      spol=0,
                      psps='GBRV',
                      kpts=(4, 4, 1),
-                     sigma=0.1)
+                     sigma=0.15)
 
     rism = qe.copy()
     rism['_calculator'] = 'rism'
