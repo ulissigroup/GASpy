@@ -142,7 +142,8 @@ def bulk_settings():
                      spol=0,
                      psps='GBRV',
                      kpts='bulk',
-                     sigma=0.1)
+                     sigma=0.1,
+                     nosym=False)
 
     rism = qe.copy()
 
@@ -208,7 +209,8 @@ def slab_settings():
                      spol=0,
                      psps='GBRV',
                      kpts=(4, 4, 1),
-                     sigma=0.15)
+                     sigma=0.15,
+                     nosym=True)
 
     rism = qe.copy()
     rism['_calculator'] = 'rism'
