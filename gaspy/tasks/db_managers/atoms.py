@@ -140,20 +140,28 @@ def __patch_old_document(doc, atoms, fw):
     '''
     patched_doc = doc.copy()
 
-    # Fix the energies in the atoms object
-    patched_atoms = __patch_atoms_from_old_vasp(atoms, fw)
-    for key, value in make_doc_from_atoms(patched_atoms).items():
-        patched_doc[key] = value
+    try:
+        # Fix the energies in the atoms object
+        patched_atoms = __patch_atoms_from_old_vasp(atoms, fw)
+        for key, value in make_doc_from_atoms(patched_atoms).items():
+            patched_doc[key] = value
 
-    # Guess some VASP setttings we never recorded
-    patched_doc['fwname']['vasp_settings'] = __get_patched_vasp_settings(fw)
+        # Guess some VASP setttings we never recorded
+        patched_doc['fwname']['vasp_settings'] = __get_patched_vasp_settings(fw)
 
-    # Some of our old FireWorks had string-formatted Miller indices. Let's
-    # fix those.
-    if 'miller' in fw.name:
-        patched_doc['fwname']['miller'] = __get_patched_miller(fw.name['miller'])
+        # Some of our old FireWorks had string-formatted Miller indices. Let's
+        # fix those.
+        if 'miller' in fw.name:
+            patched_doc['fwname']['miller'] = __get_patched_miller(fw.name['miller'])
+        return patched_doc
 
-    return patched_doc
+    # Warn the user if the backup for an old FireWork is missing, but move on
+    # anyway by returning `None`, which should be cleaned up afterwards.
+    except FileNotFoundError:
+        warnings.warn('The backup for FW %i is missing; purging it' % fw.fw_id, RuntimeWarning)
+        from ...gasdb import purge_adslabs
+        purge_adslabs([fw.fw_id])
+        return None
 
 
 def __patch_atoms_from_old_vasp(atoms, fw):
