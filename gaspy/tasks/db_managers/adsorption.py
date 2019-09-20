@@ -170,7 +170,7 @@ def __clean_calc_energy_docs(docs, missing_docs):
         cleaned_docs    The `docs` arguments, but with empty and duplicate
                         documents removed
     '''
-    missing_fwids = set(doc['fwid'] for doc in missing_docs)
+    missing_fwids = {doc['fwid'] for doc in missing_docs}
     cleaned_docs = []
     for doc in docs:
         if doc is not None:
@@ -178,6 +178,11 @@ def __clean_calc_energy_docs(docs, missing_docs):
             if fwid in missing_fwids:
                 cleaned_docs.append(doc)
                 missing_fwids.remove(fwid)
+
+    if len(cleaned_docs) == 0:
+        raise RuntimeError('None of the %i documents we got from the '
+                           '`CalculateAdsorptionEnergy` tasks match the %i '
+                           'missing FWIDs' % (len(docs), len(missing_docs)))
     return cleaned_docs
 
 
