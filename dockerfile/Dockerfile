@@ -22,35 +22,32 @@ RUN mkdir -p $GASPY_HOME
 ENV PYTHONPATH $GASPY_HOME
 
 # Install packages that we need to install other packages
-RUN apt-get update
-RUN apt-get dist-upgrade -y
-RUN apt-get install -y wget
-
-# Install some utility packages
-RUN apt-get install less
-RUN echo -e "Y\n" | apt install rsync
+RUN apt-get update && apt-get dist-upgrade -y
+RUN apt-get update && apt-get install -y less wget rsync git
 
 # Install Conda
-RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
-RUN /bin/bash Miniconda3-4.5.4-Linux-x86_64.sh -bp $HOME/miniconda
-ENV PATH $HOME/miniconda/bin:$PATH
+RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh --directory-prefix=$HOME
+RUN /bin/bash $HOME/Miniconda3-4.5.4-Linux-x86_64.sh -bp /miniconda3
+RUN rm $HOME/Miniconda3-4.5.4-Linux-x86_64.sh
+ENV PATH /miniconda3/bin:$PATH
 
 # Install conda packages
 RUN conda config --prepend channels conda-forge
 RUN conda config --append channels matsci
 RUN conda install \
-    numpy=1.15.1    scipy=1.1.0 \
-    pytest=3.8.0 \
-    mongodb=4.0.2   pymongo=3.7.1 \
-    multiprocess=0.70.5 \
+    numpy>=1.15.1    scipy>=1.1.0   pandas>=0.25.0 \
+    multiprocess>=0.70.5 \
+    pytest>=3.8.0 \
+    mongodb>=4.0.2   pymongo>=3.7.1 \
     ase=3.17.0 \
-    pymatgen=2018.9.1 \
-    fireworks=1.7.2 \
-    luigi=2.8.9 \
-    statsmodels=0.9.0 \
-    jupyter=1.0.0 ipycache=0.1.4 \
-    tqdm=4.24.0
+    pymatgen=2018.9.1   fireworks=1.7.2 \
+    luigi>=2.8.9 \
+    statsmodels>=0.9.0 \
+    jupyter>=1.0.0  tqdm>=4.24.0
 RUN conda clean -lity
+
+# Only the development version of ipycache works right now
+RUN pip install git+https://github.com/rossant/ipycache.git
 
 # The $HOME/.ssh mount is so that you can mount your ~/.ssh into it, so that
 # you can freely log into other things from inside the container.
