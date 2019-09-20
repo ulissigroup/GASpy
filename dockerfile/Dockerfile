@@ -32,9 +32,8 @@ RUN echo -e "Y\n" | apt install rsync
 
 # Install Conda
 RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh
-RUN echo -e "\nyes\n/miniconda3\nyes\n" | /bin/bash Miniconda3-4.5.4-Linux-x86_64.sh
-RUN rm Miniconda3-4.5.4-Linux-x86_64.sh $HOME/.bashrc-miniconda3.bak
-ENV PATH /miniconda3/bin:$PATH
+RUN /bin/bash Miniconda3-4.5.4-Linux-x86_64.sh -bp $HOME/miniconda
+ENV PATH $HOME/miniconda/bin:$PATH
 
 # Install conda packages
 RUN conda config --prepend channels conda-forge
@@ -47,14 +46,11 @@ RUN conda install \
     ase=3.17.0 \
     pymatgen=2018.9.1 \
     fireworks=1.7.2 \
-    luigi=2.7.8 \
+    luigi=2.8.9 \
     statsmodels=0.9.0 \
-    ipykernel=4.9.0 \
+    jupyter=1.0.0 ipycache=0.1.4 \
     tqdm=4.24.0
-
-# Patch Luigi until the PR comes through
-RUN sed -i '1108s/ValueError/(ValueError, TypeError)/' /miniconda3/lib/python3.6/site-packages/luigi/parameter.py
-RUN sed -i '1109s/literal_eval(x)/tuple(literal_eval(x))/' /miniconda3/lib/python3.6/site-packages/luigi/parameter.py
+RUN conda clean -lity
 
 # The $HOME/.ssh mount is so that you can mount your ~/.ssh into it, so that
 # you can freely log into other things from inside the container.
