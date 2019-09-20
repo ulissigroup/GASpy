@@ -339,7 +339,7 @@ class FindAdslab(FindCalculation):
                             'fwname.mpid': self.mpid,
                             'fwname.miller': self.miller_indices,
                             'fwname.shift': {'$gte': self.shift - 1e-3,
-                                             '$lte': self.shift + 1e-4},
+                                             '$lte': self.shift + 1e-3},
                             'fwname.top': self.top,
                             'fwname.adsorbate_rotation.phi': self.rotation['phi'],
                             'fwname.adsorbate_rotation.theta': self.rotation['theta'],
