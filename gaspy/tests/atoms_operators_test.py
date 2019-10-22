@@ -164,22 +164,30 @@ def test_constrain_slab(z_cutoff):
             atoms_constrained = constrain_slab(atoms, z_cutoff)
             fixed_atom_indices = atoms_constrained.constraints[-1].get_indices()
 
+            # Normalization factors to use when assesing distance from surface
+            scaled_positions = atoms.get_scaled_positions()
+            unit_cell_height = np.linalg.norm(atoms.cell[2])
+
             # If the slab is pointing upwards...
             if atoms_constrained.cell[2, 2] > 0:
-                max_height = max(atom.position[2] for atom in atoms_constrained if atom.tag == 0)
-                threshold = max_height - z_cutoff
-                for i, atom in enumerate(atoms_constrained):
-                    if atom.tag == 0 and atom.position[2] < threshold:
+                max_height = max(position[2]
+                                 for position, atom in zip(scaled_positions, atoms_constrained)
+                                 if atom.tag == 0)
+                threshold = max_height - z_cutoff / unit_cell_height
+                for i, (position, atom) in enumerate(zip(scaled_positions, atoms)):
+                    if atom.tag == 0 and position[2] < threshold:
                         assert i in fixed_atom_indices
                     else:
                         assert i not in fixed_atom_indices
 
             # If the slab is pointing downwards...
             if atoms_constrained.cell[2, 2] < 0:
-                min_height = min(atom.position[2] for atom in atoms_constrained if atom.tag == 0)
-                threshold = min_height + z_cutoff
-                for i, atom in enumerate(atoms_constrained):
-                    if atom.tag == 0 and atom.position[2] > threshold:
+                min_height = min(position[2]
+                                 for position, atom in zip(scaled_positions, atoms_constrained)
+                                 if atom.tag == 0)
+                threshold = min_height + z_cutoff / unit_cell_height
+                for i, (position, atom) in enumerate(zip(scaled_positions, atoms)):
+                    if atom.tag == 0 and position[2] > threshold:
                         assert i in fixed_atom_indices
                     else:
                         assert i not in fixed_atom_indices
@@ -319,21 +327,27 @@ def test_add_adsorbate_onto_slab():
                 # Are the correct slab atoms fixed?
                 fixed_atom_indices = adslab.constraints[-1].get_indices()
                 z_cutoff = inspect.signature(constrain_slab).parameters['z_cutoff'].default
+                scaled_positions = adslab.get_scaled_positions()
+                unit_cell_height = np.linalg.norm(adslab.cell[2])
                 # If the slab is pointing upwards...
                 if adslab.cell[2, 2] > 0:
-                    max_height = max(atom.position[2] for atom in adslab if atom.tag == 0)
-                    threshold = max_height - z_cutoff
-                    for i, atom in enumerate(adslab):
-                        if atom.tag == 0 and atom.position[2] < threshold:
+                    max_height = max(position[2]
+                                     for position, atom in zip(scaled_positions, adslab)
+                                     if atom.tag == 0)
+                    threshold = max_height - z_cutoff / unit_cell_height
+                    for i, (position, atom) in enumerate(zip(scaled_positions, adslab)):
+                        if atom.tag == 0 and position[2] < threshold:
                             assert i in fixed_atom_indices
                         else:
                             assert i not in fixed_atom_indices
                 # If the slab is pointing downwards...
                 if adslab.cell[2, 2] < 0:
-                    min_height = min(atom.position[2] for atom in adslab if atom.tag == 0)
-                    threshold = min_height + z_cutoff
-                    for i, atom in enumerate(adslab):
-                        if atom.tag == 0 and atom.position[2] > threshold:
+                    min_height = min(position[2]
+                                     for position, atom in zip(scaled_positions, adslab)
+                                     if atom.tag == 0)
+                    threshold = min_height + z_cutoff / unit_cell_height
+                    for i, (position, atom) in enumerate(zip(scaled_positions, adslab)):
+                        if atom.tag == 0 and position[2] > threshold:
                             assert i in fixed_atom_indices
                         else:
                             assert i not in fixed_atom_indices
