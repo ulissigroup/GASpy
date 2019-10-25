@@ -20,6 +20,7 @@ from fireworks import (Firework,
                        ScriptTask,
                        Workflow)
 from .utils import print_dict, read_rc
+from . import defaults
 
 
 def get_launchpad():
@@ -183,24 +184,22 @@ def make_firework(atoms, fw_name, dft_settings):
         warnings.warn('You are making a firework with %i atoms in it. This may '
                       'take awhile.' % len(atoms), RuntimeWarning)
 
-    # We'll make one type of firework rocket for VASP, and another for Quantum
-    # Espresso. And there's a QE subtype for RISM, too.
-    if dft_settings['_calculator'] == 'vasp':
-        firework = _make_vasp_firework(atoms, fw_name, dft_settings)
-    elif dft_settings['_calculator'] == 'qe':
-        firework = _make_qe_firework(atoms, fw_name, dft_settings,
-                                     espresso_function='espresso_tools.run_qe')
-    elif dft_settings['_calculator'] == 'rism':
-        firework = _make_qe_firework(atoms, fw_name, dft_settings,
-                                     espresso_function='espresso_tools.run_rism')
+    # We use different functions for different types of FireWorks. We figure
+    # out which one to use here and then call it.
+    firework_makers = {'vasp': _make_vasp_firework,
+                       'qe': _make_qe_firework,
+                       'rism': _make_rism_firework}
+    calculator = dft_settings['_calculator']
+    try:
+        firework_maker = firework_makers[calculator]
+        firework = firework_maker(atoms, fw_name, dft_settings)
+        return firework
 
     # Yell if we try to run anything else
-    else:
+    except KeyError:
         raise RuntimeError('The %s calculator is not recognized, so we do not '
                            'know how the make a FireWork.'
                            % dft_settings['_calculator'])
-
-    return firework
 
 
 def _make_vasp_firework(atoms, fw_name, vasp_settings):
@@ -241,7 +240,7 @@ def _make_vasp_firework(atoms, fw_name, vasp_settings):
     return firework
 
 
-def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
+def _make_qe_firework(atoms, fw_name, qe_settings):
     '''
     This function creates a FireWorks rocket specifically tailored to do
     Quantum Espresso calculations.
@@ -251,8 +250,6 @@ def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
         fw_name             Dictionary of tags/etc to use as the FireWorks name
         qe_settings         Dictionary of settings to pass to
                             espresso_tools/Quantum Espresso
-        espresso_function   A string indicating the full path of the function
-                            within espresso_tools that you want to run
     Returns:
         firework    An instance of a `fireworks.Firework` object that is set up
                     to perform a VASP relaxation
@@ -265,7 +262,7 @@ def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
 
     # Tell the FireWork rocket to run the job using espresso_tools
     atom_trajhex = encode_atoms_to_trajhex(atoms)
-    relax = PyTask(func=espresso_function,
+    relax = PyTask(func='espresso_tools.run_qe',
                    args=[atom_trajhex, qe_settings],
                    stored_data_varname='opt_results')
 
@@ -280,6 +277,72 @@ def _make_qe_firework(atoms, fw_name, qe_settings, espresso_function):
     fw_name['user'] = getpass.getuser()
     firework = Firework([clone_espresso_tools, relax, clean_up], name=fw_name)
     return firework
+
+
+def _make_rism_firework(atoms, fw_name, rism_settings):
+    '''
+    This function creates a FireWorks rocket specifically tailored to do
+    Quantum Espresso calculations.
+
+    Args:
+        atoms               `ase.Atoms` object to relax
+        fw_name             Dictionary of tags/etc to use as the FireWorks name
+        rism_settings       Dictionary of settings to pass to espresso_tools/RISM
+    Returns:
+        firework    An instance of a `fireworks.Firework` object that is set up
+                    to perform a VASP relaxation
+    '''
+    # Clone the espresso_tools repository, which will help create the input
+    # files
+    clone_command = ('git clone https://github.com/ulissigroup/espresso_tools.git || '
+                     'git clone git@github.com:ulissigroup/espresso_tools.git')
+    clone_espresso_tools = ScriptTask.from_str(clone_command)
+
+    # RISM runs better when you initialize it with 1 step of QE
+    atom_trajhex = encode_atoms_to_trajhex(atoms)
+    qe_settings = __guess_qe_initialization_settings(fw_name)
+    initialize = PyTask(func='espresso_tools.run_qe',
+                        args=[atom_trajhex, qe_settings],
+                        stored_data_varname='initialization_results')
+
+    # Tell the FireWork rocket to run the job using espresso_tools
+    relax = PyTask(func='espresso_tools.run_rism',
+                   args=[atom_trajhex, rism_settings],
+                   stored_data_varname='opt_results')
+
+    # espresso_tools is big. Let's remove it and then leave behind the commit
+    # number we used (for traceability)
+    cleaning_command = ('cd espresso_tools && '
+                        'git rev-parse --verify HEAD > ../espresso_tools_version.log && '
+                        'cd .. && '
+                        'rm -rf espresso_tools')
+    clean_up = ScriptTask.from_str(cleaning_command)
+
+    fw_name['user'] = getpass.getuser()
+    firework = Firework([clone_espresso_tools, initialize, relax, clean_up], name=fw_name)
+    return firework
+
+
+def __guess_qe_initialization_settings(fw_name):
+    '''
+    We initialize RISM runs with a 1-step QE run. We need to pass some settings
+    to this 1-step QE run. We guess the correct settings based on the FireWork
+    name, and thes set the `nstep` argument to 1.
+
+    Arg:
+        fw_name     A dictionary that should have probably been created
+                    somewhere in `gaspy.tasks.make_fireworks`
+    Returns:
+        qe_settings     A dictionary of the Quantum Espresso settings to use
+    '''
+    all_settings = {'gas phase optimization': defaults.gas_settings,
+                    'unit cell optimization': defaults.bulk_settings,
+                    'surface energy optimization': defaults.slab_settings,
+                    'slab+adsorbate optimization': defaults.adslab_settings}
+    calculation_type = fw_name['calculation_type']
+    qe_settings = all_settings[calculation_type]()['qe']
+    qe_settings['nstep'] = 1
+    return qe_settings
 
 
 def encode_atoms_to_trajhex(atoms):

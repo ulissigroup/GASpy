@@ -19,6 +19,8 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         make_firework,
                                         _make_vasp_firework,
                                         _make_qe_firework,
+                                        _make_rism_firework,
+                                        __guess_qe_initialization_settings,
                                         encode_atoms_to_trajhex,
                                         decode_trajhex_to_atoms,
                                         submit_fwork,
@@ -220,8 +222,7 @@ def test__make_vasp_firework():
     assert relax['stored_data_varname'] == 'opt_results'
 
 
-@pytest.mark.parametrize('qe_type', ['qe', 'rism'])
-def test__make_qe_firework(qe_type):
+def test__make_qe_firework():
     '''
     Our Quantum Espresso rockets should take three steps:  Clone the
     espresso_tools repository; perform the relaxation via epressotools; then
@@ -231,10 +232,8 @@ def test__make_qe_firework(qe_type):
     # Make the firework and pull out the operations so we can inspect them
     atoms = ase.Atoms('CO')
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
-    dft_settings = defaults.gas_settings()[qe_type]
-    esp_fun = 'espresso_tools.run_' + qe_type
-    fwork = _make_qe_firework(atoms, fw_name, dft_settings,
-                              espresso_function=esp_fun)
+    qe_settings = defaults.gas_settings()['qe']
+    fwork = _make_qe_firework(atoms, fw_name, qe_settings)
     clone_espresso_tools, relax, clean_up = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
@@ -250,13 +249,70 @@ def test__make_qe_firework(qe_type):
 
     # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)
-    assert relax['func'] == esp_fun
-    assert relax['args'] == [encode_atoms_to_trajhex(atoms), dft_settings]
+    assert relax['func'] == 'espresso_tools.run_qe'
+    assert relax['args'] == [encode_atoms_to_trajhex(atoms), qe_settings]
 
     # Make sure we start VASP
     assert isinstance(clean_up, ScriptTask)
     assert 'rm -rf espresso_tools' in clean_up['script'][0]
     assert 'espresso_tools_version.log' in clean_up['script'][0]
+
+
+def test__make_rism_firework():
+    '''
+    Our RISM rockets should take four steps:  Clone the espresso_tools
+    repository; initialize with one QE run; perform the relaxation via
+    epressotools; then delete espresso_tools after saving the commit hash.
+    We'll pick apart each of these during this test.
+    '''
+    # Make the firework and pull out the operations so we can inspect them
+    atoms = ase.Atoms('CO')
+    fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
+    rism_settings = defaults.gas_settings()['rism']
+    fwork = _make_rism_firework(atoms, fw_name, rism_settings)
+    clone_espresso_tools, initialize, relax, clean_up = fwork.tasks
+
+    # Make sure it's actually a Firework object and its name is correct
+    assert isinstance(fwork, Firework)
+    fw_name_expected = fw_name.copy()
+    fw_name_expected['user'] == getpass.getuser()
+    assert fwork.name == fw_name_expected
+
+    # Make sure we clone espresso_tools correctly
+    assert isinstance(clone_espresso_tools, ScriptTask)
+    assert 'git clone' in clone_espresso_tools['script'][0]
+    assert 'espresso_tools' in clone_espresso_tools['script'][0]
+
+    # Make sure we initialize with QE
+    trajhex = encode_atoms_to_trajhex(atoms)
+    qe_settings = __guess_qe_initialization_settings(fw_name)
+    assert isinstance(initialize, PyTask)
+    assert initialize['func'] == 'espresso_tools.run_qe'
+    assert initialize['args'] == [trajhex, qe_settings]
+
+    # Make sure we are calling espresso_tools
+    assert isinstance(relax, PyTask)
+    assert relax['func'] == 'espresso_tools.run_rism'
+    assert relax['args'] == [trajhex, rism_settings]
+
+    # Make sure we start VASP
+    assert isinstance(clean_up, ScriptTask)
+    assert 'rm -rf espresso_tools' in clean_up['script'][0]
+    assert 'espresso_tools_version.log' in clean_up['script'][0]
+
+
+def test___guess_qe_initialization_settings():
+    all_settings = {'gas phase optimization': defaults.gas_settings,
+                    'unit cell optimization': defaults.bulk_settings,
+                    'surface energy optimization': defaults.slab_settings,
+                    'slab+adsorbate optimization': defaults.adslab_settings}
+    fw_names = [{'calculation_type': calc_type} for calc_type in all_settings]
+    for fw_name in fw_names:
+        qe_settings = __guess_qe_initialization_settings(fw_name)
+
+        expected_qe_settings = all_settings[fw_name['calculation_type']]()['qe']
+        expected_qe_settings['nstep'] = 1
+        assert qe_settings == expected_qe_settings
 
 
 @pytest.mark.parametrize('adslab_atoms_name',

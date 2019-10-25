@@ -89,7 +89,8 @@ def gas_settings():
                      spol=0,
                      psps='GBRV',
                      kpts=(1, 1, 1),
-                     sigma=0.05)
+                     sigma=0.05,
+                     nstep=50)
 
     rism = qe.copy()
     rism['_calculator'] = 'rism'
@@ -143,7 +144,8 @@ def bulk_settings():
                      psps='GBRV',
                      kpts='bulk',
                      smearing='gaussian',
-                     sigma=0.1)
+                     sigma=0.1,
+                     nstep=50)
 
     rism = qe.copy()
 
@@ -175,7 +177,8 @@ def surface_energy_bulk_settings():
                      spol=0,
                      psps='GBRV',
                      kpts='bulk',
-                     sigma=0.1)
+                     sigma=0.1,
+                     nstep=50)
 
     rism = qe.copy()
 
@@ -210,7 +213,8 @@ def slab_settings():
                      psps='GBRV',
                      kpts=(4, 4, 1),
                      sigma=0.15,
-                     nosym=True)
+                     nosym=True,
+                     nstep=50)
 
     rism = qe.copy()
     rism['_calculator'] = 'rism'
