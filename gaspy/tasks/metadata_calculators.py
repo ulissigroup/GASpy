@@ -22,7 +22,7 @@ from .calculation_finders import (FindBulk,
                                   FindAdslab,
                                   FindSurface,
                                   FindRismAdslab)
-from ..mongo import make_atoms_from_doc
+from ..mongo import make_atoms_from_doc, make_doc_from_atoms
 from .. import utils
 from .. import defaults
 
@@ -252,7 +252,8 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         # for the bare slab
         with open(vanilla_adsorption_task.input()['bare_slab_doc'].path, 'rb') as file_handle:
             vanilla_slab_doc = pickle.load(file_handle)
-        reqs['bare_slab'] = FindRismAdslab(atoms_dict=vanilla_slab_doc,
+        pruned_slab_doc = self.prune_atoms_doc(vanilla_slab_doc)
+        reqs['bare_slab'] = FindRismAdslab(atoms_dict=pruned_slab_doc,
                                            adsorption_site=(0., 0., 0.),
                                            shift=self.shift,
                                            top=self.top,
@@ -271,7 +272,8 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         # for the adslab
         with open(vanilla_adsorption_task.input()['adslab_doc'].path, 'rb') as file_handle:
             vanilla_adslab_doc = pickle.load(file_handle)
-        reqs['adslab_doc'] = FindRismAdslab(atoms_dict=vanilla_adslab_doc,
+        pruned_adslab_doc = self.prune_atoms_doc(vanilla_adslab_doc)
+        reqs['adslab_doc'] = FindRismAdslab(atoms_dict=pruned_adslab_doc,
                                             adsorption_site=self.adsorption_site,
                                             shift=self.shift,
                                             top=self.top,
@@ -293,6 +295,20 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
 
         self.__save_requirements(reqs)
         return reqs
+
+    @staticmethod
+    def prune_atoms_doc(doc):
+        '''
+        For this task, we only need to make an atoms object out of a document.
+        We don't need the rest of this stuff messing up with JSON serialization
+        or making Luigi work harder. So we take them out.
+        '''
+        atoms = make_atoms_from_doc(doc)
+        pruned_doc = make_doc_from_atoms(atoms)
+        del pruned_doc['user']
+        del pruned_doc['ctime']
+        del pruned_doc['mtime']
+        return pruned_doc
 
     def __save_requirements(self, reqs):
         '''

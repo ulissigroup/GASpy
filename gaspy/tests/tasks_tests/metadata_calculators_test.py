@@ -33,6 +33,10 @@ GAS_SETTINGS = defaults.gas_settings()
 SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 
 
+def test_CalculateRismAdsorptionEnergy():
+    assert False  # Test pending
+
+
 def test_CalculateAdsorptionEnergy():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
