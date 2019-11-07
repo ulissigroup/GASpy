@@ -89,6 +89,7 @@ def gas_settings():
                      spol=0,
                      psps='GBRV',
                      kpts=(1, 1, 1),
+                     smearing='gaussian',
                      sigma=0.05,
                      nstep=50)
 
