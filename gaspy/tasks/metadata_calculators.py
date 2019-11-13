@@ -231,13 +231,13 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         self.__save_requirements(reqs)
         return reqs
 
-    def _loose_rism_requires(self):
+    def _rism_requires(self):
         '''
         Typical Luigi tasks have a `requires` method. This task has a series of
         dynamic dependencies. For organizational purposes, we break them up
         into `_*_requires` methods.
 
-        This one returns the RISM calculations with loose convergence settings.
+        This one returns the RISM calculations.
         '''
         reqs = {}
 
@@ -334,7 +334,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         energy.
         '''
         yield self._vanilla_qe_requires()
-        yield self._loose_rism_requires()
+        yield self._rism_requires()
 
         with open(self.requirements['adsorbate_energy'].path, 'rb') as file_handle:
             ads_energy = pickle.load(file_handle)
