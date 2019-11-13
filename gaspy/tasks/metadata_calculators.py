@@ -503,12 +503,9 @@ class CalculateAdsorbateEnergy(luigi.Task):
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
     def requires(self):
-        return CalculateAdsorbateBasisEnergies(self.dft_settings)
-
-    def run(self):
-        with open(self.input().path, 'rb') as file_handle:
-            basis_energies = pickle.load(file_handle)
-
+        '''
+        Figure out the basis energies you need
+        '''
         # Fetch the adsorbate from our dictionary. If it's not there, yell
         try:
             adsorbate = defaults.adsorbates()[self.adsorbate_name]
@@ -518,6 +515,27 @@ class CalculateAdsorbateEnergy(luigi.Task):
                               'adsorbate within `gaspy.defaults.adsorbates' %
                               self.adsorbate_name).with_traceback(sys.exc_info()[2])
 
+        # Ask Luigi to calculate the basis energy for each atom in this
+        # adsorbate
+        tasks = {atom: CalculateAtomicBasisEnergy(atom=atom,
+                                                  dft_settings=self.dft_settings,
+                                                  max_fizzles=self.max_fizzles)
+                 for atom in adsorbate.get_chemical_symbols()}
+        return tasks
+
+    def run(self):
+        '''
+        Calculate the adsorbate energy through algebraic addition/subtraction
+        of basis energies
+        '''
+        # Get the basis energy of each atom in the adsorbate
+        basis_energies = {}
+        for atom, target in self.input().items():
+            with open(target.path, 'rb') as file_handle:
+                basis_energies[atom] = pickle.load(file_handle)
+
+        # Add all the atoms together
+        adsorbate = defaults.adsorbates()[self.adsorbate_name]
         energy = sum(basis_energies[atom] for atom in adsorbate.get_chemical_symbols())
         save_task_output(self, energy)
 
@@ -525,7 +543,7 @@ class CalculateAdsorbateEnergy(luigi.Task):
         return make_task_output_object(self)
 
 
-class CalculateAdsorbateBasisEnergies(luigi.Task):
+class CalculateAtomicBasisEnergy(luigi.Task):
     '''
     When calculating adsorption energies, we first need the energy of the
     adsorbate. Sometimes the adsorbate does not exist in the gas phase, so we
@@ -534,10 +552,12 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
     For example:  `E(CH3OH)` can be calculated by adding `3*E(C) + 4*E(H) +
     1*E(O)`. To get the energies of the single atoms, we can relax normal gases
     and perform similar algebra, e.g., `E(H) = E(H2)/2` or `E(O) = E(H2O) -
-    E(H2)`. This task will calculate the basis energies for H, O, C, and N for
+    E(H2)`. This task will calculate the basis energies for H, O, C, or N for
     you so that you can use these energies in other calculations.
 
     Arg:
+        atom            A string indicating which atom you want the basis
+                        energy for.
         dft_settings    A dictionary containing the DFT settings you want to
                         use for the DFT relaxations of the gases.
         max_fizzles     The maximum number of times you want any single
@@ -547,34 +567,57 @@ class CalculateAdsorbateBasisEnergies(luigi.Task):
                         whose values are their respective energies, e.g.,
                         {'H': foo, 'O': bar}
     '''
+    atom = luigi.Parameter()
     dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
-    def requires(self):
-        return {'CO': FindGas(gas_name='CO', dft_settings=self.dft_settings,
-                              max_fizzles=self.max_fizzles),
-                'H2': FindGas(gas_name='H2', dft_settings=self.dft_settings,
-                              max_fizzles=self.max_fizzles),
-                'H2O': FindGas(gas_name='H2O', dft_settings=self.dft_settings,
-                               max_fizzles=self.max_fizzles),
-                'N2': FindGas(gas_name='N2', dft_settings=self.dft_settings,
-                              max_fizzles=self.max_fizzles)}
-
     def run(self):
-        # Load each gas and calculate their energies
-        gas_energies = dict.fromkeys(self.input())
-        for adsorbate_name, target in self.input().items():
-            with open(target.path, 'rb') as file_handle:
-                doc = pickle.load(file_handle)
-            atoms = make_atoms_from_doc(doc)
-            gas_energies[adsorbate_name] = atoms.get_potential_energy(apply_constraint=False)
+        '''
+        Each atom needs a different set of real gases for us to perform
+        relaxations on. We use dynamic Luigi dependencies to figure it out, and
+        then use them accordingly.
+        '''
+        # The keys are the atoms you want to calculate the basis energy of, and
+        # the values are the gases that we need to relax to calculate that
+        # atom's basis energy.
+        all_gases = {'H': ['H2'],
+                     'O': ['H2O', 'H2'],
+                     'C': ['CO', 'H2O', 'H2'],
+                     'N': ['N2']}
+        try:
+            gases = all_gases[self.atom]
 
-        # Calculate and save the basis energies from the gas phase energies
-        basis_energies = {'H': gas_energies['H2']/2.,
-                          'O': gas_energies['H2O'] - gas_energies['H2'],
-                          'C': gas_energies['CO'] - (gas_energies['H2O']-gas_energies['H2']),
-                          'N': gas_energies['N2']/2.}
-        save_task_output(self, basis_energies)
+        # Make a more useful error message in case the user asks for something
+        # we haven't defined.
+        except KeyError as error:
+            message = (' happened because we have not defined how to calculate '
+                       'the basis energy for %s yet.' % self.atom)
+            raise type(error)(str(error) + message).with_traceback(sys.exc_info()[2])
+
+        # Submit the dynamic dependencies here
+        requirements = [FindGas(gas_name=gas,
+                                dft_settings=self.dft_settings,
+                                max_fizzles=self.max_fizzles)
+                        for gas in gases]
+        yield requirements
+
+        # Load each gas and calculate their energies
+        gas_energies = dict.fromkeys(gases)
+        for gas, gas_finder in zip(gases, requirements):
+            doc = get_task_output(gas_finder)
+            atoms = make_atoms_from_doc(doc)
+            gas_energies[gas] = atoms.get_potential_energy(apply_constraint=False)
+
+        # Calculate and save the basis energy from the gas phase energies
+        if self.atom == 'H':
+            basis_energy = gas_energies['H2']/2.
+        elif self.atom == 'O':
+            basis_energy = gas_energies['H2O'] - gas_energies['H2']
+        elif self.atom == 'C':
+            basis_energy = gas_energies['CO'] - (gas_energies['H2O']-gas_energies['H2'])
+        elif self.atom == 'N':
+            basis_energy = gas_energies['N2']/2.
+        save_task_output(self, basis_energy)
 
     def output(self):
         return make_task_output_object(self)
