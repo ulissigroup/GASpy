@@ -450,39 +450,10 @@ def get_atoms_from_fw(fw, index=-1):
     This function will return an `ase.Atoms` object given a Firework from our
     LaunchPad.
 
-    Args:
-        fw      Instance of a `fireworks.core.firework.Firework` class that
-                should probably get obtained from our Launchpad
-        index   Integer referring to the index of the trajectory file that
-                you want to pull the `ase.Atoms` object from. `0` will be
-                the starting image; `-1` will be the final image; etc.
-    Returns
-        atoms   `ase.Atoms` instance from the Firework you provided
-    '''
-    # There are different methods to pull it out whether it was a VASP
-    # calculation or a Quantum Espresso calculation. Figure out which to use
-    # and then call it.
-    calculator = fw.name['dft_settings']['_calculator']
-    if calculator == 'vasp':
-        atoms = _get_atoms_from_vasp_fw(fw, index)
-    elif calculator == 'qe':
-        atoms = _get_atoms_from_qe_fw(fw, index)
-    elif calculator == 'rism':
-        atoms = _get_atoms_from_qe_fw(fw, index)
-    else:
-        raise ValueError('The %s DFT calculator is not recognized' % calculator)
-    return atoms
-
-
-def _get_atoms_from_vasp_fw(fw, index=-1):
-    '''
-    This function will return an `ase.Atoms` object given a Firework from our
-    LaunchPad that happened to use VASP to perform the relaxation.
-
-    Note:  The relaxation often mangles the tags and constraints due to
-    limitations in vasp() calculators. We fix this by getting the original
-    `ase.Atoms` object that we gave to the Firework, and the putting the tags
-    and constraints from the original object onto the decoded one.
+    Note:  Some relaxations mangle the tags and constraints due to limitations
+    in calculators. We fix this by getting the original `ase.Atoms` object that
+    we gave to the Firework, and the putting the tags and constraints from the
+    original object onto the decoded one.
 
     Args:
         fw      Instance of a `fireworks.core.firework.Firework` class that
@@ -493,32 +464,18 @@ def _get_atoms_from_vasp_fw(fw, index=-1):
     Returns
         atoms   `ase.Atoms` instance from the Firework you provided
     '''
-    # Get the `ase.Atoms` object from FireWork's results
+    # Get the final `ase.Atoms` object from FireWork's results
     atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
     atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
 
-    # Get the Firework task that was meant to convert the original hexstring to
-    # a trajectory file. We'll get the original atoms from this task (in
-    # hexstring format). Note that over the course of our use, we have had
-    # different names for these FireWorks tasks, so we check for them all.
-    function_names_of_hex_encoders = {'vasp_functions.hex_to_file',
-                                      'fireworks_helper_scripts.atoms_hex_to_file',
-                                      'fireworks_helper_scripts.atomsHexToFile'}
-    trajhexes = [task['args'][1] for task in fw.spec['_tasks']
-                 if task.get('func', '') in function_names_of_hex_encoders]
+    # Get the initial `ase.Atoms` object
+    initial_atoms = _fetch_initial_atoms_from_fw(fw=fw, index=index)
 
-    # If there was not one task, then we're screwed
-    if len(trajhexes) != 1:
-        raise RuntimeError('We tried to get the atoms object\'s trajhex from a '
-                           'FireWork, but could not find the FireWork task that '
-                           'contains the trajhex (FWID %i)' % fw.fw_id)
-
-    # We can grab the original trajhex and then transfer its tags & constraints
-    # to the newly decoded atoms
-    original_atoms = decode_trajhex_to_atoms(trajhexes[0])
+    # Transfer the original `Atoms`' tags & constraints # to the final, relaxed
+    # `Atoms`
     try:
-        atoms.set_tags(original_atoms.get_tags())
-        atoms.set_constraint(original_atoms.constraints)
+        atoms.set_tags(initial_atoms.get_tags())
+        atoms.set_constraint(initial_atoms.constraints)
 
     # Sometimes the length of the initial atoms and the final atoms are
     # different. If this happens, then add a more useful error message.
@@ -528,15 +485,16 @@ def _get_atoms_from_vasp_fw(fw, index=-1):
                          % fw.fw_id).with_traceback(error.__traceback__)
 
     # Patch some old, kinda-broken atoms
-    patched_atoms = __patch_old_atoms_tags(fw, atoms)
+    if 'calculator' == 'vasp':
+        atoms = __patch_old_atoms_tags(fw, atoms)
 
-    return patched_atoms
+    return atoms
 
 
-def _get_atoms_from_qe_fw(fw, index=-1):
+def _fetch_initial_atoms_from_fw(fw, index=-1):
     '''
-    This function will return an `ase.Atoms` object given a Firework from our
-    LaunchPad that happened to use Quantum Espresso to perform the relaxation.
+    This function will return an `ase.Atoms` object of the initial structure
+    given a Firework from our LaunchPad to perform the relaxation.
 
     Args:
         fw      Instance of a `fireworks.core.firework.Firework` class that
@@ -547,38 +505,36 @@ def _get_atoms_from_qe_fw(fw, index=-1):
     Returns
         atoms   `ase.Atoms` instance from the Firework you provided
     '''
-    # Get the `ase.Atoms` object from FireWork's results
-    atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
-    atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
+    calculator = fw.name['dft_settings']['_calculator']
 
-    # Get the Firework task that was meant to run Quantum Espresso. It takes
-    # the atoms object hexstring as an argument. We'll get the original atoms
-    # from this argument.
-    trajhexes = [task['args'][0] for task in fw.spec['_tasks']
-                 if (task.get('func', '') == 'espresso_tools.run_qe' or
-                     task.get('func', '') == 'espresso_tools.run_rism')]
+    # If we used VASP, then the initial atoms was passed as a trajhex to the
+    # hex decoder. Let's grab that argument.
+    if calculator == 'vasp':
+        function_names = {'vasp_functions.hex_to_file',
+                          'fireworks_helper_scripts.atoms_hex_to_file',
+                          'fireworks_helper_scripts.atomsHexToFile'}
+        trajhexes = [task['args'][1] for task in fw.spec['_tasks']
+                     if task.get('func', '') in function_names]
 
-    # If there was no match, then we're screwed
+    # If we used QE or RISM, then the initial atoms was passed as a trajhex to
+    # the function that runs QE. Let's grab that argument. Note that RISM
+    # actually calls 'run_qe` first as an initialization step, which is why we
+    # don't look for the input for 'run_rism' for RISM FireWorks.
+    elif calculator in {'qe', 'rism'}:
+        trajhexes = [task['args'][0] for task in fw.spec['_tasks']
+                     if task.get('func', '') == 'espresso_tools.run_qe']
+
+    # Some error handling in case something goes wrong.
+    else:
+        raise ValueError('The %s DFT calculator is not recognized' % calculator)
     if len(trajhexes) != 1:
         raise RuntimeError('We tried to get the atoms object\'s trajhex from a '
-                           'FireWork, but could not find the FireWork task '
-                           'argument that contains the trajhex (FWID %i)'
-                           % fw.fw_id)
+                           'FireWork, but could not find the FireWork task that '
+                           'contains the trajhex (FWID %i)' % fw.fw_id)
+    trajhex = trajhexes[0]
 
-    # We can grab the original trajhex and then transfer its tags & constraints
-    # to the newly decoded atoms
-    original_atoms = decode_trajhex_to_atoms(trajhexes[0])
-    try:
-        atoms.set_tags(original_atoms.get_tags())
-        atoms.set_constraint(original_atoms.constraints)
-
-    # Sometimes the length of the initial atoms and the final atoms are
-    # different. If this happens, then add a more useful error message.
-    except ValueError as error:
-        raise ValueError('The number of atoms from beginning to end of '
-                         'calculation has changed for FireWork ID %i'
-                         % fw.fw_id).with_traceback(error.__traceback__)
-
+    # Decode the trajhex and return
+    atoms = decode_trajhex_to_atoms(trajhex)
     return atoms
 
 
