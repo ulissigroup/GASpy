@@ -375,9 +375,27 @@ class MakeRismAdslabFW(MakeAdslabFW):
 
     def run(self, _testing=False):
         ''' Do not use `_testing=True` unless you are unit testing '''
-        atoms = make_atoms_from_doc(self.atoms_dict)
+        # Parse the possible adslab structures and find the one that matches
+        # the site, shift, and top values we're looking for.
+        with open(self.input().path, 'rb') as file_handle:
+            adslab_docs = pickle.load(file_handle)
+        if self.adsorbate_name != '':
+            doc = self._find_matching_adslab_doc(adslab_docs=adslab_docs,
+                                                 adsorption_site=self.adsorption_site,
+                                                 shift=self.shift,
+                                                 top=self.top)
+        # Hacky solution for finding empty slabs, where we don't care about the
+        # site. This is only here because we are still (unfortunately) using
+        # the adslab infrastructure to do slab calculations.
+        else:
+            doc = self._find_matching_adslab_doc_for_slab(adslab_docs=adslab_docs,
+                                                          shift=self.shift,
+                                                          top=self.top)
+        # All this work was just to get the slab repeat. That's about it.
+        slab_repeat = doc['slab_repeat']
 
         # Create, package, and submit the FireWork
+        atoms = make_atoms_from_doc(self.atoms_dict)
         dft_settings = unfreeze_dict(self.dft_settings)
         fw_name = {'calculation_type': 'slab+adsorbate optimization',
                    'adsorbate': self.adsorbate_name,
@@ -387,6 +405,7 @@ class MakeRismAdslabFW(MakeAdslabFW):
                    'miller': self.miller_indices,
                    'shift': self.shift,
                    'top': self.top,
+                   'slab_repeat': slab_repeat,
                    'dft_settings': dft_settings}
         fwork = make_firework(atoms=atoms,
                               fw_name=fw_name,
