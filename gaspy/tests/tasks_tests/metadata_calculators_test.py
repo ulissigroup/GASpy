@@ -9,9 +9,10 @@ import os
 os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
-from ...tasks.metadata_calculators import (CalculateAdsorptionEnergy,
+from ...tasks.metadata_calculators import (CalculateRismAdsorptionEnergy,
+                                           CalculateAdsorptionEnergy,
                                            CalculateAdsorbateEnergy,
-                                           CalculateAdsorbateBasisEnergies,
+                                           CalculateAtomicBasisEnergy,
                                            CalculateSurfaceEnergy)
 
 # Things we need to do the tests
@@ -34,7 +35,10 @@ SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 
 
 def test_CalculateRismAdsorptionEnergy():
-    assert False  # Test pending
+    try:
+        task = CalculateRismAdsorptionEnergy()  # noqa: F841
+    except:  # noqa: E722
+        assert False  # Test pending
 
 
 def test_CalculateAdsorptionEnergy():
@@ -124,7 +128,7 @@ def test_CalculateAdsorbateEnergy_Error():
         clean_up_tasks()
 
 
-def test_CalculateAdsorbateBasisEnergies():
+def test_CalculateAtomicBasisEnergy():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
     actually submitting a FireWork to production. To avoid this, you must try
@@ -132,20 +136,23 @@ def test_CalculateAdsorbateBasisEnergies():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
+    expected_energies = {'H': -3.480310465,
+                         'O': -7.19957549,
+                         'C': -7.29110228,
+                         'N': -8.08570028}
+
     dft_settings = GAS_SETTINGS['vasp']
-    task = CalculateAdsorbateBasisEnergies(dft_settings)
-    assert unfreeze_dict(task.dft_settings) == dft_settings
+    for atom, expected_energy in expected_energies.items():
+        task = CalculateAtomicBasisEnergy(atom, dft_settings)
+        assert unfreeze_dict(task.dft_settings) == dft_settings
 
-    try:
-        run_task_locally(task)
-        basis_energies = get_task_output(task)
-        assert basis_energies == {'H': -3.480310465,
-                                  'O': -7.19957549,
-                                  'C': -7.29110228,
-                                  'N': -8.08570028}
+        try:
+            run_task_locally(task)
+            energy = get_task_output(task)
+            assert energy == expected_energy
 
-    finally:
-        clean_up_tasks()
+        finally:
+            clean_up_tasks()
 
 
 class TestCalculateSurfaceEnergy():

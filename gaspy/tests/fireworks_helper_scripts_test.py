@@ -27,8 +27,6 @@ from ..fireworks_helper_scripts import (get_launchpad,
                                         check_jobs_status,
                                         get_atoms_from_fwid,
                                         get_atoms_from_fw,
-                                        _get_atoms_from_vasp_fw,
-                                        _get_atoms_from_qe_fw,
                                         __patch_old_atoms_tags)
 
 # Things we need to do the tests
@@ -270,7 +268,7 @@ def test__make_rism_firework():
     fw_name = {'calculation_type': 'gas phase optimization', 'gasname': 'CO'}
     rism_settings = defaults.gas_settings()['rism']
     fwork = _make_rism_firework(atoms, fw_name, rism_settings)
-    clone_espresso_tools, initialize, relax, clean_up = fwork.tasks
+    clone_espresso_tools, initialize, move, relax, clean_up = fwork.tasks
 
     # Make sure it's actually a Firework object and its name is correct
     assert isinstance(fwork, Firework)
@@ -289,6 +287,11 @@ def test__make_rism_firework():
     assert isinstance(initialize, PyTask)
     assert initialize['func'] == 'espresso_tools.run_qe'
     assert initialize['args'] == [trajhex, qe_settings]
+
+    # Make sure we move the output file for the initialization
+    assert isinstance(move, ScriptTask)
+    assert 'mv fireworks-*.out' in move['script'][0]
+    assert 'mv fireworks-*.error' in move['script'][0]
 
     # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)
@@ -427,24 +430,6 @@ def test_get_atoms_from_fw(fw_file):
         fw = pickle.load(file_handle)
     atoms = get_atoms_from_fw(fw)
     assert isinstance(atoms, ase.Atoms)
-
-
-@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
-def test__get_atoms_from_vasp_fw(fw_file):
-    with open(fw_file, 'rb') as file_handle:
-        fw = pickle.load(file_handle)
-    if fw.name['dft_settings']['_calculator'] == 'vasp':
-        atoms = _get_atoms_from_vasp_fw(fw)
-        assert isinstance(atoms, ase.Atoms)
-
-
-@pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
-def test__get_atoms_from_qe_fw(fw_file):
-    with open(fw_file, 'rb') as file_handle:
-        fw = pickle.load(file_handle)
-    if fw.name['dft_settings']['_calculator'] == 'qe':
-        atoms = _get_atoms_from_qe_fw(fw)
-        assert isinstance(atoms, ase.Atoms)
 
 
 @pytest.mark.parametrize('fw_file', FIREWORKS_FILES)
