@@ -292,7 +292,7 @@ def test__make_rism_firework():
     # Make sure we move the output file for the initialization
     assert isinstance(move, FileTransferTask)
     assert move.get('mode') in {'move', 'mv'}
-    assert move.get('files') == {'src': 'fireworks-*.out', 'dest': 'initialization.out'}
+    assert move.get('files') == [{'src': 'fireworks-*.out', 'dest': 'initialization.out'}]
 
     # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)

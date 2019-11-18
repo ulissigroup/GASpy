@@ -311,8 +311,8 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
     # keep the output files separate, so we move the output of the
     # initialization.
     mv_outputs = FileTransferTask(mode='mv',
-                                  files={'src': 'fireworks-*.out',
-                                         'dest': 'initialization.out'})
+                                  files=[{'src': 'fireworks-*.out',
+                                          'dest': 'initialization.out'}])
 
     # Tell the FireWork rocket to run the job using espresso_tools
     relax = PyTask(func='espresso_tools.run_rism',
