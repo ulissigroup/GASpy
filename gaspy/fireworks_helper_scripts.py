@@ -18,7 +18,6 @@ from fireworks import (Firework,
                        PyTask,
                        FileWriteTask,
                        ScriptTask,
-                       FileTransferTask,
                        Workflow)
 from .utils import print_dict, read_rc
 from . import defaults
@@ -310,9 +309,8 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
     # right afterwards, it'll just concatenate to the same file. We want to
     # keep the output files separate, so we move the output of the
     # initialization.
-    mv_outputs = FileTransferTask(mode='mv',
-                                  files=[{'src': 'fireworks-*.out',
-                                          'dest': 'initialization.out'}])
+    mv_outputs = PyTask(func='espresso_tools.gaspy_wrappers.move_initialization_output',
+                        stored_data_varnam='initialization_movement')
 
     # Tell the FireWork rocket to run the job using espresso_tools
     relax = PyTask(func='espresso_tools.run_rism',

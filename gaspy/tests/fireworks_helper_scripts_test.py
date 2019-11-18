@@ -43,7 +43,6 @@ from fireworks import (Firework,
                        PyTask,
                        FileWriteTask,
                        ScriptTask,
-                       FileTransferTask,
                        Workflow)
 from . import test_cases
 from ..utils import read_rc
@@ -290,9 +289,8 @@ def test__make_rism_firework():
     assert initialize['args'] == [trajhex, qe_settings]
 
     # Make sure we move the output file for the initialization
-    assert isinstance(move, FileTransferTask)
-    assert move.get('mode') in {'move', 'mv'}
-    assert move.get('files') == [{'src': 'fireworks-*.out', 'dest': 'initialization.out'}]
+    assert isinstance(move, PyTask)
+    assert move['func'] == 'espresso_tools.gaspy_wrappers.move_initialization_output'
 
     # Make sure we are calling espresso_tools
     assert isinstance(relax, PyTask)
