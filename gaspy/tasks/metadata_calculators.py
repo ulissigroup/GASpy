@@ -622,7 +622,7 @@ class CalculateAtomicBasisEnergy(luigi.Task):
         '''
         # Load each gas and calculate their energies
         gas_energies = {}
-        for gas, gas_finder in self.requirements().items():
+        for gas, gas_finder in self.requires().items():
             doc = get_task_output(gas_finder)
             atoms = make_atoms_from_doc(doc)
             gas_energies[gas] = atoms.get_potential_energy(apply_constraint=False)

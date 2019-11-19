@@ -14,7 +14,7 @@ from datetime import datetime
 import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy, CalculateRismAdsorptionEnergy
-from ...defaults import DFT_CALCULATOR
+from ...defaults import DFT_CALCULATOR, gas_settings
 from ...utils import multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
@@ -136,6 +136,12 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     else:
         raise ValueError('"%s" is an unrecognized DFT calculator' % dft_calculator)
 
+    # Use the correct gas phase settings
+    gas_dft_settings = gas_settings()[dft_calculator]
+    if dft_calculator == 'rism':
+        for key in ['anion_concs', 'cation_concs']:
+            gas_dft_settings[key] = atoms_doc['fwname']['dft_settings'][key]
+
     # Create, run, and return the output of the task
     task = adsorption_calculator(adsorption_site=adsorption_site,
                                  shift=atoms_doc['fwname']['shift'],
@@ -145,7 +151,8 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                  mpid=atoms_doc['fwname']['mpid'],
                                  miller_indices=atoms_doc['fwname']['miller'],
                                  bare_slab_dft_settings=atoms_doc['fwname']['dft_settings'],
-                                 adslab_dft_settings=atoms_doc['fwname']['dft_settings'])
+                                 adslab_dft_settings=atoms_doc['fwname']['dft_settings'],
+                                 gas_dft_settings=gas_dft_settings)
     try:
         run_task(task)
         energy_doc = get_task_output(task)
