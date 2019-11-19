@@ -12,7 +12,7 @@ import warnings
 from datetime import datetime
 import luigi
 from ..core import get_task_output, run_task
-from ..metadata_calculators import CalculateAdsorptionEnergy
+from ..metadata_calculators import CalculateAdsorptionEnergy, CalculateRismAdsorptionEnergy
 from ...defaults import DFT_CALCULATOR
 from ...utils import print_dict, multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
@@ -126,16 +126,25 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     # Reformat the site because of silly historical reasons
     adsorption_site = atoms_doc['fwname']['adsorption_site']
 
+    # Use the appropriate adsorption energy calculator
+    dft_calculator = atoms_doc['fwname']['dft_settings']['_calculator']
+    if dft_calculator == 'vasp' or 'qe':
+        adsorption_calculator = CalculateAdsorptionEnergy
+    elif dft_calculator == 'rism':
+        adsorption_calculator = CalculateRismAdsorptionEnergy
+    else:
+        raise ValueError('"%s" is an unrecognized DFT calculator' % dft_calculator)
+
     # Create, run, and return the output of the task
-    task = CalculateAdsorptionEnergy(adsorption_site=adsorption_site,
-                                     shift=atoms_doc['fwname']['shift'],
-                                     top=atoms_doc['fwname']['top'],
-                                     adsorbate_name=atoms_doc['fwname']['adsorbate'],
-                                     rotation=atoms_doc['fwname']['adsorbate_rotation'],
-                                     mpid=atoms_doc['fwname']['mpid'],
-                                     miller_indices=atoms_doc['fwname']['miller'],
-                                     bare_slab_dft_settings=atoms_doc['fwname']['dft_settings'],
-                                     adslab_dft_settings=atoms_doc['fwname']['dft_settings'])
+    task = adsorption_calculator(adsorption_site=adsorption_site,
+                                 shift=atoms_doc['fwname']['shift'],
+                                 top=atoms_doc['fwname']['top'],
+                                 adsorbate_name=atoms_doc['fwname']['adsorbate'],
+                                 rotation=atoms_doc['fwname']['adsorbate_rotation'],
+                                 mpid=atoms_doc['fwname']['mpid'],
+                                 miller_indices=atoms_doc['fwname']['miller'],
+                                 bare_slab_dft_settings=atoms_doc['fwname']['dft_settings'],
+                                 adslab_dft_settings=atoms_doc['fwname']['dft_settings'])
     try:
         run_task(task)
         energy_doc = get_task_output(task)
