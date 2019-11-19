@@ -9,12 +9,13 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import traceback
 import warnings
+import pprint
 from datetime import datetime
 import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy, CalculateRismAdsorptionEnergy
 from ...defaults import DFT_CALCULATOR
-from ...utils import print_dict, multimap
+from ...utils import multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
 from ...atoms_operators import fingerprint_adslab, find_max_movement
@@ -164,14 +165,13 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     # to move on so that we can still update other things.
     except:     # noqa: E722
         traceback.print_exc()
+        doc_str = pprint.pformat({'fwname': atoms_doc['fwname'],
+                                  'fwid': atoms_doc['fwid'],
+                                  'directory': atoms_doc['directory'],
+                                  'calculation_date': atoms_doc['calculation_date']})
         warnings.warn('We caught the exception reported just above and moved on '
                       'without updating the adsorption collection. Here is the '
-                      'offending document:')
-        print_dict({'fwname': atoms_doc['fwname'],
-                    'fwid': atoms_doc['fwid'],
-                    'directory': atoms_doc['directory'],
-                    'calculation_date': atoms_doc['calculation_date']},
-                    indent=1)
+                      'offending document:\n%s' % doc_str)
 
 
 def __clean_calc_energy_docs(docs, missing_docs):

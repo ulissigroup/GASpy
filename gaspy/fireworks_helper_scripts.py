@@ -8,6 +8,7 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import os
 import warnings
+import pprint
 import uuid
 from datetime import datetime
 import getpass
@@ -19,7 +20,7 @@ from fireworks import (Firework,
                        FileWriteTask,
                        ScriptTask,
                        Workflow)
-from .utils import print_dict, read_rc
+from .utils import read_rc
 from . import defaults
 
 
@@ -427,8 +428,9 @@ def submit_fwork(fwork, _testing=False):
     if not _testing:
         lpad = get_launchpad()
         lpad.add_wf(wflow)
-        print('Submitted the following FireWork rocket (FWID %i):' % fwork.fw_id)
-        print_dict(fwork.name, indent=1)
+        fwork_str = pprint.pformat(fwork.name)
+        print('Submitted the following FireWork rocket (FWID %i):\n%s'
+              % (fwork.fw_id, fwork_str))
 
     return wflow
 
