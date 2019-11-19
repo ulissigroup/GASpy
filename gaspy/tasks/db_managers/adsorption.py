@@ -254,8 +254,7 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['top'] = adslab_doc['fwname']['top']
     adsorption_doc['slab_repeat'] = adslab_doc['fwname']['slab_repeat']
     adsorption_doc['dft_settings'] = adslab_doc['fwname']['dft_settings']
-    adsorption_doc['fwids'] = {'slab+adsorbate': adslab_doc['fwid'],
-                               'slab': slab_doc['fwid']}
+    adsorption_doc['fwids'] = energy_doc['fwids']
     adsorption_doc['fw_directories'] = {'slab+adsorbate': adslab_doc['directory'],
                                         'slab': slab_doc['directory']}
     adsorption_doc['fp_final'] = fp_final

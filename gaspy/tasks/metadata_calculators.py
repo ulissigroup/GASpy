@@ -338,6 +338,12 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
 
         with open(self.requirements['adsorbate_energy'].path, 'rb') as file_handle:
             ads_energy = pickle.load(file_handle)
+        # Get the FWIDs of the gas calculations we used
+        adsorbate_energy_calc = self.requires()['adsorbate_energy']
+        atomic_basis_calcs = adsorbate_energy_calc.requires()
+        gas_finders = [gas_finder for basis_calc in atomic_basis_calcs.values()
+                       for gas_finder in basis_calc.requires().values()]
+        gas_fwids = {get_task_output(gas_finder)['fwid'] for gas_finder in gas_finders}
 
         with open(self.requirements['bare_slab_doc'].path, 'rb') as file_handle:
             slab_doc = pickle.load(file_handle)
@@ -352,7 +358,8 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         adsorption_energy = adslab_energy - slab_energy - ads_energy
         doc = {'adsorption_energy': adsorption_energy,
                'fwids': {'adslab': adslab_doc['fwid'],
-                         'slab': slab_doc['fwid']}}
+                         'slab': slab_doc['fwid'],
+                         'adsobrate': list(gas_fwids)}}
         save_task_output(self, doc)
 
     def output(self):
@@ -462,6 +469,12 @@ class CalculateAdsorptionEnergy(luigi.Task):
     def run(self):
         with open(self.input()['adsorbate_energy'].path, 'rb') as file_handle:
             ads_energy = pickle.load(file_handle)
+        # Get the FWIDs of the gas calculations we used
+        adsorbate_energy_calc = self.requires()['adsorbate_energy']
+        atomic_basis_calcs = adsorbate_energy_calc.requires()
+        gas_finders = [gas_finder for basis_calc in atomic_basis_calcs.values()
+                       for gas_finder in basis_calc.requires().values()]
+        gas_fwids = {get_task_output(gas_finder)['fwid'] for gas_finder in gas_finders}
 
         with open(self.input()['bare_slab_doc'].path, 'rb') as file_handle:
             slab_doc = pickle.load(file_handle)
@@ -476,7 +489,8 @@ class CalculateAdsorptionEnergy(luigi.Task):
         adsorption_energy = adslab_energy - slab_energy - ads_energy
         doc = {'adsorption_energy': adsorption_energy,
                'fwids': {'adslab': adslab_doc['fwid'],
-                         'slab': slab_doc['fwid']}}
+                         'slab': slab_doc['fwid'],
+                         'adsorbate': list(gas_fwids)}}
         save_task_output(self, doc)
 
     def output(self):
@@ -571,19 +585,18 @@ class CalculateAtomicBasisEnergy(luigi.Task):
     dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
 
-    def run(self):
+    def requires(self):
         '''
-        Each atom needs a different set of real gases for us to perform
-        relaxations on. We use dynamic Luigi dependencies to figure it out, and
-        then use them accordingly.
+        Figure out the gas calculations we need to do
         '''
-        # The keys are the atoms you want to calculate the basis energy of, and
-        # the values are the gases that we need to relax to calculate that
-        # atom's basis energy.
+        # The keys are the atoms you want to calculate the basis energy of, and the
+        # values are the gases that we need to relax to calculate that atom's basis
+        # energy.
         all_gases = {'H': ['H2'],
                      'O': ['H2O', 'H2'],
                      'C': ['CO', 'H2O', 'H2'],
                      'N': ['N2']}
+        # Figure out the gases we need for this atom
         try:
             gases = all_gases[self.atom]
 
@@ -594,16 +607,22 @@ class CalculateAtomicBasisEnergy(luigi.Task):
                        'the basis energy for %s yet.' % self.atom)
             raise type(error)(str(error) + message).with_traceback(sys.exc_info()[2])
 
-        # Submit the dynamic dependencies here
-        requirements = [FindGas(gas_name=gas,
-                                dft_settings=self.dft_settings,
-                                max_fizzles=self.max_fizzles)
-                        for gas in gases]
-        yield requirements
+        requirements = {gas: FindGas(gas_name=gas,
+                                     dft_settings=self.dft_settings,
+                                     max_fizzles=self.max_fizzles)
+                        for gas in gases}
+        return requirements
 
+
+    def run(self):
+        '''
+        Each atom needs a different set of real gases for us to perform
+        relaxations on. We use dynamic Luigi dependencies to figure it out, and
+        then use them accordingly.
+        '''
         # Load each gas and calculate their energies
-        gas_energies = dict.fromkeys(gases)
-        for gas, gas_finder in zip(gases, requirements):
+        gas_energies = {}
+        for gas, gas_finder in self.requirements().items():
             doc = get_task_output(gas_finder)
             atoms = make_atoms_from_doc(doc)
             gas_energies[gas] = atoms.get_potential_energy(apply_constraint=False)

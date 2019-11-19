@@ -72,6 +72,10 @@ def test_CalculateAdsorptionEnergy():
         assert doc['fwids']['slab'] == 124894
         assert doc['fwids']['adslab'] == 124897
 
+        # TODO:  Add gas fwids in here
+        #assert doc['fwids']['adsorbate'] == []
+        assert False
+
     finally:
         clean_up_tasks()
 
