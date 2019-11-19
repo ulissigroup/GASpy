@@ -16,5 +16,8 @@ from .surfaces import update_surface_energy_collection
 
 def update_all_collections(n_processes=1):
     update_atoms_collection(n_processes=n_processes)
-    update_adsorption_collection(n_processes=n_processes)
-    update_surface_energy_collection(n_processes=n_processes)
+    for dft_calculator in ['vasp', 'qe', 'rism']:
+        update_adsorption_collection(dft_calculator=dft_calculator,
+                                     n_processes=n_processes)
+        update_surface_energy_collection(dft_calculator=dft_calculator, 
+                                         n_processes=n_processes)
