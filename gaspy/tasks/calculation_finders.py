@@ -7,6 +7,7 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import warnings
+import pprint
 from copy import deepcopy
 import pickle
 import numpy as np
@@ -115,11 +116,13 @@ class FindCalculation(luigi.Task):
             # If we're already running, then throw an error so that Luigi knows
             # that we couldn't find the calculation
             else:
+                fw_query_str = pprint.pformat(self.fw_query)
                 raise RuntimeError('You just tried to find a calculation that '
                                    'has not yet finished running. Please try '
                                    'again later. If you know it has finished '
                                    'running, then try updating the `atoms` '
-                                   'collection of GASdb.')
+                                   'collection of GASdb. Here is the FireWorks '
+                                   'query:\n%s' % fw_query_str)
 
     def _find_and_save_calculation(self):
         '''
