@@ -253,20 +253,20 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         with open(vanilla_adsorption_task.input()['bare_slab_doc'].path, 'rb') as file_handle:
             vanilla_slab_doc = pickle.load(file_handle)
         pruned_slab_doc = self.prune_atoms_doc(vanilla_slab_doc)
-        reqs['bare_slab'] = FindRismAdslab(atoms_dict=pruned_slab_doc,
-                                           adsorption_site=(0., 0., 0.),
-                                           shift=self.shift,
-                                           top=self.top,
-                                           dft_settings=self.bare_slab_dft_settings,
-                                           adsorbate_name='',
-                                           rotation={'phi': 0., 'theta': 0., 'psi': 0.},
-                                           mpid=self.mpid,
-                                           miller_indices=self.miller_indices,
-                                           min_xy=self.min_xy,
-                                           slab_generator_settings=self.slab_generator_settings,
-                                           get_slab_settings=self.get_slab_settings,
-                                           bulk_dft_settings=self.bulk_dft_settings,
-                                           max_fizzles=self.max_fizzles)
+        reqs['bare_slab_doc'] = FindRismAdslab(atoms_dict=pruned_slab_doc,
+                                               adsorption_site=(0., 0., 0.),
+                                               shift=self.shift,
+                                               top=self.top,
+                                               dft_settings=self.bare_slab_dft_settings,
+                                               adsorbate_name='',
+                                               rotation={'phi': 0., 'theta': 0., 'psi': 0.},
+                                               mpid=self.mpid,
+                                               miller_indices=self.miller_indices,
+                                               min_xy=self.min_xy,
+                                               slab_generator_settings=self.slab_generator_settings,
+                                               get_slab_settings=self.get_slab_settings,
+                                               bulk_dft_settings=self.bulk_dft_settings,
+                                               max_fizzles=self.max_fizzles)
 
         # Get and feed the results of the non-RISM Quantum Espresso relaxation
         # for the adslab
@@ -333,28 +333,30 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         After we finish the dependencies, we then calculate the adsorption
         energy.
         '''
-        yield self._vanilla_qe_requires()
-        yield self._rism_requires()
+        # We assign variables to the yield statements to make sure the
+        # generators are executed before the rest of this method.
+        _ = yield self._vanilla_qe_requires()  # noqa: F841
+        _ = yield self._rism_requires()  # noqa: F841
 
-        with open(self.requirements['adsorbate_energy'].path, 'rb') as file_handle:
-            ads_energy = pickle.load(file_handle)
-        # Get the FWIDs of the gas calculations we used
-        adsorbate_energy_calc = self.requires()['adsorbate_energy']
+        # Calculate the adsorbate energy and also find the FWIDs
+        adsorbate_energy_calc = self.adsorbate_energy
+        ads_energy = get_task_output(adsorbate_energy_calc)
         atomic_basis_calcs = adsorbate_energy_calc.requires()
         gas_finders = [gas_finder for basis_calc in atomic_basis_calcs.values()
                        for gas_finder in basis_calc.requires().values()]
         gas_fwids = {get_task_output(gas_finder)['fwid'] for gas_finder in gas_finders}
 
-        with open(self.requirements['bare_slab_doc'].path, 'rb') as file_handle:
-            slab_doc = pickle.load(file_handle)
+        # Calculate the slab energy
+        slab_doc = get_task_output(self.bare_slab_doc)
         slab_atoms = make_atoms_from_doc(slab_doc)
         slab_energy = slab_atoms.get_potential_energy(apply_constraint=False)
 
-        with open(self.requirements['adslab_doc'].path, 'rb') as file_handle:
-            adslab_doc = pickle.load(file_handle)
+        # Calculate the adslab energy
+        adslab_doc = get_task_output(self.adslab_doc)
         adslab_atoms = make_atoms_from_doc(adslab_doc)
         adslab_energy = adslab_atoms.get_potential_energy(apply_constraint=False)
 
+        # Calculate adsorption energy and compile/save the results
         adsorption_energy = adslab_energy - slab_energy - ads_energy
         doc = {'adsorption_energy': adsorption_energy,
                'fwids': {'adslab': adslab_doc['fwid'],
