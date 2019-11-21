@@ -107,8 +107,13 @@ def run_task(task, force=False):
                 # Sometimes we can actually get a list of dynamic
                 # dependendencies instead of one at a time. We address that
                 # here.
-                elif isinstance(dependency, Iterable):
+                elif isinstance(dependency, list):
                     for dep in dependency:
+                        run_task(dep)
+                # Sometimes we get a dictionary of dependencies instead of a
+                # list.
+                elif isinstance(dependency, dict):
+                    for dep in dependency.values():
                         run_task(dep)
 
 

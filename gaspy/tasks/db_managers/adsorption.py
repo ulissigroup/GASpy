@@ -122,14 +122,14 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
         atoms_doc   A dictionary taken from our `atoms` Mongo collection
     Returns:
         energy_doc  A dictionary obtained from the output of the
-                    `CalculateAdsorptionEnergy` task
+                    `Calculate*AdsorptionEnergy` task
     '''
     # Reformat the site because of silly historical reasons
     adsorption_site = atoms_doc['fwname']['adsorption_site']
 
     # Use the appropriate adsorption energy calculator
     dft_calculator = atoms_doc['fwname']['dft_settings']['_calculator']
-    if dft_calculator == 'vasp' or 'qe':
+    if (dft_calculator == 'vasp') or (dft_calculator == 'qe'):
         adsorption_calculator = CalculateAdsorptionEnergy
     elif dft_calculator == 'rism':
         adsorption_calculator = CalculateRismAdsorptionEnergy
@@ -193,7 +193,7 @@ def __clean_calc_energy_docs(docs, missing_docs):
 
     Arg:
         docs            A list of dictionaries obtained from the output of the
-                        `CalculateAdsorptionEnergy` task
+                        `Calculate*AdsorptionEnergy` task
         missing_docs    The output of the
                         `_find_atoms_docs_not_in_adsorption_collection`
     Returns:
@@ -214,10 +214,10 @@ def __clean_calc_energy_docs(docs, missing_docs):
 def __create_adsorption_doc(energy_doc):
     '''
     This function will create a Mongo document for the `adsorption` collection
-    given the output of the `CalculateAdsorptionEnergy` task.
+    given the output of the `Calculate*AdsorptionEnergy` task.
 
     Arg:
-        energy_doc  A dictionary created by the `CalculateAdsorptionEnergy`
+        energy_doc  A dictionary created by the `Calculate*AdsorptionEnergy`
                     task
     '''
     # Get the `atoms` documents for the slab and adslab
