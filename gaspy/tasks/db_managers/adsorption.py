@@ -92,7 +92,7 @@ def _find_atoms_docs_not_in_adsorption_collection(dft_calculator):
     # Find the FWIDs of the documents inside our adsorption collection
     with get_mongo_collection('adsorption_' + dft_calculator) as collection:
         docs_adsorption = list(collection.find({}, {'fwids': 'fwids', '_id': 0}))
-    fwids_in_adsorption = {doc['fwids']['slab+adsorbate'] for doc in docs_adsorption}
+    fwids_in_adsorption = {doc['fwids']['adslab'] for doc in docs_adsorption}
 
     # Find the FWIDs of the documents inside our atoms collection
     with get_mongo_collection('atoms') as collection:
