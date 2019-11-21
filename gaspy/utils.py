@@ -108,7 +108,7 @@ def unfreeze_dict(frozen_dict):
 
 
 def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
-             chunksize=1, n_calcs=None):
+             chunksize=1, n_calcs=None, desc=None):
     '''
     This function is a wrapper to parallelize a function.
 
@@ -129,6 +129,8 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
                             requirements.
         n_calcs             How many calculations you have. Only necessary for
                             adding a percentage timer to the progress bar.
+        desc                String indicating what you want the TQDM label to
+                            be for the progress bar
     Returns:
         outputs     A list of the inputs mapped through the function
     '''
@@ -138,7 +140,7 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
 
     # If we have one thread, there's no use multiprocessing
     if processes == 1:
-        output = [function(input_) for input_ in tqdm(inputs, total=n_calcs)]
+        output = [function(input_) for input_ in tqdm(inputs, total=n_calcs, desc=desc)]
         return output
 
     with Pool(processes=processes, maxtasksperchild=maxtasksperchild) as pool:
@@ -149,14 +151,14 @@ def multimap(function, inputs, chunked=False, processes=32, maxtasksperchild=1,
         if not chunked:
             iterator = pool.imap(function, inputs, chunksize=chunksize)
             total = n_calcs
-            outputs = list(tqdm(iterator, total=total))
+            outputs = list(tqdm(iterator, total=total, desc=desc))
 
         # If our function expects chunks, then we have to unpack our inputs
         # appropriately
         else:
             iterator = pool.imap(function, _chunk(inputs, n=chunksize))
             total = n_calcs / chunksize
-            outputs = list(np.concatenate(list(tqdm(iterator, total=total))))
+            outputs = list(np.concatenate(list(tqdm(iterator, total=total, desc=desc))))
 
     return outputs
 

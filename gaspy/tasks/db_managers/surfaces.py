@@ -52,20 +52,21 @@ def update_surface_energy_collection(dft_calculator=DFT_CALCULATOR, n_processes=
              for mpid, miller_indices, shift, dft_settings in surfaces]
 
     # Run each task and then see which ones are done
-    print('[%s] Calculating surface energies...' % datetime.now())
+    desc = '[%s] Calculating surface energies...' % datetime.now()
     multimap(__run_calculate_surface_energy_task, tasks,
              processes=n_processes, maxtasksperchild=10, chunksize=100,
-             n_calcs=len(tasks))
+             n_calcs=len(tasks), desc=desc)
     completed_tasks = [task for task in tasks if task.complete()]
 
     # Parse the completed tasks into documents for us to save
-    print('[%s] Creating surface energy documents...' % datetime.now())
+    desc = '[%s] Creating surface energy documents...' % datetime.now()
     surface_energy_docs = multimap(__create_surface_energy_doc,
                                    completed_tasks,
                                    processes=n_processes,
                                    maxtasksperchild=1,
                                    chunksize=100,
-                                   n_calcs=len(completed_tasks))
+                                   n_calcs=len(completed_tasks),
+                                   desc=desc)
 
     if len(surface_energy_docs) > 0:
         print('[%s] Creating %i new entries in the surface energy collection...'
