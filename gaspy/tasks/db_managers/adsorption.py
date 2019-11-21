@@ -43,7 +43,7 @@ def update_adsorption_collection(dft_calculator=DFT_CALCULATOR, n_processes=1):
     missing_docs = _find_atoms_docs_not_in_adsorption_collection(dft_calculator)
 
     # Calculate adsorption energies
-    desc = '[%s] Calculating adsorption_%s energies...' % (datetime.now(), dft_calculator)
+    desc = '[%s] Calculating adsorption_%s energies' % (datetime.now(), dft_calculator)
     calc_energy_docs = multimap(__run_calculate_adsorption_energy_task,
                                 missing_docs, processes=n_processes,
                                 maxtasksperchild=10, chunksize=100,
@@ -54,7 +54,7 @@ def update_adsorption_collection(dft_calculator=DFT_CALCULATOR, n_processes=1):
                                                         missing_docs)
 
     # Turn the adsorption energies into `adsorption` documents, then save them
-    desc = '[%s] Creating adsorption_%s documents...' % (datetime.now(), dft_calculator)
+    desc = '[%s] Creating adsorption_%s documents' % (datetime.now(), dft_calculator)
     adsorption_docs = multimap(__create_adsorption_doc,
                                cleaned_calc_energy_docs,
                                processes=n_processes,
