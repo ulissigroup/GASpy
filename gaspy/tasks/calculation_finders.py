@@ -454,11 +454,11 @@ class FindAdslab(FindCalculation):
         if self.dft_settings['kpts'] == 'surface':
             # Get the atoms object of the surface
             try:  # EAFP to just run the task if we need to
-                doc = get_task_output(self.requires())
+                docs = get_task_output(self.requires())
             except FileNotFoundError:
                 run_task(self.requires())
-                doc = get_task_output(self.requires())
-            atoms = make_atoms_from_doc(doc)
+                docs = get_task_output(self.requires())
+            atoms = make_atoms_from_doc(docs[0])
             kpts = calculate_surface_k_points(atoms)
             self.gasdb_query['fwname.dft_settings.kpts'] = kpts
             self.fw_query['name.dft_settings.kpts'] = kpts

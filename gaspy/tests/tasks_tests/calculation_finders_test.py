@@ -397,7 +397,6 @@ class TestFindSurface():
                            dft_settings=dft_settings)
 
         try:
-            _run_task_with_dynamic_dependencies(task.requires())
             _run_task_with_dynamic_dependencies(task)
             doc = get_task_output(task)
             assert doc['fwname']['calculation_type'] == 'surface energy optimization'
