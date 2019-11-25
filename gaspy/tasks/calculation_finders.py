@@ -25,7 +25,7 @@ from .core import (save_task_output,
                    make_task_output_object,
                    get_task_output,
                    run_task)
-from .atoms_generators import GenerateBulk
+from .atoms_generators import GenerateBulk, GenerateAdslabs
 from .make_fireworks import (MakeGasFW,
                              MakeBulkFW,
                              MakeAdslabFW,
@@ -395,6 +395,16 @@ class FindAdslab(FindCalculation):
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
     bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
 
+    def requires(self):
+        return GenerateAdslabs(adsorbate_name=self.adsorbate_name,
+                               rotation=self.rotation,
+                               mpid=self.mpid,
+                               miller_indices=self.miller_indices,
+                               min_xy=self.min_xy,
+                               slab_generator_settings=self.slab_generator_settings,
+                               get_slab_settings=self.get_slab_settings,
+                               bulk_dft_settings=self.bulk_dft_settings)
+
     def _load_attributes(self):
         '''
         Parses and saves Luigi parameters into various class attributes
@@ -439,6 +449,21 @@ class FindAdslab(FindCalculation):
                 self.gasdb_query['fwname.dft_settings.%s' % key] = value
                 self.fw_query['name.dft_settings.%s' % key] = value
 
+        # If the k-points is 'surface', then calculate and assign them
+        dft_settings = unfreeze_dict(self.dft_settings)
+        if self.dft_settings['kpts'] == 'surface':
+            # Get the atoms object of the surface
+            try:  # EAFP to just run the task if we need to
+                doc = get_task_output(self.requires())
+            except FileNotFoundError:
+                run_task(self.requires())
+                doc = get_task_output(self.requires())
+            atoms = make_atoms_from_doc(doc)
+            kpts = calculate_surface_k_points(atoms)
+            self.gasdb_query['fwname.dft_settings.kpts'] = kpts
+            self.fw_query['name.dft_settings.kpts'] = kpts
+            dft_settings['kpts'] = kpts
+
         # For historical reasons, we do bare slab relaxations with the adslab
         # infrastructure. If this task happens to be for a bare slab, then we
         # should take out some extraneous adsorbate information. We should have
@@ -469,6 +494,24 @@ class FindAdslab(FindCalculation):
                                        slab_generator_settings=self.slab_generator_settings,
                                        get_slab_settings=self.get_slab_settings,
                                        bulk_dft_settings=self.bulk_dft_settings)
+
+
+def calculate_surface_k_points(atoms):
+    '''
+    For surface calculations, it's a good practice to calculate the k-point
+    mesh given the unit cell size. We do that on-the-spot here.
+
+    Returns:
+        k_pts   A 3-tuple of integers indicating the k-point mesh to use
+    '''
+    cell = atoms.get_cell()
+    a0 = np.linalg.norm(cell[0])
+    b0 = np.linalg.norm(cell[1])
+    k_pts_x = int(20/a0)
+    k_pts = (k_pts_x,
+             max(1, int(k_pts_x*a0/b0)),
+             1)
+    return k_pts
 
 
 class FindSurface(FindCalculation):
@@ -553,6 +596,7 @@ class FindSurface(FindCalculation):
                          'name.shift': {'$gte': self.shift - 1e-3,
                                         '$lte': self.shift + 1e-3},
                          'name.num_slab_atoms': n_atoms}
+
         # Parse the DFT settings
         for key, value in self.dft_settings.items():
             # We don't care if these VASP-DFT settings change
@@ -567,6 +611,14 @@ class FindSurface(FindCalculation):
         # Delete some keys that Luigi doesn't like
         del atoms_doc['ctime']
         del atoms_doc['mtime']
+
+        # If the k-points is 'surface', then calculate and assign them
+        dft_settings = unfreeze_dict(self.dft_settings)
+        if self.dft_settings['kpts'] == 'surface':
+            kpts = calculate_surface_k_points(atoms)
+            self.gasdb_query['fwname.dft_settings.kpts'] = kpts
+            self.fw_query['name.dft_settings.kpts'] = kpts
+            dft_settings['kpts'] = kpts
 
         self.dependency = MakeSurfaceFW(atoms_doc=atoms_doc,
                                         mpid=self.mpid,
