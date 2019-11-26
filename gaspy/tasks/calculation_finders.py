@@ -86,17 +86,15 @@ class FindCalculation(luigi.Task):
             _testing    Boolean indicating whether or not you are doing a unit
                         test. You probably shouldn't touch this.
         '''
-        # Hacky paragraph to deal with changing FindBulk arguments on-the-fly
-        dft_settings = unfreeze_dict(self.dft_settings)
-        if isinstance(self, FindBulk):
-            dft_settings['kpts'] = self.calculate_bulk_k_points()
+        # Load the correct attributes
+        self._load_attributes()
 
         # If there's no match in our `atoms` collection, then check if our
         # FireWorks system is currently running it
         calc_found = self._find_and_save_calculation()
         if calc_found is False:
             n_running, n_fizzles = find_n_rockets(self.fw_query,
-                                                  dft_settings,
+                                                  self.dft_settings,
                                                   _testing=_testing)
 
             # If we aren't running yet, then start running
@@ -619,6 +617,7 @@ class FindSurface(FindCalculation):
             self.gasdb_query['fwname.dft_settings.kpts'] = kpts
             self.fw_query['name.dft_settings.kpts'] = kpts
             dft_settings['kpts'] = kpts
+            self.dft_settings = dft_settings
 
         self.dependency = MakeSurfaceFW(atoms_doc=atoms_doc,
                                         mpid=self.mpid,

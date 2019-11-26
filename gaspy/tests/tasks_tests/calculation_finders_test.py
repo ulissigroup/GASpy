@@ -328,6 +328,10 @@ def test_FindAdslab_unsuccessfully():
         clean_up_tasks()
 
 
+def test_calculate_surface_k_points():
+    assert False
+
+
 class TestFindSurface():
     def test__create_surface(self):
         '''
@@ -436,7 +440,20 @@ class TestFindSurface():
             assert dependency.mpid == mpid
             assert dependency.miller_indices == miller_indices
             assert dependency.shift == shift
-            assert unfreeze_dict(dependency.dft_settings) == dft_settings
+            # Test all the DFT settings, excluding the kpts (which are
+            # calculated on the spot).
+            for key, value in dft_settings.items():
+                try:
+                    assert dependency.dft_settings[key] == value
+                except AssertionError:
+                    if key == 'kpts':
+                        pass
+                    else:
+                        raise
 
         finally:
             clean_up_tasks()
+
+
+def test_FindRismAdslab():
+    assert False

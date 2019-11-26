@@ -248,8 +248,21 @@ def test_MakeSurfaceFW():
         assert fwork.name['miller'] == miller_indices
         assert fwork.name['shift'] == shift
         assert fwork.name['num_slab_atoms'] == len(finder._create_surface())
-        assert fwork.name['dft_settings'] == dft_settings
         assert task.complete() is True
+        # Test all the DFT settings, excluding the kpts (which are
+        # calculated on the spot).
+        for key, value in dft_settings.items():
+            try:
+                assert fwork.name['dft_settings'][key] == value
+            except AssertionError:
+                if key == 'kpts':
+                    pass
+                else:
+                    raise
 
     finally:
         clean_up_tasks()
+
+
+def test_MakeRismAdslabFW():
+    assert False
