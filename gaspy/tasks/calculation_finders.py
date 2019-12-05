@@ -130,17 +130,20 @@ class FindCalculation(luigi.Task):
             bool    Boolean indicating whether or not we've successfully found
                     and saved the calculation
         '''
-        # Find the document in our `atoms` Mongo collection
-        try:
-            with get_mongo_collection('atoms') as collection:
-                docs = list(collection.find(self.gasdb_query))
-
-        # If we have not yet created the query yet, then load it. We try/except
-        # this so that we only load it once.
-        except AttributeError:
+        # If there is no query attribute, then we need to load it. We use an if
+        # statement to make sure it only happens once per instance.
+        if not hasattr(self, 'gasdb_query'):
             self._load_attributes()
-            with get_mongo_collection('atoms') as collection:
-                docs = list(collection.find(self.gasdb_query))
+
+        # Turn frozen dictionaries into normal ones for cleaner queries
+        for dict_ in [self.gasdb_query, self.fw_query]:
+            for key, value in dict_.items():
+                if isinstance(value, luigi.parameter._FrozenOrderedDict):
+                    dict_[key] = dict(value)
+
+        # Find the document in our `atoms` Mongo collection
+        with get_mongo_collection('atoms') as collection:
+            docs = list(collection.find(self.gasdb_query))
 
         # Save the match
         doc = self._remove_old_docs(docs)
@@ -441,6 +444,7 @@ class FindAdslab(FindCalculation):
                          'name.adsorbate_rotation.theta': self.rotation['theta'],
                          'name.adsorbate_rotation.psi': self.rotation['psi']}
 
+        # Put the DFT settings into the queries
         for key, value in self.dft_settings.items():
             # We don't care if these VASP-DFT settings change
             if key not in set(['nsw', 'isym', 'symprec']):
@@ -708,6 +712,7 @@ class FindRismAdslab(FindAdslab):
                     Luigi tries to hash datetime objects and whatnot).
     '''
     atoms_dict = luigi.DictParameter()
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['rism'])
 
     def _load_attributes(self):
         '''

@@ -265,4 +265,66 @@ def test_MakeSurfaceFW():
 
 
 def test_MakeRismAdslabFW():
-    assert False
+    clean_up_tasks()
+    adsorption_site = (1.2793379063371517, 2.5586758126743008, 19.187941671)
+    shift = 0.25
+    top = True
+    dft_settings = ADSLAB_SETTINGS['rism']
+    adsorbate_name = 'CO'
+    rotation = ADSLAB_SETTINGS['rotation']
+    mpid = 'mp-30'
+    miller_indices = (1, 0, 0)
+    min_xy = ADSLAB_SETTINGS['min_xy']
+    slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
+    get_slab_settings = SLAB_SETTINGS['get_slab_settings']
+    bulk_dft_settings = BULK_SETTINGS['rism']
+    task = MakeAdslabFW(adsorption_site=adsorption_site,
+                        shift=shift,
+                        top=top,
+                        dft_settings=dft_settings,
+                        adsorbate_name=adsorbate_name,
+                        rotation=rotation,
+                        mpid=mpid,
+                        miller_indices=miller_indices,
+                        min_xy=min_xy,
+                        slab_generator_settings=slab_generator_settings,
+                        get_slab_settings=get_slab_settings,
+                        bulk_dft_settings=bulk_dft_settings)
+
+    # Check that our requirement is correct
+    req = task.requires()
+    assert isinstance(req, GenerateAdslabs)
+    assert req.adsorbate_name == adsorbate_name
+    assert unfreeze_dict(req.rotation) == rotation
+    assert req.mpid == mpid
+    assert req.miller_indices == miller_indices
+    assert req.min_xy == min_xy
+    assert unfreeze_dict(req.slab_generator_settings) == slab_generator_settings
+    assert unfreeze_dict(req.get_slab_settings) == get_slab_settings
+    assert unfreeze_dict(req.bulk_dft_settings) == bulk_dft_settings
+
+    try:
+        # Need to make sure our requirement is run before testing our task.
+        # Make sure you are asking for something that does not need a FireWork
+        # submission, i.e., make sure the requirements are already in the
+        # unit testing Mongo collections.
+        run_task_locally(req)
+
+        # Manually call the `run` method with the unit testing flag to get the
+        # firework instead of actually submitting it
+        fwork = task.run(_testing=True)
+        assert fwork.name['calculation_type'] == 'slab+adsorbate optimization'
+        assert fwork.name['adsorbate'] == adsorbate_name
+        assert fwork.name['adsorbate_rotation'] == rotation
+        assert isinstance(fwork.name['adsorbate_rotation'], dict)
+        assert fwork.name['adsorption_site'] == adsorption_site
+        assert fwork.name['mpid'] == mpid
+        assert fwork.name['miller'] == miller_indices
+        assert fwork.name['shift'] == shift
+        assert fwork.name['top'] == top
+        assert isinstance(fwork.name['slab_repeat'], tuple)
+        assert fwork.name['dft_settings'] == ADSLAB_SETTINGS['rism']
+        assert task.complete() is True
+
+    finally:
+        clean_up_tasks()

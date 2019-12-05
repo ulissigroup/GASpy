@@ -104,6 +104,12 @@ def get_adsorption_docs(adsorbate=None, dft_calculator=DFT_CALCULATOR,
         filters = defaults.adsorption_filters(adsorbate)
     if adsorbate:
         filters['adsorbate'] = adsorbate
+
+    # Dynamic kpts don't query well, so ignore it
+    try:
+        del filters['dft_settings.kpts']
+    except KeyError:
+        pass
     match = {'$match': filters}
 
     # Establish the information that'll be contained in the documents we'll be
@@ -121,8 +127,6 @@ def get_adsorption_docs(adsorbate=None, dft_calculator=DFT_CALCULATOR,
         docs = [doc for doc in tqdm(cursor, desc='Pulling adsorption docs', unit=' docs')]
     cleaned_docs = _clean_up_aggregated_docs(docs, expected_keys=projection.keys())
 
-    #import pdb
-    #pdb.set_trace()
     return cleaned_docs
 
 
@@ -532,6 +536,7 @@ def _get_attempted_adsorption_docs(adsorbate, dft_calculator, dft_settings=None)
         dft_settings = defaults.adslab_settings()[dft_calculator]
     filters = {'dft_settings.%s' % setting: value
                for setting, value in dft_settings.items()}
+    del filters['dft_settings.kpts']  # Dynamic kpts don't query well, so ignore it
     if adsorbate:
         filters['adsorbate'] = adsorbate
     match = {'$match': filters}

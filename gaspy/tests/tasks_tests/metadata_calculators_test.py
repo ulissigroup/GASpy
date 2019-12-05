@@ -35,10 +35,39 @@ SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
 
 
 def test_CalculateRismAdsorptionEnergy():
+    '''
+    WARNING:  This test uses `run_task_locally`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make sure that you have all of the gas calculations in the unit testing
+    atoms collection.  If you copy/paste this test into somewhere else, make
+    sure that you use `run_task_locally` appropriately.
+    '''
+    adsorption_site = (2.558675812674303, 2.5586758126743008, 19.187941671)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'CO'
+    mpid = 'mp-30'
+    miller_indices = (1, 0, 0)
+    task = CalculateRismAdsorptionEnergy(adsorption_site=adsorption_site,
+                                         shift=shift,
+                                         top=top,
+                                         adsorbate_name=adsorbate_name,
+                                         mpid=mpid,
+                                         miller_indices=miller_indices,)
+
     try:
-        task = CalculateRismAdsorptionEnergy()  # noqa: F841
-    except:  # noqa: E722
-        assert False  # Test pending
+        run_task_locally(task)
+        doc = get_task_output(task)
+
+        # I just checked this one calculation by hand and found some key
+        # information about it.
+        assert math.isclose(doc['adsorption_energy'], -0.7436998067121294)
+        assert doc['fwids']['slab'] == 3003
+        assert doc['fwids']['adslab'] == 3006
+        assert doc['fwids']['adsorbate'] == [3017, 3018, 3019]
+
+    finally:
+        clean_up_tasks()
 
 
 def test_CalculateAdsorptionEnergy():

@@ -197,10 +197,10 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
     min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
     slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
     get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
-    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS[DFT_CALCULATOR])
-    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS[DFT_CALCULATOR])
-    bare_slab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
-    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS[DFT_CALCULATOR])
+    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS['rism'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['rism'])
+    bare_slab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['rism'])
+    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['rism'])
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
     requirements = {}
 
@@ -361,7 +361,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         doc = {'adsorption_energy': adsorption_energy,
                'fwids': {'adslab': adslab_doc['fwid'],
                          'slab': slab_doc['fwid'],
-                         'adsobrate': list(gas_fwids)}}
+                         'adsorbate': list(gas_fwids)}}
         save_task_output(self, doc)
 
     def output(self):

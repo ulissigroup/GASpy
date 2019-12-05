@@ -13,6 +13,8 @@ from ...tasks.calculation_finders import (FindCalculation,
                                           FindGas,
                                           FindBulk,
                                           FindAdslab,
+                                          calculate_surface_k_points,
+                                          FindRismAdslab,
                                           FindSurface)
 
 # Things we need to do the tests
@@ -20,6 +22,7 @@ import os
 import pytest
 import warnings
 import math
+import numpy as np
 import luigi
 import ase
 from .utils import clean_up_tasks
@@ -30,6 +33,7 @@ from ...tasks.core import get_task_output, schedule_tasks
 from ...tasks.make_fireworks import (MakeGasFW,
                                      MakeBulkFW,
                                      MakeAdslabFW,
+                                     MakeRismAdslabFW,
                                      MakeSurfaceFW)
 
 GAS_SETTINGS = defaults.gas_settings()
@@ -99,6 +103,8 @@ def _assert_dft_settings(doc, dft_settings):
         _assert_vasp_settings(doc, dft_settings)
     elif dft_settings['_calculator'] == 'qe':
         _assert_qe_settings(doc, dft_settings)
+    elif dft_settings['_calculator'] == 'rism':
+        _assert_qe_settings(doc, dft_settings)
     else:
         raise AssertionError('The DFT settings do not look like anything we '
                              'have the infrastruture setup for.')
@@ -140,18 +146,29 @@ def _assert_vasp_settings(doc, vasp_settings):
                 raise
 
 
-def _assert_qe_settings(doc, qe_settings):
+def _assert_qe_settings(doc, rism_settings):
     '''
     Asserts whether the qe_settings inside a doc/dictionary are correct
 
     Args:
         doc             Dictionary/Mongo document object
-        qe_settings     Dictionary of Quantum Espresso settings
+        rism_settings   Dictionary of RISM settings
     '''
-    assert AssertionError('We have not yet set up a unit test for finding '
-                          'Quantum Espresso calculations. We will rely on the '
-                          'underlying infrastructure that is already here. Feel '
-                          'free to add a correct unit test.')
+    for key, value in rism_settings.items():
+        try:
+            assert doc['fwname']['dft_settings'][key] == value
+
+        # The kpts key is calculated on-the-fly. So we will input 'surface' and
+        # get out a 3-tuple of integers. This is ok.
+        except AssertionError:
+            if key == 'kpts':
+                kpts = doc['fwname']['dft_settings'][key]
+                assert isinstance(kpts, tuple) or isinstance(kpts, list)
+                assert len(kpts) == 3
+                for kpt in kpts:
+                    assert isinstance(kpt, int) or isinstance(kpt, float)
+            else:
+                raise
 
 
 def test_FindGas_successfully():
@@ -329,7 +346,20 @@ def test_FindAdslab_unsuccessfully():
 
 
 def test_calculate_surface_k_points():
-    assert False
+    for cell in [[[9.9, 0.0, 0.0],
+                  [0.0, 10.3, 0.0],
+                  [0.0, -6.0, 20.1]],
+                 [[5.53, 0.00, 0.00],
+                  [-1.84, 13.79, 0.00],
+                  [7.37, 3.94, 20.48]]]:
+        atoms = ase.Atoms('C', cell=cell)
+        k_points = calculate_surface_k_points(atoms)
+
+        a0, b0, c0 = (np.linalg.norm(vector) for vector in cell)
+        assert all(isinstance(point, int) for point in k_points)
+        assert k_points[0] == int(20 / a0)
+        assert k_points[1] == max(1, int(k_points[0] * a0 / b0))
+        assert k_points[2] == 1
 
 
 class TestFindSurface():
@@ -455,5 +485,112 @@ class TestFindSurface():
             clean_up_tasks()
 
 
-def test_FindRismAdslab():
-    assert False
+def test_RismFindAdslab_successfully():
+    '''
+    If we ask this task to find something that is there, it should return
+    the correct Mongo document/dictionary
+    '''
+    # Various settings
+    adsorption_site = (2.558675812674303, 2.5586758126743008, 19.187941671)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'CO'
+    rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
+    mpid = 'mp-30'
+    miller_indices = (1, 0, 0)
+
+    # Need to run QE before running RISM
+    req = FindAdslab(adsorption_site=adsorption_site,
+                     shift=shift,
+                     top=top,
+                     adsorbate_name=adsorbate_name,
+                     rotation=rotation,
+                     mpid=mpid,
+                     miller_indices=miller_indices,
+                     dft_settings=ADSLAB_SETTINGS['qe'])
+    try:
+        schedule_tasks([req])
+        qe_doc = get_task_output(req)
+        for key in ['ctime', 'mtime', '_id', 'calculation_date', 'initial_configuration']:
+            del qe_doc[key]
+
+        # Need to feed the positions from QE relaxation to RISM
+        task = FindRismAdslab(atoms_dict=qe_doc,
+                              adsorption_site=adsorption_site,
+                              shift=shift,
+                              top=top,
+                              adsorbate_name=adsorbate_name,
+                              rotation=rotation,
+                              mpid=mpid,
+                              miller_indices=miller_indices,
+                              dft_settings=ADSLAB_SETTINGS['rism'])
+        schedule_tasks([task])
+        doc = get_task_output(task)
+        assert doc['fwname']['calculation_type'] == 'slab+adsorbate optimization'
+        assert doc['fwname']['adsorption_site'] == list(adsorption_site)
+        assert math.isclose(doc['fwname']['shift'], shift)
+        assert doc['fwname']['top'] == top
+        assert doc['fwname']['adsorbate'] == adsorbate_name
+        assert doc['fwname']['adsorbate_rotation'] == rotation
+        assert doc['fwname']['mpid'] == mpid
+        assert tuple(doc['fwname']['miller']) == miller_indices
+        _assert_dft_settings(doc, ADSLAB_SETTINGS['rism'])
+
+        # Make sure we can turn it into an atoms object
+        _ = make_atoms_from_doc(doc)    # noqa: F841
+
+    finally:
+        clean_up_tasks()
+
+
+def test_RismFindAdslab_unsuccessfully():
+    '''
+    If we ask this task to find something that is not there, it should return
+    the correct dependency
+    '''
+    # Various settings
+    adsorption_site = (2.558675812674303, 2.5586758126743008, 19.187941671)
+    shift = 0.25
+    top = True
+    adsorbate_name = 'OH'
+    rotation = {'phi': 0., 'theta': 0., 'psi': 0.}
+    mpid = 'mp-30'
+    miller_indices = (1, 0, 0)
+
+    # Need to run QE before running RISM
+    req = FindAdslab(adsorption_site=adsorption_site,
+                     shift=shift,
+                     top=top,
+                     adsorbate_name='CO',
+                     rotation=rotation,
+                     mpid=mpid,
+                     miller_indices=miller_indices,
+                     dft_settings=ADSLAB_SETTINGS['qe'])
+    try:
+        schedule_tasks([req])
+        qe_doc = get_task_output(req)
+        for key in ['ctime', 'mtime', '_id', 'calculation_date', 'initial_configuration']:
+            del qe_doc[key]
+        task = FindRismAdslab(atoms_dict=qe_doc,
+                              adsorption_site=adsorption_site,
+                              shift=shift,
+                              top=top,
+                              adsorbate_name=adsorbate_name,
+                              rotation=rotation,
+                              mpid=mpid,
+                              miller_indices=miller_indices,
+                              dft_settings=ADSLAB_SETTINGS['rism'])
+
+        dependency = _run_task_with_dynamic_dependencies(task)
+        assert isinstance(dependency, MakeRismAdslabFW)
+        assert dependency.mpid == mpid
+        assert dependency.adsorption_site == adsorption_site
+        assert dependency.shift == shift
+        assert dependency.top == top
+        assert dependency.adsorbate_name == adsorbate_name
+        assert unfreeze_dict(dependency.rotation) == rotation
+        assert dependency.miller_indices == miller_indices
+        assert unfreeze_dict(dependency.dft_settings) == ADSLAB_SETTINGS['rism']
+
+    finally:
+        clean_up_tasks()
