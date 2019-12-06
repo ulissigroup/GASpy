@@ -239,6 +239,10 @@ def slab_settings():
     rism['esm_only'] = False
     # Setting the charge
     rism['starting_charges'] = None
+    # Assume that we do one step of QE before RISM so that we can use the
+    # electronic files from it
+    rism['startingpot'] = 'file'
+    rism['startingwfc'] = 'file'
 
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
