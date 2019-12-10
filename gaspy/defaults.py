@@ -115,7 +115,7 @@ def gas_settings():
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['starting_charges'] = None
+    rism['starting_charge'] = None
     # Re-set the sigma for gas-phase
     rism['sigma'] = 0.01
 
@@ -238,7 +238,7 @@ def slab_settings():
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['starting_charges'] = None
+    rism['starting_charge'] = None
     # Assume that we do one step of QE before RISM so that we can use the
     # electronic files from it
     rism['startingpot'] = 'file'

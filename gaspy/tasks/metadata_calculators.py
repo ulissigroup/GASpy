@@ -6,6 +6,8 @@ __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
 import sys
+import copy
+import warnings
 import pickle
 import numpy as np
 import luigi
@@ -23,10 +25,11 @@ from .calculation_finders import (FindBulk,
                                   FindSurface,
                                   FindRismAdslab)
 from ..mongo import make_atoms_from_doc, make_doc_from_atoms
-from .. import utils
+from ..fireworks_helper_scripts import get_atoms_from_fwid, get_launchpad
+from ..utils import read_rc, unfreeze_dict
 from .. import defaults
 
-GASDB_PATH = utils.read_rc('gasdb_path')
+GASDB_PATH = read_rc('gasdb_path')
 DFT_CALCULATOR = defaults.DFT_CALCULATOR
 GAS_SETTINGS = defaults.gas_settings()
 BULK_SETTINGS = defaults.bulk_settings()
@@ -75,7 +78,8 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
 
 
 def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
-                                        anion_concs, cation_concs, **kwargs):
+                                        anion_concs, cation_concs,
+                                        target_fermi=None, **kwargs):
     '''
     Wrapper for submitting RISM-type adsorption calculations given documents
     from the catalog. This should be used as a reference for beginners. Any
@@ -85,6 +89,8 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         adsorbate       A string indicating which adsorbate you want to submit
                         a calculation for. See `gaspy.defaults.adsorbates` for
                         possible values.
+        target_fermi    The Fermi energy you want the calculation to be
+        performed at [eV]. If `None`, then we'll do a PZC calculation.
         catalog_docs    Any portion of the list of dictionaries obtained from
                         `gaspy.gasdb.get_catalog_docs` that you want to run.
         anion_concs     A dictionary whose keys are the anions you want in the
@@ -96,7 +102,7 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                         units of mol/L. What you provide here will override the
                         default in `gaspy.defaults`.
         kwargs          If you want to override any arguments for the
-                        `gaspy.tasks.metadata_calculators.CalculateAdsorptionEnergy`
+                        `gaspy.tasks.metadata_calculators.CalculateConstantMuAdsorptionEnergy`
                         task, then just supply them here. Note that if you
                         supply a value for a field that is inside one of the
                         dictionaries in the `site_docs` argument, the site
@@ -115,7 +121,7 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         kwargs['shift'] = doc['shift']
         kwargs['top'] = doc['top']
 
-        # Define the RISM settings
+        # Define the default RISM settings
         if 'gas_dft_settings' not in kwargs:
             kwargs['gas_dft_settings'] = GAS_SETTINGS['rism']
         if 'bulk_dft_settings' not in kwargs:
@@ -124,17 +130,46 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
             kwargs['bare_slab_dft_settings'] = ADSLAB_SETTINGS['rism']
         if 'adslab_dft_settings' not in kwargs:
             kwargs['adslab_dft_settings'] = ADSLAB_SETTINGS['rism']
-        # Override default RISM settings with user-supplied ones
+
+        # Make sure we use the same anion and cation concentrations for everything
         for calculation_type in ['gas_dft_settings',
                                  'bare_slab_dft_settings',
                                  'adslab_dft_settings']:
             kwargs[calculation_type]['anion_concs'] = anion_concs
             kwargs[calculation_type]['cation_concs'] = cation_concs
 
-        # Create and submit the tasks/jobs
-        task = CalculateRismAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+        # If we have a target Fermi level, then make sure we use it for all the
+        # calculations
+        if target_fermi is not None:
+            for calculation_type in ['bare_slab_dft_settings', 'adslab_dft_settings']:
+                kwargs[calculation_type]['target_fermi'] = target_fermi
+            task = CalculateConstantMuAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+
+        # If we do not have a target Fermi level, then do a PZC
+        else:
+            task = CalculateRismAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
+
+        # Submit the jobs to GASpy
         tasks.append(task)
     schedule_tasks(tasks)
+
+    # Parse the results
+    energies = []
+    for doc, task in zip(catalog_docs, tasks):
+        try:
+            doc = get_task_output(task)
+            energy = doc['adsorption_energy']
+            energies.append(energy)
+        except FileNotFoundError:
+            energies.append(None)
+            warnings.warn('The following calculation has not finished yet:\n' +
+                          '  adsorbate = %s\n' % adsorbate +
+                          '  mpid = %s\n' % doc['mpid'] +
+                          '  miller = %s\n' % doc['miller'] +
+                          '  shift = %s\n' % doc['shift'] +
+                          '  top = %s\n' % doc['top'] +
+                          '  site = %s' % doc['adsorption_site'])
+    return energies
 
 
 class CalculateRismAdsorptionEnergy(luigi.Task):
@@ -204,7 +239,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
     max_fizzles = luigi.IntParameter(MAX_FIZZLES)
     requirements = {}
 
-    def _vanilla_qe_requires(self):
+    def _seed_calc_requires(self):
         '''
         Typical Luigi tasks have a `requires` method. This task has a series of
         dynamic dependencies. For organizational purposes, we break them up
@@ -228,7 +263,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
                                                                 adslab_dft_settings=ADSLAB_SETTINGS['qe'],
                                                                 max_fizzles=self.max_fizzles)}
 
-        self.__save_requirements(reqs)
+        self._save_requirements(reqs)
         return reqs
 
     def _rism_requires(self):
@@ -241,12 +276,12 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         '''
         reqs = {}
 
-        # For some reason, Luigi might not run the `_vanilla_qe_requires` before
+        # For some reason, Luigi might not run the `_seed_calc_requires` before
         # running this method. If this happens, then call it manually.
         try:
             vanilla_adsorption_task = self.requirements['vanilla_adsorption']
         except KeyError:
-            vanilla_adsorption_task = self._vanilla_qe_requires()['vanilla_adsorption']
+            vanilla_adsorption_task = self._seed_calc_requires()['vanilla_adsorption']
 
         # Get and feed the results of the non-RISM Quantum Espresso relaxation
         # for the bare slab
@@ -293,7 +328,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
                                                             self.gas_dft_settings,
                                                             max_fizzles=self.max_fizzles)
 
-        self.__save_requirements(reqs)
+        self._save_requirements(reqs)
         return reqs
 
     @staticmethod
@@ -310,7 +345,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         del pruned_doc['mtime']
         return pruned_doc
 
-    def __save_requirements(self, reqs):
+    def _save_requirements(self, reqs):
         '''
         We need to hack Luigi by using `gaspy.tasks.core.run_task` sometimse
         instead of `gaspy.tasks.core.schedule_tasks`, but `run_task` doesn't
@@ -335,7 +370,7 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
         '''
         # We assign variables to the yield statements to make sure the
         # generators are executed before the rest of this method.
-        _ = yield self._vanilla_qe_requires()  # noqa: F841
+        _ = yield self._seed_calc_requires()  # noqa: F841
         _ = yield self._rism_requires()  # noqa: F841
 
         # Calculate the adsorbate energy and also find the FWIDs
@@ -363,6 +398,251 @@ class CalculateRismAdsorptionEnergy(luigi.Task):
                          'slab': slab_doc['fwid'],
                          'adsorbate': list(gas_fwids)}}
         save_task_output(self, doc)
+
+    def output(self):
+        return make_task_output_object(self)
+
+
+class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
+    '''
+    This task will calculate the adsorption energy of a solvated system using
+    RISM. It does this by first doing RISM calculated at zero charge, and then
+    it uses the atomic positions and potential to seed a RISM calculation. This
+    helps RISM converge faster (theoretically).
+
+    Args:
+        adsorption_site         A 3-tuple of floats containing the Cartesian
+                                coordinates of the adsorption site you want to
+                                make a FW for
+        shift                   A float indicating the shift of the slab
+        top                     A Boolean indicating whether the adsorption
+                                site is on the top or the bottom of the slab
+        adsorbate_name          A string indicating which adsorbate to use. It
+                                should be one of the keys within the
+                                `gaspy.defaults.adsorbates` dictionary. If you
+                                want an adsorbate that is not in the dictionary,
+                                then you will need to add the adsorbate to that
+                                dictionary.
+        rotation                A dictionary containing the angles (in degrees)
+                                in which to rotate the adsorbate after it is
+                                placed at the adsorption site. The keys for
+                                each of the angles are 'phi', 'theta', and
+                                psi'.
+        mpid                    A string indicating the Materials Project ID of
+                                the bulk you want to enumerate sites from
+        miller_indices          A 3-tuple containing the three Miller indices
+                                of the slab[s] you want to enumerate sites from
+        min_xy                  A float indicating the minimum width (in both
+                                the x and y directions) of the slab (Angstroms)
+                                before we enumerate adsorption sites on it.
+        slab_generator_settings We use pymatgen's `SlabGenerator` class to
+                                enumerate surfaces. You can feed the arguments
+                                for that class here as a dictionary.
+        get_slab_settings       We use the `get_slabs` method of pymatgen's
+                                `SlabGenerator` class. You can feed the
+                                arguments for the `get_slabs` method here
+                                as a dictionary.
+        gas_dft_settings        A dictionary containing the DFT settings of
+                                the gas relaxation of the adsorbate
+        bulk_dft_settings       A dictionary containing the DFT settings of
+                                the relaxed bulk to enumerate slabs from
+        bare_slab_dft_settings  A dictionary containing your DFT settings
+                                for the bare slab relaxation
+        adslab_dft_settings     A dictionary containing your DFT settings
+                                for the adslab relaxation
+        max_fizzles             The maximum number of times you want any single
+                                DFT calculation to fail before giving up on this.
+    '''
+    adsorption_site = luigi.TupleParameter()
+    shift = luigi.FloatParameter()
+    top = luigi.BoolParameter()
+    adsorbate_name = luigi.Parameter()
+    rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
+    mpid = luigi.Parameter()
+    miller_indices = luigi.TupleParameter()
+    min_xy = luigi.FloatParameter(ADSLAB_SETTINGS['min_xy'])
+    slab_generator_settings = luigi.DictParameter(SLAB_SETTINGS['slab_generator_settings'])
+    get_slab_settings = luigi.DictParameter(SLAB_SETTINGS['get_slab_settings'])
+    gas_dft_settings = luigi.DictParameter(GAS_SETTINGS['rism'])
+    bulk_dft_settings = luigi.DictParameter(BULK_SETTINGS['rism'])
+    bare_slab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['rism'])
+    adslab_dft_settings = luigi.DictParameter(ADSLAB_SETTINGS['rism'])
+    max_fizzles = luigi.IntParameter(MAX_FIZZLES)
+    requirements = {}
+
+    def _seed_calc_requires(self):
+        '''
+        Typical Luigi tasks have a `requires` method. This task has a series of
+        dynamic dependencies. For organizational purposes, we break them up
+        into `_*_requires` methods.
+
+        This one returns the "potential at zero charge" RISM calculations,
+        which provide good guesses for the starting charge of the system.
+        '''
+        # Remove the target fermi level from the slab and adslab settings
+        pzc_adslab_settings = unfreeze_dict(copy.deepcopy(self.adslab_dft_settings))
+        pzc_slab_settings = unfreeze_dict(copy.deepcopy(self.bare_slab_dft_settings))
+        del pzc_adslab_settings['target_fermi']
+        del pzc_slab_settings['target_fermi']
+
+        # Go ahead and do the PZC calculations to get the charges
+        reqs = {'pzc': CalculateRismAdsorptionEnergy(adsorption_site=self.adsorption_site,
+                                                     shift=self.shift,
+                                                     top=self.top,
+                                                     adsorbate_name=self.adsorbate_name,
+                                                     rotation=self.rotation,
+                                                     mpid=self.mpid,
+                                                     miller_indices=self.miller_indices,
+                                                     min_xy=self.min_xy,
+                                                     slab_generator_settings=self.slab_generator_settings,
+                                                     get_slab_settings=self.get_slab_settings,
+                                                     gas_dft_settings=self.gas_dft_settings,
+                                                     bulk_dft_settings=self.bulk_dft_settings,
+                                                     bare_slab_dft_settings=pzc_slab_settings,
+                                                     adslab_dft_settings=pzc_adslab_settings,
+                                                     max_fizzles=self.max_fizzles)}
+        self._save_requirements(reqs)
+        return reqs
+
+    def _rism_requires(self):
+        '''
+        Typical Luigi tasks have a `requires` method. This task has a series of
+        dynamic dependencies. For organizational purposes, we break them up
+        into `_*_requires` methods.
+
+        This one returns the RISM calculations.
+        '''
+        reqs = {}
+
+        # For some reason, Luigi might not run the `_seed_calc_requires` before
+        # running this method. If this happens, then call it manually.
+        try:
+            pzc_task = self.requirements['pzc']
+        except KeyError:
+            pzc_task = self._seed_calc_requires()['pzc']
+
+        # Fetch the PZC results we need to seed the RISM calculations with
+        pzc_doc = get_task_output(pzc_task)
+        fwids = pzc_doc['fwids']
+        slab_doc, slab_starting_fermi = self.__parse_pzc_info(fwids['slab'])
+        adslab_doc, adslab_starting_fermi = self.__parse_pzc_info(fwids['adslab'])
+
+        # Get and feed the results of the PZC relaxation for the slab
+        pruned_slab_doc = self.prune_atoms_doc(slab_doc)
+        bare_slab_dft_settings = copy.deepcopy(self.bare_slab_dft_settings)
+        bare_slab_starting_charge = self.__calculate_starting_charge(self.dft_settings['target_fermi'],
+                                                                     slab_starting_fermi,
+                                                                     pruned_slab_doc)
+        bare_slab_dft_settings['starting_charge'] = bare_slab_starting_charge
+        reqs['bare_slab_doc'] = FindRismAdslab(atoms_dict=pruned_slab_doc,
+                                               adsorption_site=(0., 0., 0.),
+                                               shift=self.shift,
+                                               top=self.top,
+                                               dft_settings=bare_slab_dft_settings,
+                                               adsorbate_name='',
+                                               rotation={'phi': 0., 'theta': 0., 'psi': 0.},
+                                               mpid=self.mpid,
+                                               miller_indices=self.miller_indices,
+                                               min_xy=self.min_xy,
+                                               slab_generator_settings=self.slab_generator_settings,
+                                               get_slab_settings=self.get_slab_settings,
+                                               bulk_dft_settings=self.bulk_dft_settings,
+                                               max_fizzles=self.max_fizzles)
+
+        # Get and feed the results of the PZC relaxation for the adslab
+        pruned_adslab_doc = self.prune_atoms_doc(adslab_doc)
+        adslab_dft_settings = copy.deepcopy(self.adslab_dft_settings)
+        adslab_starting_charge = self.__calculate_starting_charge(self.dft_settings['target_fermi'],
+                                                                  adslab_starting_fermi,
+                                                                  pruned_adslab_doc)
+        adslab_dft_settings['starting_charge'] = adslab_starting_charge
+        reqs['adslab_doc'] = FindRismAdslab(atoms_dict=pruned_adslab_doc,
+                                            adsorption_site=self.adsorption_site,
+                                            shift=self.shift,
+                                            top=self.top,
+                                            dft_settings=adslab_dft_settings,
+                                            adsorbate_name=self.adsorbate_name,
+                                            rotation=self.rotation,
+                                            mpid=self.mpid,
+                                            miller_indices=self.miller_indices,
+                                            min_xy=self.min_xy,
+                                            slab_generator_settings=self.slab_generator_settings,
+                                            get_slab_settings=self.get_slab_settings,
+                                            bulk_dft_settings=self.bulk_dft_settings,
+                                            max_fizzles=self.max_fizzles)
+
+        # Get the adsorbate energy
+        reqs['adsorbate_energy'] = CalculateAdsorbateEnergy(self.adsorbate_name,
+                                                            self.gas_dft_settings,
+                                                            max_fizzles=self.max_fizzles)
+
+        self._save_requirements(reqs)
+        return reqs
+
+    @staticmethod
+    def __parse_pzc_info(fwid):
+        '''
+        Given a FireWork ID number of a PZC calculation, this method will get
+        you the information you need to seed a RISM calculation.
+
+        Arg:
+            fwid    Integer indicating the FireWork ID of the job you want to parse
+        Returns:
+            doc     A dictionary of the relaxed atoms object for the PZC
+                    relaxation
+            fermi   The Fermi energy of the PZC [eV]
+        '''
+        lpad = get_launchpad()
+        atoms = get_atoms_from_fwid(fwid)
+        doc = make_doc_from_atoms(atoms)
+        fw = lpad.get_fw_by_id(fwid)
+        launch = fw.launches[-1]
+        fermi = launch['action']['stored_data']['opt_results'][-1]
+        return doc, fermi
+
+    @staticmethod
+    def __calculate_starting_charge(mu, mu_pzc, doc):
+        '''
+        This method will guess the charge that you should start a RISM
+        calculation with given the Fermi energy you want to use, the Fermi
+        energy of a potential-at-zero-charge (PZC) calculation, and the area of
+        the structure. We use this equation (courtesy of Steve Weitzner):
+
+            Q = -A * C / qe * (mu - mu_pzc)
+
+        where Q = charge, A = area, C = capacitance, qe = elementary charge, mu
+        = Fermi energy of our calculation, and mu_pzc = Fermi level of PZC
+        calculation.
+
+        Args:
+            mu      Fermi level of the relaxation you want to do [eV]
+            mu_pzc  Float indicating the Fermi level of the relaxed PZC
+                    calculation [eV]
+            doc     A dictionary that we can use `make_atoms_from_doc` on.
+                    Used to calculate the surface area.
+        Returns:
+            Q   Float indicating the starting charge you should use [elementary
+                charge]
+        '''
+        # Establish some constants
+        qe = 1.602176634e-19  # Elementary charge [coulombs]
+        C = 30.  # Assumed capacitance [micro-Farad/cm^2]
+        C = C / 1e6 * (100)**2  # [Farad/m^2]
+
+        # Calculate the surface area
+        atoms = make_atoms_from_doc(doc)
+        cell = atoms.cell
+        A = np.cross(cell[0, :], cell[1, :]).norm()  # [Angstrom^2]
+        A = A / ((1e10)**2)  # [m^2]
+
+        # Calculate the difference in Fermi level between this calc and PZC
+        d_mu = mu - mu_pzc  # [eV]
+        d_mu = d_mu * 1.602176634e-19  # [J]
+
+        # Calculate the starting charge
+        Q = -A * C / qe * d_mu  # [coulombs]
+        Q = Q / qe  # [elementary charge]
+        return Q
 
     def output(self):
         return make_task_output_object(self)
@@ -770,7 +1050,7 @@ class CalculateSurfaceEnergy(luigi.Task):
 
             # Delete some slab generator settings that we don't care about for a
             # unit slab
-            slab_generator_settings = utils.unfreeze_dict(self.slab_generator_settings)
+            slab_generator_settings = unfreeze_dict(self.slab_generator_settings)
             del slab_generator_settings['min_vacuum_size']
             del slab_generator_settings['min_slab_size']
 

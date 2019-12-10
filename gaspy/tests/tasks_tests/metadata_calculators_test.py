@@ -70,6 +70,10 @@ def test_CalculateRismAdsorptionEnergy():
         clean_up_tasks()
 
 
+def test_CalculateConstantMuAdsorptionEnergy():
+    assert False
+
+
 def test_CalculateAdsorptionEnergy():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
