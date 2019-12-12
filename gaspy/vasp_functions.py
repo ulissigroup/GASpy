@@ -159,7 +159,7 @@ def _set_vasp_command(vasp_flags):
 
     # Make the appropriate command to call VASP and then assign it to the
     # environment so that VASP can pick it up automatically.
-    vasp_command, vasp_flags = command_makers[cluster_name]()
+    vasp_command, vasp_flags = command_makers[cluster_name](vasp_flags)
     os.environ['VASP_COMMAND'] = vasp_command
     return vasp_flags
 
