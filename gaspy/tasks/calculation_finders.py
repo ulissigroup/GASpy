@@ -487,7 +487,7 @@ class FindAdslab(FindCalculation):
         self.dependency = MakeAdslabFW(adsorption_site=self.adsorption_site,
                                        shift=self.shift,
                                        top=self.top,
-                                       dft_settings=self.dft_settings,
+                                       dft_settings=dft_settings,
                                        adsorbate_name=self.adsorbate_name,
                                        rotation=self.rotation,
                                        mpid=self.mpid,
