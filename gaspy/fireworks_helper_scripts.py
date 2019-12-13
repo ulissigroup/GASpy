@@ -59,7 +59,9 @@ def find_n_rockets(query, dft_settings, _testing=False):
     '''
     # Parse the DFT settings into the FireWorks query, then grab the docs
     for key, value in dft_settings.items():
-        query['name.dft_settings.%s' % key] = value
+        full_key = 'name.dft_settings.%s' % key
+        if full_key not in query:
+            query[full_key] = value
     docs = _get_firework_docs(query=query, _testing=_testing)
 
     # Warn the user if there are a bunch of fizzles
