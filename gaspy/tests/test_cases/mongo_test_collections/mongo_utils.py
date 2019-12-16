@@ -14,7 +14,7 @@ from ..utils import read_testing_rc
 from ....gasdb import get_mongo_collection, ConnectableCollection
 
 LOCATION_OF_DOCS = '/home/GASpy/gaspy/tests/test_cases/mongo_test_collections/'
-ALL_COLLECTION_TAGS = ['atoms', 'catalog', 'adsorption', 'surface_energy']
+ALL_COLLECTION_TAGS = ['atoms', 'catalog_vasp', 'adsorption_vasp', 'surface_energy_vasp']
 
 
 def get_testing_mongo_collection(collection_tag):
