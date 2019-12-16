@@ -35,7 +35,9 @@ def read_rc(query=None):
             try:
                 rc_contents = rc_contents[key]
             except KeyError as error:
-                raise KeyError('Check the spelling/capitalization of the key/values you are looking for').with_traceback(error.__traceback__)
+                raise KeyError('Check the spelling/capitalization of the %s '
+                               'key in your .gaspyrc.json file'
+                               % key).with_traceback(error.__traceback__)
 
     return rc_contents
 

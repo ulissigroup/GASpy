@@ -54,7 +54,7 @@ def test_read_rc_exception():
     # If there was a KeyError but it wasn't the one it was supposed to be,
     # then something went wrong
     except KeyError as error:
-        if str(error) != "'Check the spelling/capitalization of the key/values you are looking for'":
+        if "Check the spelling/capitalization of the" not in str(error):
             assert False
 
         # Pass if the message is correct
