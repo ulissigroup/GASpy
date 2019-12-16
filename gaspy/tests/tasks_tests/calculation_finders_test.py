@@ -22,6 +22,7 @@ import os
 import pytest
 import warnings
 import math
+import copy
 import numpy as np
 import luigi
 import ase
@@ -339,7 +340,9 @@ def test_FindAdslab_unsuccessfully():
         assert dependency.adsorbate_name == adsorbate_name
         assert unfreeze_dict(dependency.rotation) == rotation
         assert dependency.miller_indices == miller_indices
-        assert unfreeze_dict(dependency.dft_settings) == dft_settings
+        expected_dft_settings = copy.deepcopy(dft_settings)
+        expected_dft_settings['kpts'] = (3, 3, 1)
+        assert unfreeze_dict(dependency.dft_settings) == expected_dft_settings
 
     finally:
         clean_up_tasks()
