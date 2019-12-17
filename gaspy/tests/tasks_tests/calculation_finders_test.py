@@ -266,6 +266,14 @@ def test_FindBulk_unsuccessfully():
         clean_up_tasks()
 
 
+def test_calculate_bulk_k_points():
+    mpid = 'mp-67'
+    dft_settings = BULK_SETTINGS['qe']
+    task = FindBulk(mpid=mpid, dft_settings=dft_settings)
+    k_points = task.calculate_bulk_k_points()
+    assert k_points == (9, 9, 6)
+
+
 def test_FindAdslab_successfully():
     '''
     If we ask this task to find something that is there, it should return
@@ -360,8 +368,8 @@ def test_calculate_surface_k_points():
 
         a0, b0, c0 = (np.linalg.norm(vector) for vector in cell)
         assert all(isinstance(point, int) for point in k_points)
-        assert k_points[0] == int(20 / a0)
-        assert k_points[1] == max(1, int(k_points[0] * a0 / b0))
+        assert k_points[0] == max(1, int(round(20 / a0)))
+        assert k_points[1] == max(1, int(round(20 / b0)))
         assert k_points[2] == 1
 
 

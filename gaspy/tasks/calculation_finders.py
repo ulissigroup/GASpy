@@ -324,10 +324,9 @@ class FindBulk(FindCalculation):
         a0 = np.linalg.norm(cell[0])
         b0 = np.linalg.norm(cell[1])
         c0 = np.linalg.norm(cell[2])
-        k_pts_x = int(30/a0)
-        k_pts = (k_pts_x,
-                 max(1, int(k_pts_x*a0/b0)),
-                 max(1, int(k_pts_x*a0/c0)))
+        k_pts = (max(1, int(round(30/a0))),
+                 max(1, int(round(30/b0))),
+                 max(1, int(round(30/c0))))
         return k_pts
 
 
@@ -509,9 +508,8 @@ def calculate_surface_k_points(atoms):
     cell = atoms.get_cell()
     a0 = np.linalg.norm(cell[0])
     b0 = np.linalg.norm(cell[1])
-    k_pts_x = int(20/a0)
-    k_pts = (k_pts_x,
-             max(1, int(k_pts_x*a0/b0)),
+    k_pts = (max(1, int(round(20/a0))),
+             max(1, int(round(20/b0))),
              1)
     return k_pts
 
