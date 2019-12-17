@@ -82,7 +82,7 @@ def test_CalculateAdsorptionEnergy():
     atoms collection.  If you copy/paste this test into somewhere else, make
     sure that you use `run_task_locally` appropriately.
     '''
-    adsorption_site = (0., 1.41, 20.52)
+    adsorption_site = (1.41, 1.41, 20.90)
     shift = 0.25
     top = True
     adsorbate_name = 'CO'
@@ -101,9 +101,9 @@ def test_CalculateAdsorptionEnergy():
 
         # I just checked this one calculation by hand and found some key
         # information about it.
-        assert math.isclose(doc['adsorption_energy'], -1.5959449799999899)
+        assert math.isclose(doc['adsorption_energy'], -1.2317927399999942)
         assert doc['fwids']['slab'] == 124894
-        assert doc['fwids']['adslab'] == 124897
+        assert doc['fwids']['adslab'] == 124895
         assert doc['fwids']['adsorbate'] == [19565, 19566, 19567]
 
     finally:

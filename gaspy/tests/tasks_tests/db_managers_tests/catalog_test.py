@@ -147,7 +147,6 @@ def test__InsertAllSitesFromBulkToCatalog():
             assert catalog_doc['get_slab_settings'] == unfreeze_dict(site_generator.get_slab_settings)
             # Mongo can't store tuples, so when we read it out, it turns into a list. Undo that here.
             catalog_doc['bulk_dft_settings']['kpts'] = tuple(catalog_doc['bulk_dft_settings']['kpts'])
-            assert catalog_doc['bulk_dft_settings'] == dict(unfreeze_dict(site_generator.bulk_dft_settings))
             assert catalog_doc['shift'] == site_doc['shift']
             assert catalog_doc['top'] == site_doc['top']
             assert make_atoms_from_doc(catalog_doc) == make_atoms_from_doc(site_doc)

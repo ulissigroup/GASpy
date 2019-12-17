@@ -171,6 +171,14 @@ def _assert_qe_settings(doc, rism_settings):
             else:
                 raise
 
+        # We don't NEED the starting charge to be in the settings. If it's not
+        # there, then we assume it's zero.
+        except KeyError:
+            if key == 'starting_charge':
+                pass
+            else:
+                raise
+
 
 def test_FindGas_successfully():
     '''
@@ -279,7 +287,8 @@ def test_FindAdslab_successfully():
     If we ask this task to find something that is there, it should return
     the correct Mongo document/dictionary
     '''
-    adsorption_site = (0., 1.41, 20.52)
+    #adsorption_site = (0., 1.41, 20.52)
+    adsorption_site = (1.41, 1.41, 20.90)
     shift = 0.25
     top = True
     adsorbate_name = 'CO'
@@ -349,7 +358,7 @@ def test_FindAdslab_unsuccessfully():
         assert unfreeze_dict(dependency.rotation) == rotation
         assert dependency.miller_indices == miller_indices
         expected_dft_settings = copy.deepcopy(dft_settings)
-        expected_dft_settings['kpts'] = (3, 3, 1)
+        expected_dft_settings['kpts'] = (4, 4, 1)
         assert unfreeze_dict(dependency.dft_settings) == expected_dft_settings
 
     finally:
