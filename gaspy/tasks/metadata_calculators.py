@@ -626,7 +626,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         '''
         # Establish some constants
         qe = 1.602176634e-19  # Elementary charge [coulombs]
-        C = 30.  # Assumed capacitance [micro-Farad/cm^2]
+        C = 20.  # Assumed capacitance [micro-Farad/cm^2]
         C = C / 1e6 * (100)**2  # [Farad/m^2]
 
         # Calculate the surface area
