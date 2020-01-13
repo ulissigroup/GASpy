@@ -76,6 +76,21 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
         tasks.append(task)
     schedule_tasks(tasks)
 
+    # Parse the results
+    for catalog_doc, task in zip(catalog_docs, tasks):
+        try:
+            energy_doc = get_task_output(task)
+            catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
+        except FileNotFoundError:
+            warnings.warn('The following calculation has not finished yet:\n' +
+                          '  adsorbate = %s\n' % adsorbate +
+                          '  mpid = %s\n' % doc['mpid'] +
+                          '  miller = %s\n' % doc['miller'] +
+                          '  shift = %s\n' % doc['shift'] +
+                          '  top = %s\n' % doc['top'] +
+                          '  site = %s' % doc['adsorption_site'])
+    return catalog_docs
+
 
 def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                                         anion_concs, cation_concs,
@@ -154,14 +169,11 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
     schedule_tasks(tasks)
 
     # Parse the results
-    energies = []
-    for doc, task in zip(catalog_docs, tasks):
+    for catalog_doc, task in zip(catalog_docs, tasks):
         try:
-            doc = get_task_output(task)
-            energy = doc['adsorption_energy']
-            energies.append(energy)
+            energy_doc = get_task_output(task)
+            catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
         except FileNotFoundError:
-            energies.append(None)
             warnings.warn('The following calculation has not finished yet:\n' +
                           '  adsorbate = %s\n' % adsorbate +
                           '  mpid = %s\n' % doc['mpid'] +
@@ -169,7 +181,7 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                           '  shift = %s\n' % doc['shift'] +
                           '  top = %s\n' % doc['top'] +
                           '  site = %s' % doc['adsorption_site'])
-    return energies
+    return catalog_docs
 
 
 class CalculateRismAdsorptionEnergy(luigi.Task):
