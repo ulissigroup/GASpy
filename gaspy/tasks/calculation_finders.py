@@ -452,7 +452,7 @@ class FindAdslab(FindCalculation):
 
         # If the k-points is 'surface', then calculate and assign them
         self.unfrozen_dft_settings = unfreeze_dict(self.dft_settings)
-        if self._dft_settings['kpts'] == 'surface':
+        if self.unfrozen_dft_settings['kpts'] == 'surface':
             # Get the atoms object of the surface
             try:  # EAFP to just run the task if we need to
                 docs = get_task_output(self.requires())
@@ -486,7 +486,7 @@ class FindAdslab(FindCalculation):
         self.dependency = MakeAdslabFW(adsorption_site=self.adsorption_site,
                                        shift=self.shift,
                                        top=self.top,
-                                       dft_settings=self._dft_settings,
+                                       dft_settings=self.unfrozen_dft_settings,
                                        adsorbate_name=self.adsorbate_name,
                                        rotation=self.rotation,
                                        mpid=self.mpid,
