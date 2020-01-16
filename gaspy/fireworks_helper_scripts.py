@@ -354,6 +354,12 @@ def __guess_qe_initialization_settings(fw_name):
     calculation_type = fw_name['calculation_type']
     qe_settings = all_settings[calculation_type]()['qe']
     qe_settings['nstep'] = 1
+
+    # The default k point grid for surfaces is simply labeled as "surface".
+    # Let's replace it with the real k point grid here.
+    if qe_settings['kpts'] == 'surface':
+        qe_settings['kpts'] = fw_name['dft_settings']['kpts']
+
     return qe_settings
 
 

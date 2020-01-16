@@ -308,12 +308,14 @@ def test___guess_qe_initialization_settings():
                     'unit cell optimization': defaults.bulk_settings,
                     'surface energy optimization': defaults.slab_settings,
                     'slab+adsorbate optimization': defaults.adslab_settings}
-    fw_names = [{'calculation_type': calc_type} for calc_type in all_settings]
+    fw_names = [{'calculation_type': calc_type,
+                 'dft_settings': {'kpts': (8, 6, 1)}} for calc_type in all_settings]
     for fw_name in fw_names:
         qe_settings = __guess_qe_initialization_settings(fw_name)
 
         expected_qe_settings = all_settings[fw_name['calculation_type']]()['qe']
         expected_qe_settings['nstep'] = 1
+        expected_qe_settings['kpts'] = (8, 6, 1)
         assert qe_settings == expected_qe_settings
 
 
