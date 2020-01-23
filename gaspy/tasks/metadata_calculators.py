@@ -176,12 +176,13 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         except FileNotFoundError:
             warnings.warn('The following calculation has not finished yet:\n' +
                           '  adsorbate = %s\n' % adsorbate +
-                          '  mpid = %s\n' % doc['mpid'] +
-                          '  miller = %s\n' % doc['miller'] +
-                          '  shift = %s\n' % doc['shift'] +
-                          '  top = %s\n' % doc['top'] +
-                          '  site = %s' % doc['adsorption_site'])
-    return catalog_docs
+                          '  mpid = %s\n' % catalog_doc['mpid'] +
+                          '  miller = %s\n' % catalog_doc['miller'] +
+                          '  shift = %s\n' % catalog_doc['shift'] +
+                          '  top = %s\n' % catalog_doc['top'] +
+                          '  site = %s' % catalog_doc['adsorption_site'],
+                          RuntimeWarning)
+    return zip(tasks, catalog_docs)
 
 
 class CalculateRismAdsorptionEnergy(luigi.Task):
