@@ -13,7 +13,7 @@ from .utils import read_rc
 
 MODEL = 'model0'
 DFT_CALCULATOR = read_rc('dft_calculator')
-MAX_FIZZLES = 5
+MAX_FIZZLES = 10
 
 
 def pp_version():
@@ -241,8 +241,8 @@ def slab_settings():
     rism['starting_charge'] = None
     # Assume that we do one step of QE before RISM so that we can use the
     # electronic files from it
-    rism['startingpot'] = 'file'
-    rism['startingwfc'] = 'file'
+    #rism['startingpot'] = 'file'
+    #rism['startingwfc'] = 'file'
 
     slab_settings = OrderedDict(max_miller=2,
                                 max_atoms=80,
