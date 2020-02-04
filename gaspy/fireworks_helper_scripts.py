@@ -301,19 +301,19 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
                      'git clone git@github.com:ulissigroup/espresso_tools.git')
     clone_espresso_tools = ScriptTask.from_str(clone_command)
 
-    # RISM runs better when you initialize it with 1 step of QE
+    # # RISM runs better when you initialize it with 1 step of QE
     atom_trajhex = encode_atoms_to_trajhex(atoms)
-    qe_settings = __guess_qe_initialization_settings(fw_name)
-    initialize = PyTask(func='espresso_tools.run_qe',
-                        args=[atom_trajhex, qe_settings],
-                        stored_data_varname='initialization_results')
+    # qe_settings = __guess_qe_initialization_settings(fw_name)
+    # initialize = PyTask(func='espresso_tools.run_qe',
+    #                     args=[atom_trajhex, qe_settings],
+    #                     stored_data_varname='initialization_results')
 
-    # Our QE initialization created a `fireworks-*.out` file. If we run RISM
-    # right afterwards, it'll just concatenate to the same file. We want to
-    # keep the output files separate, so we move the output of the
-    # initialization.
-    mv_outputs = PyTask(func='espresso_tools.gaspy_wrappers.move_initialization_output',
-                        stored_data_varnam='initialization_movement')
+    # # Our QE initialization created a `fireworks-*.out` file. If we run RISM
+    # # right afterwards, it'll just concatenate to the same file. We want to
+    # # keep the output files separate, so we move the output of the
+    # # initialization.
+    # mv_outputs = PyTask(func='espresso_tools.gaspy_wrappers.move_initialization_output',
+    #                     stored_data_varnam='initialization_movement')
 
     # Tell the FireWork rocket to run the job using espresso_tools
     relax = PyTask(func='espresso_tools.run_rism',
@@ -330,7 +330,8 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
 
     # Package everything together
     fw_name['user'] = getpass.getuser()
-    tasks = [clone_espresso_tools, initialize, mv_outputs, relax, clean_up]
+    #tasks = [clone_espresso_tools, initialize, mv_outputs, relax, clean_up]
+    tasks = [clone_espresso_tools, relax, clean_up]
     firework = Firework(tasks, name=fw_name)
     return firework
 
