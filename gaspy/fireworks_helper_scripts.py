@@ -536,13 +536,17 @@ def _fetch_initial_atoms_from_fw(fw, index=-1):
         trajhexes = [task['args'][1] for task in fw.spec['_tasks']
                      if task.get('func', '') in function_names]
 
-    # If we used QE or RISM, then the initial atoms was passed as a trajhex to
-    # the function that runs QE. Let's grab that argument. Note that RISM
-    # actually calls 'run_qe` first as an initialization step, which is why we
-    # don't look for the input for 'run_rism' for RISM FireWorks.
-    elif calculator in {'qe', 'rism'}:
+    # If we used QE, then the initial atoms was passed as a trajhex to the
+    # function that runs QE. Let's grab that argument.
+    elif calculator == 'qe':
         trajhexes = [task['args'][0] for task in fw.spec['_tasks']
                      if task.get('func', '') == 'espresso_tools.run_qe']
+
+    # If we used RISM, then the initial atoms was passed as a trajhex to the
+    # function that runs RISM. Let's grab that argument.
+    elif calculator == 'rism':
+        trajhexes = [task['args'][0] for task in fw.spec['_tasks']
+                     if task.get('func', '') == 'espresso_tools.run_rism']
 
     # Some error handling in case something goes wrong.
     else:
