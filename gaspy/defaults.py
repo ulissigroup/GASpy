@@ -115,7 +115,7 @@ def gas_settings():
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['starting_charge'] = None
+    rism['tot_charge'] = None
     # Re-set the sigma for gas-phase
     rism['sigma'] = 0.01
     # Need to tell espresso_tools to use these defaults
@@ -241,7 +241,7 @@ def slab_settings():
     rism['LJ_sigmas'] = None
     rism['esm_only'] = False
     # Setting the charge
-    rism['starting_charge'] = None
+    rism['tot_charge'] = None
     # Need to tell espresso_tools to use these defaults
     rism['startingpot'] = 'atomic'
     rism['startingwfc'] = 'atomic'

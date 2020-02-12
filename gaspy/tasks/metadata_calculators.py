@@ -543,10 +543,10 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         # Get and feed the results of the PZC relaxation for the slab
         pruned_slab_doc = self.prune_atoms_doc(slab_doc)
         bare_slab_dft_settings = unfreeze_dict(copy.deepcopy(self.bare_slab_dft_settings))
-        bare_slab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
-                                                                     slab_starting_fermi,
-                                                                     pruned_slab_doc)
-        bare_slab_dft_settings['starting_charge'] = bare_slab_starting_charge
+        bare_slab_starting_charge = self.__calculate_tot_charge(self.adslab_dft_settings['target_fermi'],
+                                                                slab_starting_fermi,
+                                                                pruned_slab_doc)
+        bare_slab_dft_settings['tot_charge'] = bare_slab_starting_charge
         reqs['bare_slab_doc'] = FindRismAdslab(atoms_dict=pruned_slab_doc,
                                                adsorption_site=(0., 0., 0.),
                                                shift=self.shift,
@@ -565,10 +565,10 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         # Get and feed the results of the PZC relaxation for the adslab
         pruned_adslab_doc = self.prune_atoms_doc(adslab_doc)
         adslab_dft_settings = unfreeze_dict(copy.deepcopy(self.adslab_dft_settings))
-        adslab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
-                                                                  adslab_starting_fermi,
-                                                                  pruned_adslab_doc)
-        adslab_dft_settings['starting_charge'] = adslab_starting_charge
+        adslab_starting_charge = self.__calculate_tot_charge(self.adslab_dft_settings['target_fermi'],
+                                                             adslab_starting_fermi,
+                                                             pruned_adslab_doc)
+        adslab_dft_settings['tot_charge'] = adslab_starting_charge
         reqs['adslab_doc'] = FindRismAdslab(atoms_dict=pruned_adslab_doc,
                                             adsorption_site=self.adsorption_site,
                                             shift=self.shift,
@@ -614,7 +614,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         return doc, fermi
 
     @staticmethod
-    def __calculate_starting_charge(mu, mu_pzc, doc):
+    def __calculate_tot_charge(mu, mu_pzc, doc):
         '''
         This method will guess the charge that you should start a RISM
         calculation with given the Fermi energy you want to use, the Fermi
