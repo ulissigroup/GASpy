@@ -542,7 +542,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
 
         # Get and feed the results of the PZC relaxation for the slab
         pruned_slab_doc = self.prune_atoms_doc(slab_doc)
-        bare_slab_dft_settings = copy.deepcopy(self.bare_slab_dft_settings)
+        bare_slab_dft_settings = unfreeze_dict(copy.deepcopy(self.bare_slab_dft_settings))
         bare_slab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
                                                                      slab_starting_fermi,
                                                                      pruned_slab_doc)
@@ -564,7 +564,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
 
         # Get and feed the results of the PZC relaxation for the adslab
         pruned_adslab_doc = self.prune_atoms_doc(adslab_doc)
-        adslab_dft_settings = copy.deepcopy(self.adslab_dft_settings)
+        adslab_dft_settings = unfreeze_dict(copy.deepcopy(self.adslab_dft_settings))
         adslab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
                                                                   adslab_starting_fermi,
                                                                   pruned_adslab_doc)
@@ -645,7 +645,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         # Calculate the surface area
         atoms = make_atoms_from_doc(doc)
         cell = atoms.cell
-        A = np.cross(cell[0, :], cell[1, :]).norm()  # [Angstrom^2]
+        A = np.linalg.norm(np.cross(cell[0, :], cell[1, :]))  # [Angstrom^2]
         A = A / ((1e10)**2)  # [m^2]
 
         # Calculate the difference in Fermi level between this calc and PZC
