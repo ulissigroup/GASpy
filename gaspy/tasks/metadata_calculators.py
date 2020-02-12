@@ -610,7 +610,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         doc = make_doc_from_atoms(atoms)
         fw = lpad.get_fw_by_id(fwid)
         launch = fw.launches[-1]
-        fermi = launch['action']['stored_data']['opt_results'][-1]
+        fermi = launch.action.stored_data['opt_results'][-1]
         return doc, fermi
 
     @staticmethod
