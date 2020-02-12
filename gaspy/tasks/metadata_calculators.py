@@ -543,7 +543,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         # Get and feed the results of the PZC relaxation for the slab
         pruned_slab_doc = self.prune_atoms_doc(slab_doc)
         bare_slab_dft_settings = copy.deepcopy(self.bare_slab_dft_settings)
-        bare_slab_starting_charge = self.__calculate_starting_charge(self.dft_settings['target_fermi'],
+        bare_slab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
                                                                      slab_starting_fermi,
                                                                      pruned_slab_doc)
         bare_slab_dft_settings['starting_charge'] = bare_slab_starting_charge
@@ -565,7 +565,7 @@ class CalculateConstantMuAdsorptionEnergy(CalculateRismAdsorptionEnergy):
         # Get and feed the results of the PZC relaxation for the adslab
         pruned_adslab_doc = self.prune_atoms_doc(adslab_doc)
         adslab_dft_settings = copy.deepcopy(self.adslab_dft_settings)
-        adslab_starting_charge = self.__calculate_starting_charge(self.dft_settings['target_fermi'],
+        adslab_starting_charge = self.__calculate_starting_charge(self.adslab_dft_settings['target_fermi'],
                                                                   adslab_starting_fermi,
                                                                   pruned_adslab_doc)
         adslab_dft_settings['starting_charge'] = adslab_starting_charge
