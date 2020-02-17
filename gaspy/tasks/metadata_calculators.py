@@ -8,6 +8,7 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import sys
 import copy
 import warnings
+from pprint import pprint
 import pickle
 import numpy as np
 import luigi
@@ -173,6 +174,10 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         try:
             energy_doc = get_task_output(task)
             catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
+            catalog_doc['anion_concs'] = anion_concs
+            catalog_doc['cation_concs'] = cation_concs
+            catalog_doc['target_fermi'] = target_fermi
+            del catalog_doc['mongo_id']
         except FileNotFoundError:
             warnings.warn('The following calculation has not finished yet:\n' +
                           '  adsorbate = %s\n' % adsorbate +
@@ -180,8 +185,14 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                           '  miller = %s\n' % catalog_doc['miller'] +
                           '  shift = %s\n' % catalog_doc['shift'] +
                           '  top = %s\n' % catalog_doc['top'] +
-                          '  site = %s' % catalog_doc['adsorption_site'],
+                          '  site = %s\n' % catalog_doc['adsorption_site'] +
+                          '  anions = %s\n' % anion_concs +
+                          '  cations = %s\n' % cation_concs +
+                          '  fermi = %s' % target_fermi,
                           RuntimeWarning)
+    print('Calculations finished:')
+    for doc in catalog_docs:
+        pprint(doc, indent=1)
     return zip(tasks, catalog_docs)
 
 
