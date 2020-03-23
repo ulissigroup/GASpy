@@ -289,7 +289,7 @@ def adslab_settings():
     rism = slab_settings()['rism']
     rism['xcf'] = 'rpbe'
 
-    adslab_settings = OrderedDict(min_xy=4.5,
+    adslab_settings = OrderedDict(min_xy=11.,  # Set to 4.5 for normal DFT or 11 for RISM
                                   rotation=OrderedDict(phi=0., theta=0., psi=0.),
                                   vasp=vasp,
                                   qe=qe,
