@@ -506,10 +506,12 @@ def calculate_surface_k_points(atoms):
         k_pts   A 3-tuple of integers indicating the k-point mesh to use
     '''
     cell = atoms.get_cell()
-    a0 = np.linalg.norm(cell[0])
-    b0 = np.linalg.norm(cell[1])
-    k_pts = (max(1, int(round(20/a0))),
-             max(1, int(round(20/b0))),
+    order = np.inf
+    a0 = np.linalg.norm(cell[0], order=order)
+    b0 = np.linalg.norm(cell[1], order=order)
+    multiplier = 40
+    k_pts = (max(1, int(round(multiplier/a0))),
+             max(1, int(round(multiplier/b0))),
              1)
     return k_pts
 
