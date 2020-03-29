@@ -507,8 +507,8 @@ def calculate_surface_k_points(atoms):
     '''
     cell = atoms.get_cell()
     order = np.inf
-    a0 = np.linalg.norm(cell[0], order=order)
-    b0 = np.linalg.norm(cell[1], order=order)
+    a0 = np.linalg.norm(cell[0], ord=order)
+    b0 = np.linalg.norm(cell[1], ord=order)
     multiplier = 40
     k_pts = (max(1, int(round(multiplier/a0))),
              max(1, int(round(multiplier/b0))),
