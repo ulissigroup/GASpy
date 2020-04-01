@@ -26,25 +26,28 @@ RUN apt-get update && apt-get dist-upgrade -y
 RUN apt-get update && apt-get install -y less wget rsync git
 
 # Install Conda
-RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh --directory-prefix=$HOME
-RUN /bin/bash $HOME/Miniconda3-4.5.4-Linux-x86_64.sh -bp /miniconda3
-RUN rm $HOME/Miniconda3-4.5.4-Linux-x86_64.sh
+RUN wget https://repo.continuum.io/miniconda/Miniconda3-4.7.12-Linux-x86_64.sh --directory-prefix=$HOME
+RUN /bin/bash $HOME/Miniconda3-4.7.12-Linux-x86_64.sh -bp /miniconda3
+RUN rm $HOME/Miniconda3-4.7.12-Linux-x86_64.sh
 ENV PATH /miniconda3/bin:$PATH
 
 # Install conda packages
+# note: default python version for conda 4.7.12 is 3.7
+# which conflicts with many packages, used 3.6 instead
 RUN conda config --prepend channels conda-forge
 RUN conda config --append channels matsci
 RUN conda install \
-    numpy>=1.15.1    scipy>=1.1.0   pandas>=0.25.0 \
+    python=3.6 \
+    numpy=1.17.2    scipy>=1.1.0   pandas=0.25.1 \
     multiprocess>=0.70.5 \
-    pytest>=3.8.0 \
-    mongodb>=4.0.2   pymongo>=3.7.1 \
+    pytest=5.0.1 \
+    mongodb>=4.0.2   pymongo=3.8.0 \
     ase=3.17.0 \
-    pymatgen=2018.9.1   fireworks=1.7.2 \
+    pymatgen=2019.12.3  fireworks=1.7.2 \
     luigi>=2.8.9 \
     statsmodels>=0.9.0 \
     jupyter>=1.0.0  tqdm>=4.24.0
-RUN conda clean -lity
+RUN conda clean -ity
 
 # Only the development version of ipycache works right now
 RUN pip install git+https://github.com/rossant/ipycache.git
