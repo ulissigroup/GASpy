@@ -230,6 +230,7 @@ def __create_adsorption_doc(energy_doc):
     adsorption_doc['adsorbate'] = adslab_doc['fwname']['adsorbate']
     adsorption_doc['adsorbate_rotation'] = adslab_doc['fwname']['adsorbate_rotation']
     adsorption_doc['initial_adsorption_site'] = adslab_doc['fwname']['adsorption_site']
+    adsorption_doc['initial_adsorption_vector'] = adslab_doc['fwname']['adsorption_vector']
     adsorption_doc['mpid'] = adslab_doc['fwname']['mpid']
     adsorption_doc['miller'] = adslab_doc['fwname']['miller']
     adsorption_doc['shift'] = adslab_doc['fwname']['shift']

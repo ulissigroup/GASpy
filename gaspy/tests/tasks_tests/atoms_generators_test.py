@@ -21,6 +21,7 @@ from ...tasks.atoms_generators import (GenerateGas,
 import pytest
 from itertools import combinations
 import pickle
+import numpy as np
 import numpy.testing as npt
 import ase.io
 from ase.collections import g2
@@ -175,7 +176,6 @@ def test__make_slab_docs_from_structs():
             doc.pop('mtime', None)
         assert docs == expected_docs
 
-
 def test_GenerateAdsorptionSites():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
@@ -185,7 +185,7 @@ def test_GenerateAdsorptionSites():
     that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
-    miller_indices = (1, 0, 0)
+    miller_indices = (2, 1, 1)
     min_xy = ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']
@@ -281,6 +281,7 @@ def test_GenerateAdslabs():
             adsorbate.euler_rotate(**rotation)
             npt.assert_allclose(adslab[0:len(adsorbate)].get_positions() - doc['adsorption_site'],
                                 adsorbate.positions)
+            assert isinstance(doc['adsorption_vector'], np.ndarray)
 
     finally:
         clean_up_tasks()

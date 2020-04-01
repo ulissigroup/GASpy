@@ -17,7 +17,7 @@ from ..utils import (read_rc,
 import pytest
 import collections
 import json
-from luigi.parameter import _FrozenOrderedDict
+from luigi.parameter import FrozenOrderedDict
 
 
 @pytest.mark.parametrize('query',
@@ -75,14 +75,14 @@ def test__find_rc_file():
 
 
 def test_unfreeze_dict():
-    frozen_dict = _FrozenOrderedDict(foo='bar', bar=('foo', 'bar'),
-                                     sub_dict0=_FrozenOrderedDict(),
-                                     sub_dict1=_FrozenOrderedDict(foo=['']),
+    frozen_dict = FrozenOrderedDict(foo='bar', bar=('foo', 'bar'),
+                                     sub_dict0=FrozenOrderedDict(),
+                                     sub_dict1=FrozenOrderedDict(foo=['']),
                                      sub_dict2=dict(foo=True,
-                                                    bar=_FrozenOrderedDict(foo=1.0),
-                                                    array=['foo', _FrozenOrderedDict(foo='bar')]))
+                                                    bar=FrozenOrderedDict(foo=1.0),
+                                                    array=['foo', FrozenOrderedDict(foo='bar')]))
     unfrozen_dict = unfreeze_dict(frozen_dict)
-    _look_for_type_in_dict(type_=_FrozenOrderedDict, dict_=unfrozen_dict)
+    _look_for_type_in_dict(type_=FrozenOrderedDict, dict_=unfrozen_dict)
 
 
 def _look_for_type_in_dict(type_, dict_):

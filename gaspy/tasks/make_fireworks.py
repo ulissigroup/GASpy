@@ -222,6 +222,7 @@ class MakeAdslabFW(FireworkMaker):
                    'adsorbate': self.adsorbate_name,
                    'adsorbate_rotation': dict(self.rotation),
                    'adsorption_site': self.adsorption_site,
+                   'adsorption_vector': tuple(doc['adsorption_vector']),
                    'mpid': self.mpid,
                    'miller': self.miller_indices,
                    'shift': self.shift,

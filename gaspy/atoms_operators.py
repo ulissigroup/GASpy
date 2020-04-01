@@ -12,6 +12,7 @@ import math
 import re
 import pickle
 import numpy as np
+import scipy
 from scipy.spatial.qhull import QhullError
 from ase import Atoms
 from ase.build import rotate
@@ -251,6 +252,172 @@ def find_adsorption_sites(atoms):
     sites = sites_dict['all']
     return sites
 
+def find_bulk_cn_dict(bulk_atoms):
+    '''
+    Get a dictionary of coordination numbers
+    for each distinct site in the bulk structure.
+
+    Taken from pymatgen.core.surface Class Slab
+    `get_surface_sites`.
+    https://pymatgen.org/pymatgen.core.surface.html
+    '''
+    struct = AseAtomsAdaptor.get_structure(bulk_atoms)
+    sga = SpacegroupAnalyzer(struct)
+    sym_struct = sga.get_symmetrized_structure()
+    unique_indices = [equ[0] for equ in sym_struct.equivalent_indices]
+    # Get a dictionary of unique coordination numbers
+    # for atoms in each structure.
+    # for example, Pt[1,1,1] would have cn=3 and cn=12
+    # depends on the Pt atom.
+    v = VoronoiNN()
+    cn_dict = {}
+    for idx in unique_indices:
+        elem = sym_struct[idx].species_string
+        if elem not in cn_dict.keys():
+            cn_dict[elem] = []
+        cn = v.get_cn(sym_struct, idx, use_weights=True)
+        cn = float('%.5f' %(round(cn, 5)))
+        if cn not in cn_dict[elem]:
+            cn_dict[elem].append(cn)
+    return cn_dict
+
+
+def find_surface_atoms_indices(bulk_cn_dict, atoms):
+    '''
+    A helper function referencing codes from pymatgen to
+    get a list of surface atoms indices of a slab's
+    top surface. Due to how our workflow is setup, the
+    pymatgen method cannot be directly applied.
+
+    Taken from pymatgen.core.surface Class Slab,
+    `get_surface_sites`.
+    https://pymatgen.org/pymatgen.core.surface.html
+
+    Arg:
+        bulk_cn_dict    A dictionary of coordination numbers
+                        for each distinct site in the respective bulk structure
+        atoms           The slab where you are trying to find surface sites in
+                        `ase.Atoms` format
+    Output:
+        indices_list    A list that contains the indices of
+                        the surface atoms
+    '''
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    v = VoronoiNN()
+    # Identify index of the surface atoms
+    indices_list = []
+    weights = [s.species.weight for s in struct]
+    center_of_mass = np.average(struct.frac_coords,
+                                weights=weights, axis=0)
+
+    for idx, site in enumerate(struct):
+        if site.frac_coords[2] > center_of_mass[2]:
+            try:
+                cn = v.get_cn(struct, idx, use_weights=True)
+                cn = float('%.5f' %(round(cn, 5)))
+                # surface atoms are undercoordinated
+                if cn < min(bulk_cn_dict[site.species_string]):
+                    indices_list.append(idx)
+            except RuntimeError:
+                # or if pathological error is returned,
+                # indicating a surface site
+                indices_list.append(idx)
+    return indices_list
+
+
+def _plane_normal(coords):
+    """
+    Return the surface normal vector to a plane of best fit
+    by performing planar regression.
+    See https://gist.github.com/amroamroamro/1db8d69b4b65e8bc66a6
+    for the method.
+
+    Arg:
+        coords   A `numpy.ndarray` (n,3),
+                 coordinates of atoms on the slab surface.
+
+    Output:
+        vector  numpy.ndarray. Adsorption vector for an adsorption site.
+    """
+    A = np.c_[coords[:, 0], coords[:, 1], np.ones(coords.shape[0])]
+    vector, _, _, _ = scipy.linalg.lstsq(A, coords[:, 2])
+    vector[2] = -1.0
+    vector /= -np.linalg.norm(vector)
+    return vector
+
+def _ang_between_vectors(v1, v2):
+  
+    """
+    Returns the angle in degree
+    between 3D vectors 'v1' and 'v2'
+
+    Arg:
+        v1    3D vector in np.array(x1,y1,z1) form,
+              the origin is (0,0,0).
+        v1    3D vector in np.array(x2,y2,z2) form,
+              the origin is (0,0,0).
+
+    Output:
+        angle  angle in degrees.
+    """
+    cosang = np.dot(v1, v2)
+    sinang = np.linalg.norm(np.cross(v1, v2))
+    # np.arctan2(sinang, cosang) is angle in radian
+    radian = np.arctan2(sinang, cosang)
+    angle = radian * 57.2958
+    return angle
+
+
+def find_adsorption_vector(bulk_cn_dict, slab_atoms, surface_indices, adsorption_site):
+    """
+    Returns the vector of an adsorption site representing the
+    furthest distance from the neighboring atoms.
+    The vector is a (1,3) numpy array.
+    The idea comes from CatKit.
+    https://catkit.readthedocs.io/en/latest/?badge=latest
+
+    Arg:
+        bulk_cn_dict         A dictionary of coordination numbers
+                             for each distinct site in the respective bulk structure
+        slab_atoms           The `ase.Atoms` format of a supercell slab.
+        surface_indices      The index of the surface atoms in a list.
+        adsorption_site      A `numpy.ndarray` object that contains the x-y-z coordinates
+                             of the adsorptions sites.
+
+    Output:
+        vector            numpy.ndarray. Adsorption vector for an adsorption site.
+    """
+    vnn = VoronoiNN(allow_pathological=True)
+
+    slab_atoms += Atoms('U', [adsorption_site])
+    U_index = slab_atoms.get_chemical_symbols().index('U')
+    struct_with_U = AseAtomsAdaptor.get_structure(slab_atoms)
+    nn_info = vnn.get_nn_info(struct_with_U, n=U_index)
+    nn_indices = [neighbor['site_index'] for neighbor in nn_info]
+    surface_nn_indices = [idx for idx in nn_indices if idx in surface_indices]
+
+    # get the index of the closest 4 atom to the site to form a plane
+    # chose 4 because it will gaurantee a more accurate plane for edge cases
+    nn_dists_from_U = {idx: np.linalg.norm(slab_atoms[idx].position-slab_atoms[U_index].position) 
+                       for idx in surface_nn_indices}
+    sorted_dists = {k: v for k, v in sorted(nn_dists_from_U .items(), key=lambda item: item[1])}
+    closest_4_nn_indices = np.array(list(sorted_dists.keys())[:4], dtype=int)
+    plane_coords = struct_with_U.cart_coords[closest_4_nn_indices]
+    vector = _plane_normal(plane_coords)
+
+    # Check to see if the vector is reasonable.
+    # set an arbitay threshold where the vector and [0,0,1]
+    # should be less than 60 degrees.
+    # If someone has a better way to detect in the future, go for it
+    if _ang_between_vectors(np.array([0., 0., 1.]), vector) > 60.:
+        message = ('Warning: this might be an edge case where the '
+                   'adsorption vector is not appropriate.'
+                   ' We will place adsorbates using default [0,0,1] vector.')
+        warnings.warn(message)
+        vector = np.array([0., 0., 1.])
+
+    del slab_atoms[[U_index]]
+    return vector
 
 def add_adsorbate_onto_slab(adsorbate, slab, site):
     '''

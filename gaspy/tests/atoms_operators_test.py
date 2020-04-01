@@ -16,6 +16,9 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                flip_atoms,
                                tile_atoms,
                                find_adsorption_sites,
+                               find_bulk_cn_dict,
+                               find_surface_atoms_indices,
+                               find_adsorption_vector,
                                add_adsorbate_onto_slab,
                                fingerprint_adslab,
                                remove_adsorbate,
@@ -27,6 +30,8 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
 import pytest
 import inspect
 import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', category=DeprecationWarning)
 import pickle
 import numpy as np
 import numpy.testing as npt
@@ -42,6 +47,7 @@ from ..tasks import get_task_output, schedule_tasks
 from ..gasdb import get_mongo_collection
 from ..mongo import make_atoms_from_doc
 from ..tasks.atoms_generators import GenerateBulk
+from ..tasks.calculation_finders import FindBulk
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/atoms_operators/'
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
@@ -288,6 +294,112 @@ def test_find_adsorption_sites():
                             rtol=1e-5, atol=1e-7)
 
 
+def test_find_bulk_cn_dict():
+    """
+    For the slabs that we use to test adsorption vector
+    (in the slab_folder: TEST_CASE_LOCATION + 'slabs/'),
+    we use this test function to find out the coordinations
+    number in these slabs' bulk form, so we can further
+    identify the under-cooridnated atoms in slabs.
+    testing for these bulk
+    mpids_for_struct = {'Pt12Si5': 'mp-16317',
+                        'FeNi': 'mp-2213',
+                        'AlAu2Cu': 'mp-867306',
+                        'Cu': 'mp-30',
+                        'Ni4W': 'mp-30811',
+                        'CoSb2': 'mp-755'}
+    """
+    bulk_atoms_folder = TEST_CASE_LOCATION + 'bulk_atoms_of_slabs/'
+    bulk_cn_dicts = {}
+    for bulk_atoms_file in os.listdir(bulk_atoms_folder):
+        struct = bulk_atoms_file.split('.')[0]
+        file_name = bulk_atoms_folder + bulk_atoms_file
+        with open(file_name, 'rb') as file_handle:
+            bulk_atoms = pickle.load(file_handle)
+        bulk_cn = find_bulk_cn_dict(bulk_atoms)
+        bulk_cn_dicts[struct] = bulk_cn
+
+    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    with open(cn_dict_file, 'rb') as file_handle:
+        expected_cn_dict = pickle.load(file_handle)
+    assert bulk_cn_dicts == expected_cn_dict
+
+
+@pytest.mark.baseline
+def test_to_create_surface_atoms_indices():
+    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    with open(cn_dict_file, 'rb') as file_handle:
+        bulk_cn_dicts = pickle.load(file_handle)
+
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        slab_atoms = test_cases.get_slab_atoms(slab_atoms_name)
+        bulk_composition = slab_atoms_name.split('.')[0].split('_')[0]
+        cn_dict = bulk_cn_dicts[bulk_composition]
+        surface_sites = find_surface_atoms_indices(cn_dict, slab_atoms)
+
+        file_name = (REGRESSION_BASELINES_LOCATION + 'surface_sites_for_' +
+                     slab_atoms_name.split('.')[0] + '.pkl')
+        with open(file_name, 'wb') as file_handle:
+            pickle.dump(surface_sites, file_handle)
+        assert True
+
+
+def test_find_surface_atoms_indices():
+    '''
+    `gaspy.atoms_operators.find_surface_atoms_indices` gives
+    us a list of surface atoms indices.
+    '''
+    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    with open(cn_dict_file, 'rb') as file_handle:
+        bulk_cn_dicts = pickle.load(file_handle)
+
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        slab_atoms = test_cases.get_slab_atoms(slab_atoms_name)
+        bulk_composition = slab_atoms_name.split('.')[0].split('_')[0]
+        cn_dict = bulk_cn_dicts[bulk_composition]
+        surface_sites = find_surface_atoms_indices(cn_dict, slab_atoms)
+
+        file_name = (REGRESSION_BASELINES_LOCATION + 'surface_sites_for_' +
+                     slab_atoms_name.split('.')[0] + '.pkl')
+        with open(file_name, 'rb') as file_handle:
+            expected_surface_sites = pickle.load(file_handle)
+        assert surface_sites == expected_surface_sites
+
+
+def test_find_adsorption_vector():
+    """
+    `gaspy.atoms_operators.find_adsorption_vector` gives
+    us a (1,3) numpy array.
+    """
+    # bulk coordination number of test slabs
+    cn_dicts_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    with open(cn_dicts_file, 'rb') as file_handle:
+        bulk_cn_dicts = pickle.load(file_handle)
+
+    slab_folder = TEST_CASE_LOCATION + 'slabs/'
+    for slab_atoms_name in os.listdir(slab_folder):
+        bulk_composition = slab_atoms_name.split('.')[0].split('_')[0]
+        cn_dict = bulk_cn_dicts[bulk_composition]
+        atoms = test_cases.get_slab_atoms(slab_atoms_name)
+        repeated_slab_atoms = atoms.repeat((2, 2, 1))
+        surface_atoms_list = find_surface_atoms_indices(cn_dict, repeated_slab_atoms)
+
+        sites_and_vectors_file = (REGRESSION_BASELINES_LOCATION +
+                                  'adsorption_vectors_list_for_' +
+                                  slab_atoms_name.split('.')[0] + '.pkl')
+        with open(sites_and_vectors_file, 'rb') as file_handle:
+            expected_sites_and_vectors = pickle.load(file_handle)
+
+        for site_and_vector in expected_sites_and_vectors:
+            adsorption_vector = find_adsorption_vector(cn_dict,
+                                                       repeated_slab_atoms,
+                                                       surface_atoms_list,
+                                                       site_and_vector['site'])
+            assert np.array_equal(adsorption_vector, site_and_vector['vector'])
+
+
 def test_add_adsorbate_onto_slab():
     '''
     Yeah, I know I golfed the crap out of this. I'm sorry. I'm ill and cutting
@@ -408,16 +520,14 @@ def test_calculate_unit_slab_height():
     distinct_millers = get_symmetrically_distinct_miller_indices(structure, 3)
 
     # These are the hard-coded answers
-    expected_heights = [6.252703415323648, 6.1572366883500305,
-                        4.969144795636368, 5.105310960166873,
-                        4.969144795636368, 6.15723668835003, 6.252703415323648,
-                        6.128875244668134, 4.824065416519261,
-                        4.824065416519261, 6.128875244668133,
-                        6.157236688350029, 3.26536786177718, 4.824065416519261,
-                        4.969144795636368, 3.4247467059623546,
-                        5.006169270932693, 5.105310960166873, 3.26536786177718,
-                        4.824065416519261, 6.128875244668134]
-
+    expected_heights = [6.272210880031006, 6.176446311678471, 4.984647756561888, 
+                        5.121238738402999, 4.984647756561888, 6.176446311678471, 
+                        6.272210880031005, 6.147996384691849, 4.839115752287323, 
+                        4.839115752287323, 6.147996384691849, 6.176446311678471, 
+                        3.275555302966866, 4.839115752287323, 4.984647756561887, 
+                        3.4354313844223103, 5.021787742477727, 5.121238738402999, 
+                        3.275555302966866, 4.839115752287322, 6.14799638469185]
+                      
     # Test our function
     for miller_indices, expected_height in zip(distinct_millers, expected_heights):
         height = calculate_unit_slab_height(atoms, miller_indices)

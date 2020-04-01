@@ -172,6 +172,7 @@ def test_MakeAdslabFW():
         assert fwork.name['adsorbate'] == adsorbate_name
         assert fwork.name['adsorbate_rotation'] == rotation
         assert isinstance(fwork.name['adsorbate_rotation'], dict)
+        assert isinstance(fwork.name['adsorption_vector'], tuple)
         assert fwork.name['adsorption_site'] == adsorption_site
         assert fwork.name['mpid'] == mpid
         assert fwork.name['miller'] == miller_indices
@@ -198,18 +199,19 @@ def test__find_matching_adslab_doc():
     run_task_locally(task)
     docs = get_task_output(task)
     doc = MakeAdslabFW._find_matching_adslab_doc(docs,
-                                                 adsorption_site=(1.4064611759169474,
-                                                                  2.8129223518338944,
-                                                                  20.895846464363103),
+                                                 adsorption_site=(1.40646118,
+                                                                  1.40646118, 
+                                                                  20.89584646),
                                                  shift=0.25, top=True)
     # I know what it should have found because I did this by hand
-    expected_doc = docs[2]
+    expected_doc = docs[0]
     assert doc == expected_doc
 
     # Try a fail-to-find
-    with pytest.raises(RuntimeError, message='Expected a RuntimeError') as exc_info:
+    with pytest.raises(RuntimeError) as exc_info:
         doc = MakeAdslabFW._find_matching_adslab_doc(docs, adsorption_site=(0., 0., 0.),
                                                      shift=0.25, top=False)
+        pytest.fail('Expected a RuntimeError')
         assert ('You just tried to make an adslab FireWork rocket that we could not enumerate.'
                 in str(exc_info.value))
 

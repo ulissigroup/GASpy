@@ -12,6 +12,7 @@ __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 import pickle
 import luigi
 import ase
+import numpy as np
 from ase.collections import g2
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.ext.matproj import MPRester
@@ -26,6 +27,9 @@ from ..atoms_operators import (make_slabs_from_bulk_atoms,
                                flip_atoms,
                                tile_atoms,
                                find_adsorption_sites,
+                               find_bulk_cn_dict,
+                               find_surface_atoms_indices,
+                               find_adsorption_vector,
                                add_adsorbate_onto_slab)
 from .. import utils, defaults
 
@@ -282,7 +286,6 @@ class GenerateAdsorptionSites(luigi.Task):
                 adsorbate.translate(site)
                 adslab_atoms = slab_atoms_tiled.copy() + adsorbate
                 adslab_atoms[-1].tag = 1
-
                 # Turn the atoms into a document, then save it
                 doc = make_doc_from_atoms(adslab_atoms)
                 doc['fwids'] = slab_doc['fwids']
@@ -339,19 +342,20 @@ class GenerateAdslabs(luigi.Task):
                 into `ase.Atoms` objects. These objects have a the adsorbate
                 tagged with a `1`. These documents also contain the following
                 fields:
-                    fwids           A subdictionary containing the FWIDs of the
-                                    prerequisite calculations
-                    shift           Float indicating the shift/termination of
-                                    the slab
-                    top             Boolean indicating whether or not the slab
-                                    is oriented upwards with respect to the way
-                                    it was enumerated originally by pymatgen
-                    slab_repeat     2-tuple of integers indicating the number
-                                    of times the unit slab was repeated in the
-                                    x and y directions before site enumeration
-                    adsorption_site `np.ndarray` of length 3 containing the
-                                    containing the cartesian coordinates of the
-                                    adsorption site.
+                    fwids             A subdictionary containing the FWIDs of the
+                                      prerequisite calculations
+                    shift             Float indicating the shift/termination of
+                                      the slab
+                    top               Boolean indicating whether or not the slab
+                                      is oriented upwards with respect to the way
+                                      it was enumerated originally by pymatgen
+                    slab_repeat       2-tuple of integers indicating the number
+                                      of times the unit slab was repeated in the
+                                      x and y directions before site enumeration
+                    adsorption_site   `np.ndarray` of length 3 containing the
+                                      containing the cartesian coordinates of the
+                                      adsorption site.
+                    adsorption_vector: TODO
     '''
     adsorbate_name = luigi.Parameter()
     rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
@@ -363,18 +367,31 @@ class GenerateAdslabs(luigi.Task):
     bulk_vasp_settings = luigi.DictParameter(BULK_SETTINGS['vasp'])
 
     def requires(self):
-        return GenerateAdsorptionSites(mpid=self.mpid,
-                                       miller_indices=self.miller_indices,
-                                       min_xy=self.min_xy,
-                                       slab_generator_settings=self.slab_generator_settings,
-                                       get_slab_settings=self.get_slab_settings,
-                                       bulk_vasp_settings=self.bulk_vasp_settings)
+        from .calculation_finders import FindBulk   # local import to avoid import errors
+        return {'bulk': FindBulk(mpid=self.mpid, vasp_settings=self.bulk_vasp_settings),
+                'adsorption_sites': GenerateAdsorptionSites(mpid=self.mpid,
+                                                            miller_indices=self.miller_indices,
+                                                            min_xy=self.min_xy,
+                                                            slab_generator_settings=self.slab_generator_settings,
+                                                            get_slab_settings=self.get_slab_settings,
+                                                            bulk_vasp_settings=self.bulk_vasp_settings)}
 
     def run(self):
-        with open(self.input().path, 'rb') as file_handle:
+        with open(self.input()['bulk'].path, 'rb') as bulk_file_handle:
+            bulk_doc = pickle.load(bulk_file_handle)
+            bulk_atoms = make_atoms_from_doc(bulk_doc)
+            bulk_cn_dict = find_bulk_cn_dict(bulk_atoms)
+
+        with open(self.input()['adsorption_sites'].path, 'rb') as file_handle:
             site_docs = pickle.load(file_handle)
 
-        # Get and rotate the adsorbate
+        # prepare the supercell slab for adsorption vector
+        slab_atoms = make_atoms_from_doc(site_docs[0])
+        del slab_atoms[-1]
+        supercell_slab_atoms = slab_atoms.repeat((2, 2, 1))
+        surface_atoms_list = find_surface_atoms_indices(bulk_cn_dict, supercell_slab_atoms)
+
+        # Get and (euler) rotate the adsorbate
         adsorbate = ADSORBATES[self.adsorbate_name].copy()
         adsorbate.euler_rotate(**self.rotation)
 
@@ -384,7 +401,16 @@ class GenerateAdslabs(luigi.Task):
         for site_doc in site_docs:
             slab = make_atoms_from_doc(site_doc)
             del slab[-1]
-            adslab = add_adsorbate_onto_slab(adsorbate=adsorbate,
+
+            # Find the adsorption vector.
+            adsorption_vector = find_adsorption_vector(bulk_cn_dict, supercell_slab_atoms,
+                                                       surface_atoms_list, site_doc['adsorption_site'])
+
+            # make a copy here so the original adsorbate is not further rotated
+            # to align to the adsorption vector at each iteration
+            aligned_adsorbate = adsorbate.copy()
+            aligned_adsorbate.rotate(np.array([0., 0., 1.]), adsorption_vector)
+            adslab = add_adsorbate_onto_slab(adsorbate=aligned_adsorbate,
                                              slab=slab,
                                              site=site_doc['adsorption_site'])
 
@@ -395,6 +421,7 @@ class GenerateAdslabs(luigi.Task):
             doc['top'] = site_doc['top']
             doc['slab_repeat'] = site_doc['slab_repeat']
             doc['adsorption_site'] = site_doc['adsorption_site']
+            doc['adsorption_vector'] = adsorption_vector
             docs_adslabs.append(doc)
         save_task_output(self, docs_adslabs)
 

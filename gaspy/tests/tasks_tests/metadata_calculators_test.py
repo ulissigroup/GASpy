@@ -111,8 +111,9 @@ def test_CalculateAdsorbateEnergy_Error():
     assert unfreeze_dict(task.vasp_settings) == vasp_settings
 
     try:
-        with pytest.raises(KeyError, message='Expected a KeyError') as exc_info:
+        with pytest.raises(KeyError) as exc_info:
             run_task(task)
+            pytest.fail('Expected a KeyError')
             assert ('You are trying to calculate the adsorbate energy of an '
                     'undefined adsorbate, U' in str(exc_info.value))
 
