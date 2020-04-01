@@ -176,6 +176,7 @@ def test__make_slab_docs_from_structs():
             doc.pop('mtime', None)
         assert docs == expected_docs
 
+
 def test_GenerateAdsorptionSites():
     '''
     WARNING:  This test uses `run_task_locally`, which has a chance of
@@ -185,7 +186,7 @@ def test_GenerateAdsorptionSites():
     that you use `run_task_locally` appropriately.
     '''
     mpid = 'mp-2'
-    miller_indices = (2, 1, 1)
+    miller_indices = (1, 0, 0)
     min_xy = ADSLAB_SETTINGS['min_xy']
     slab_generator_settings = SLAB_SETTINGS['slab_generator_settings']
     get_slab_settings = SLAB_SETTINGS['get_slab_settings']

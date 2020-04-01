@@ -342,20 +342,24 @@ class GenerateAdslabs(luigi.Task):
                 into `ase.Atoms` objects. These objects have a the adsorbate
                 tagged with a `1`. These documents also contain the following
                 fields:
-                    fwids             A subdictionary containing the FWIDs of the
-                                      prerequisite calculations
-                    shift             Float indicating the shift/termination of
-                                      the slab
-                    top               Boolean indicating whether or not the slab
-                                      is oriented upwards with respect to the way
-                                      it was enumerated originally by pymatgen
-                    slab_repeat       2-tuple of integers indicating the number
-                                      of times the unit slab was repeated in the
-                                      x and y directions before site enumeration
-                    adsorption_site   `np.ndarray` of length 3 containing the
-                                      containing the cartesian coordinates of the
-                                      adsorption site.
-                    adsorption_vector: TODO
+                    fwids              A subdictionary containing the FWIDs of the
+                                       prerequisite calculations
+                    shift              Float indicating the shift/termination of
+                                       the slab
+                    top                Boolean indicating whether or not the slab
+                                       is oriented upwards with respect to the way
+                                       it was enumerated originally by pymatgen
+                    slab_repeat        2-tuple of integers indicating the number
+                                       of times the unit slab was repeated in the
+                                       x and y directions before site enumeration
+                    adsorption_site    `np.ndarray` of length 3 containing the
+                                       containing the cartesian coordinates of the
+                                       adsorption site.
+                    adsorption_vector: A (3,1) `np.ndarray` adsorption vector direction,
+                                       where the origin is (0.,0.,0.). The adsorbate is
+                                       placed along the adsorption vector so it is normal
+                                       to the local plane of slabs.
+
     '''
     adsorbate_name = luigi.Parameter()
     rotation = luigi.DictParameter(ADSLAB_SETTINGS['rotation'])
