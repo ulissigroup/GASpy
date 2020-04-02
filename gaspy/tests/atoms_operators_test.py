@@ -47,7 +47,7 @@ from ..tasks import get_task_output, schedule_tasks
 from ..gasdb import get_mongo_collection
 from ..mongo import make_atoms_from_doc
 from ..tasks.atoms_generators import GenerateBulk
-from ..tasks.calculation_finders import FindBulk
+
 
 REGRESSION_BASELINES_LOCATION = '/home/GASpy/gaspy/tests/regression_baselines/atoms_operators/'
 TEST_CASE_LOCATION = '/home/GASpy/gaspy/tests/test_cases/'
@@ -319,7 +319,7 @@ def test_find_bulk_cn_dict():
         bulk_cn = find_bulk_cn_dict(bulk_atoms)
         bulk_cn_dicts[struct] = bulk_cn
 
-    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    cn_dict_file = REGRESSION_BASELINES_LOCATION + 'bulk_cn_dicts.pkl'
     with open(cn_dict_file, 'rb') as file_handle:
         expected_cn_dict = pickle.load(file_handle)
     assert bulk_cn_dicts == expected_cn_dict
@@ -327,7 +327,7 @@ def test_find_bulk_cn_dict():
 
 @pytest.mark.baseline
 def test_to_create_surface_atoms_indices():
-    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    cn_dict_file = REGRESSION_BASELINES_LOCATION + 'bulk_cn_dicts.pkl'
     with open(cn_dict_file, 'rb') as file_handle:
         bulk_cn_dicts = pickle.load(file_handle)
 
@@ -350,7 +350,7 @@ def test_find_surface_atoms_indices():
     `gaspy.atoms_operators.find_surface_atoms_indices` gives
     us a list of surface atoms indices.
     '''
-    cn_dict_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    cn_dict_file = REGRESSION_BASELINES_LOCATION + 'bulk_cn_dicts.pkl'
     with open(cn_dict_file, 'rb') as file_handle:
         bulk_cn_dicts = pickle.load(file_handle)
 
@@ -374,7 +374,7 @@ def test_find_adsorption_vector():
     us a (1,3) numpy array.
     """
     # bulk coordination number of test slabs
-    cn_dicts_file = (REGRESSION_BASELINES_LOCATION +  'bulk_cn_dicts.pkl')
+    cn_dicts_file = REGRESSION_BASELINES_LOCATION + 'bulk_cn_dicts.pkl'
     with open(cn_dicts_file, 'rb') as file_handle:
         bulk_cn_dicts = pickle.load(file_handle)
 
@@ -520,14 +520,14 @@ def test_calculate_unit_slab_height():
     distinct_millers = get_symmetrically_distinct_miller_indices(structure, 3)
 
     # These are the hard-coded answers
-    expected_heights = [6.272210880031006, 6.176446311678471, 4.984647756561888, 
-                        5.121238738402999, 4.984647756561888, 6.176446311678471, 
-                        6.272210880031005, 6.147996384691849, 4.839115752287323, 
-                        4.839115752287323, 6.147996384691849, 6.176446311678471, 
-                        3.275555302966866, 4.839115752287323, 4.984647756561887, 
-                        3.4354313844223103, 5.021787742477727, 5.121238738402999, 
+    expected_heights = [6.272210880031006, 6.176446311678471, 4.984647756561888,
+                        5.121238738402999, 4.984647756561888, 6.176446311678471,
+                        6.272210880031005, 6.147996384691849, 4.839115752287323,
+                        4.839115752287323, 6.147996384691849, 6.176446311678471,
+                        3.275555302966866, 4.839115752287323, 4.984647756561887,
+                        3.4354313844223103, 5.021787742477727, 5.121238738402999,
                         3.275555302966866, 4.839115752287322, 6.14799638469185]
-                      
+
     # Test our function
     for miller_indices, expected_height in zip(distinct_millers, expected_heights):
         height = calculate_unit_slab_height(atoms, miller_indices)

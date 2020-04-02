@@ -252,6 +252,7 @@ def find_adsorption_sites(atoms):
     sites = sites_dict['all']
     return sites
 
+
 def find_bulk_cn_dict(bulk_atoms):
     '''
     Get a dictionary of coordination numbers
@@ -269,14 +270,14 @@ def find_bulk_cn_dict(bulk_atoms):
     # for atoms in each structure.
     # for example, Pt[1,1,1] would have cn=3 and cn=12
     # depends on the Pt atom.
-    v = VoronoiNN()
+    voronoi_nn = VoronoiNN()
     cn_dict = {}
     for idx in unique_indices:
         elem = sym_struct[idx].species_string
         if elem not in cn_dict.keys():
             cn_dict[elem] = []
-        cn = v.get_cn(sym_struct, idx, use_weights=True)
-        cn = float('%.5f' %(round(cn, 5)))
+        cn = voronoi_nn.get_cn(sym_struct, idx, use_weights=True)
+        cn = float('%.5f' % (round(cn, 5)))
         if cn not in cn_dict[elem]:
             cn_dict[elem].append(cn)
     return cn_dict
@@ -303,18 +304,18 @@ def find_surface_atoms_indices(bulk_cn_dict, atoms):
                         the surface atoms
     '''
     struct = AseAtomsAdaptor.get_structure(atoms)
-    v = VoronoiNN()
+    voronoi_nn = VoronoiNN()
     # Identify index of the surface atoms
     indices_list = []
-    weights = [s.species.weight for s in struct]
+    weights = [site.species.weight for site in struct]
     center_of_mass = np.average(struct.frac_coords,
                                 weights=weights, axis=0)
 
     for idx, site in enumerate(struct):
         if site.frac_coords[2] > center_of_mass[2]:
             try:
-                cn = v.get_cn(struct, idx, use_weights=True)
-                cn = float('%.5f' %(round(cn, 5)))
+                cn = voronoi_nn.get_cn(struct, idx, use_weights=True)
+                cn = float('%.5f' % (round(cn, 5)))
                 # surface atoms are undercoordinated
                 if cn < min(bulk_cn_dict[site.species_string]):
                     indices_list.append(idx)
@@ -345,8 +346,8 @@ def _plane_normal(coords):
     vector /= -np.linalg.norm(vector)
     return vector
 
+
 def _ang_between_vectors(v1, v2):
-  
     """
     Returns the angle in degree
     between 3D vectors 'v1' and 'v2'
@@ -398,26 +399,27 @@ def find_adsorption_vector(bulk_cn_dict, slab_atoms, surface_indices, adsorption
 
     # get the index of the closest 4 atom to the site to form a plane
     # chose 4 because it will gaurantee a more accurate plane for edge cases
-    nn_dists_from_U = {idx: np.linalg.norm(slab_atoms[idx].position-slab_atoms[U_index].position) 
+    nn_dists_from_U = {idx: np.linalg.norm(slab_atoms[idx].position-slab_atoms[U_index].position)
                        for idx in surface_nn_indices}
-    sorted_dists = {k: v for k, v in sorted(nn_dists_from_U .items(), key=lambda item: item[1])}
+    sorted_dists = {idx: distance for idx, distance in sorted(nn_dists_from_U.items(), key=lambda item: item[1])}
     closest_4_nn_indices = np.array(list(sorted_dists.keys())[:4], dtype=int)
     plane_coords = struct_with_U.cart_coords[closest_4_nn_indices]
     vector = _plane_normal(plane_coords)
 
     # Check to see if the vector is reasonable.
-    # set an arbitay threshold where the vector and [0,0,1]
+    # set an arbitay threshold where the vector and [0, 0, 1]
     # should be less than 60 degrees.
     # If someone has a better way to detect in the future, go for it
     if _ang_between_vectors(np.array([0., 0., 1.]), vector) > 60.:
         message = ('Warning: this might be an edge case where the '
                    'adsorption vector is not appropriate.'
-                   ' We will place adsorbates using default [0,0,1] vector.')
+                   ' We will place adsorbates using default [0, 0, 1] vector.')
         warnings.warn(message)
         vector = np.array([0., 0., 1.])
 
     del slab_atoms[[U_index]]
     return vector
+
 
 def add_adsorbate_onto_slab(adsorbate, slab, site):
     '''

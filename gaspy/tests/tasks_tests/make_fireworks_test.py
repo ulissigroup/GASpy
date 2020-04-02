@@ -200,7 +200,7 @@ def test__find_matching_adslab_doc():
     docs = get_task_output(task)
     doc = MakeAdslabFW._find_matching_adslab_doc(docs,
                                                  adsorption_site=(1.40646118,
-                                                                  1.40646118, 
+                                                                  1.40646118,
                                                                   20.89584646),
                                                  shift=0.25, top=True)
     # I know what it should have found because I did this by hand
