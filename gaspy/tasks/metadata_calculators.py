@@ -106,7 +106,8 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                         a calculation for. See `gaspy.defaults.adsorbates` for
                         possible values.
         target_fermi    The Fermi energy you want the calculation to be
-        performed at [eV]. If `None`, then we'll do a PZC calculation.
+                        performed at [eV]. If `None`, then we'll do a PZC
+                        calculation.
         catalog_docs    Any portion of the list of dictionaries obtained from
                         `gaspy.gasdb.get_catalog_docs` that you want to run.
         anion_concs     A dictionary whose keys are the anions you want in the
