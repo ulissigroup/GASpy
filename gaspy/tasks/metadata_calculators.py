@@ -170,7 +170,8 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         tasks.append(task)
     schedule_tasks(tasks)
 
-    # Parse the results
+    # Parse finished calculations
+    finished_docs = []
     for catalog_doc, task in zip(catalog_docs, tasks):
         try:
             energy_doc = get_task_output(task)
@@ -179,6 +180,14 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
             catalog_doc['cation_concs'] = cation_concs
             catalog_doc['target_fermi'] = target_fermi
             del catalog_doc['mongo_id']
+            lpad = get_launchpad()
+            launch_dirs = {'adslab': lpad.get_launchdir(energy_doc['fwids']['adslab']),
+                           'slab': lpad.get_launchdir(energy_doc['fwids']['slab']),
+                           'adsorbate': [lpad.get_launchdir(fwid)
+                                         for fwid in energy_doc['fwids']['adsorbate']]}
+            catalog_doc['launch_dirs'] = launch_dirs
+            finished_docs.append(catalog_doc)
+        # Print unfinished calculations
         except FileNotFoundError:
             warnings.warn('The following calculation has not finished yet:\n' +
                           '  adsorbate = %s\n' % adsorbate +
@@ -191,10 +200,12 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                           '  cations = %s\n' % cation_concs +
                           '  fermi = %s' % target_fermi,
                           RuntimeWarning)
+
+    # Print finished calculations
     print('Calculations finished:')
-    for doc in catalog_docs:
+    for doc in finished_docs:
         pprint(doc, indent=1)
-    return zip(tasks, catalog_docs)
+    return zip(tasks, finished_docs)
 
 
 class CalculateRismAdsorptionEnergy(luigi.Task):
