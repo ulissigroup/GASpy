@@ -179,7 +179,6 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
             catalog_doc['anion_concs'] = anion_concs
             catalog_doc['cation_concs'] = cation_concs
             catalog_doc['target_fermi'] = target_fermi
-            del catalog_doc['mongo_id']
             lpad = get_launchpad()
             launch_dirs = {'adslab': lpad.get_launchdir(energy_doc['fwids']['adslab']),
                            'slab': lpad.get_launchdir(energy_doc['fwids']['slab']),
