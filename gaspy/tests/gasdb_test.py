@@ -32,7 +32,8 @@ from ..gasdb import (get_mongo_collection,
                      get_low_coverage_docs,
                      get_low_coverage_dft_docs,
                      get_surface_from_doc,
-                     get_low_coverage_ml_docs)
+                     get_low_coverage_ml_docs,
+                     get_electrochemical_stability)
 
 # Things we need to do the tests
 import pytest
@@ -505,3 +506,11 @@ def test_get_low_coverage_ml_docs(adsorbate, model_tag):
         surface = get_surface_from_doc(doc)
         low_cov_energy = low_coverage_docs_by_surface[surface]['energy']
         assert low_cov_energy <= energy
+
+def test_get_electrochemical_stability():
+    # at pH=0, V=0.9
+    expected_stabilities = {'mp-126':0.884,  # Pt
+                            'mp-81': 0.0}    # Au
+    for mpid, expected_stability in expected_stabilities.items():
+        stability = get_electrochemical_stability(mpid, 0, 0.9)
+        assert stability == expected_stability

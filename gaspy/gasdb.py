@@ -5,11 +5,14 @@ __email__ = 'ktran@andrew.cmu.edu'
 
 import warnings
 import math
+import numpy as np
 from copy import deepcopy
 import json
 from tqdm import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from pymatgen.ext.matproj import MPRester
+from pymatgen.analysis.pourbaix_diagram import PourbaixDiagram, ELEMENTS_HO, PourbaixPlotter
 from . import defaults
 from .utils import read_rc
 from .fireworks_helper_scripts import get_launchpad
@@ -808,3 +811,33 @@ def purge_adslabs(fwids):
     print('Removing FWs from adsorption collection...')
     with get_mongo_collection('adsorption') as collection:
         collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})
+
+def get_electrochemical_stability(mpid, pH, potential):
+    '''
+    A wrapper for pymatgen to construct Pourbaix amd calculate electrochemical
+    stability under reaction condition (i.e. at a given pH and applied potential).
+
+    Arg:
+        mpid         Materials project ID of a bulk composition. e.g. Pt: 'mp-126'.
+        pH:          pH at reaction condition. Commonly ones are: acidic: pH=0,
+                     neutral: pH=7, and basic pH=14.
+        potential:   Applied potential at reaction condition.
+
+    Returns:
+        stability    Electrochemical stability of a composition under reaction condition.
+    '''
+    mpr = MPRester(read_rc('matproj_api_key'))
+    try:
+        entry = mpr.get_entries(mpid)[0]
+        composition = entry.composition
+        comp_dict = {str(key): value for key, value in composition.items()
+                     if key not in ELEMENTS_HO}
+        entries = mpr.get_pourbaix_entries(list(comp_dict.keys()))
+        entry = [entry for entry in entries if entry.entry_id == mpid][0]
+        pbx = PourbaixDiagram(entries, comp_dict=comp_dict, filter_solids=False)
+        stability = pbx.get_decomposition_energy(entry, pH=pH, V=potential)
+        stability = round(stability, 3)
+    # Some mpid's stability are not available
+    except IndexError:
+        stability = np.nan
+    return stability
