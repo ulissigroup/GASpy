@@ -824,7 +824,8 @@ def get_electrochemical_stability(mpid, pH, potential):
         potential:   Applied potential at reaction condition.
 
     Returns:
-        stability    Electrochemical stability of a composition under reaction condition.
+        stability    Electrochemical stability of a composition under reaction condition,
+                     unit is eV/atom.
     '''
     mpr = MPRester(read_rc('matproj_api_key'))
     try:
