@@ -129,6 +129,7 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                         things up downstream.
     '''
     tasks = []
+    catalog_docs = copy.deepcopy(catalog_docs)
 
     # Take out the basic arguments from each site document
     for doc in catalog_docs:
@@ -172,6 +173,7 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
 
     # Parse finished calculations
     finished_docs = []
+    lpad = get_launchpad()
     for catalog_doc, task in zip(catalog_docs, tasks):
         try:
             energy_doc = get_task_output(task)
@@ -179,7 +181,6 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
             catalog_doc['anion_concs'] = anion_concs
             catalog_doc['cation_concs'] = cation_concs
             catalog_doc['target_fermi'] = target_fermi
-            lpad = get_launchpad()
             launch_dirs = {'adslab': lpad.get_launchdir(energy_doc['fwids']['adslab']),
                            'slab': lpad.get_launchdir(energy_doc['fwids']['slab']),
                            'adsorbate': [lpad.get_launchdir(fwid)
