@@ -847,12 +847,21 @@ class CalculateAdsorbateEnergy(luigi.Task):
                               'adsorbate within `gaspy.defaults.adsorbates' %
                               self.adsorbate_name).with_traceback(sys.exc_info()[2])
 
+        # Hack around doing 3 gas calculations for CO when we only need one
+        if self.adsorbate_name == 'CO':
+            task = CalculateAtomicBasisEnergy(atom=self.adsorbate_name,
+                                              dft_settings=self.dft_settings,
+                                              max_fizzles=self.max_fizzles)
+            tasks = {self.adsorbate_name: task}
+
         # Ask Luigi to calculate the basis energy for each atom in this
         # adsorbate
-        tasks = {atom: CalculateAtomicBasisEnergy(atom=atom,
-                                                  dft_settings=self.dft_settings,
-                                                  max_fizzles=self.max_fizzles)
-                 for atom in adsorbate.get_chemical_symbols()}
+        else:
+            tasks = {atom: CalculateAtomicBasisEnergy(atom=atom,
+                                                      dft_settings=self.dft_settings,
+                                                      max_fizzles=self.max_fizzles)
+                     for atom in adsorbate.get_chemical_symbols()}
+
         return tasks
 
     def run(self):
@@ -860,15 +869,22 @@ class CalculateAdsorbateEnergy(luigi.Task):
         Calculate the adsorbate energy through algebraic addition/subtraction
         of basis energies
         '''
-        # Get the basis energy of each atom in the adsorbate
-        basis_energies = {}
-        for atom, target in self.input().items():
-            with open(target.path, 'rb') as file_handle:
-                basis_energies[atom] = pickle.load(file_handle)
+        # Continuation of CO hack in the `requires` method
+        if self.adsorbate_name == 'CO':
+            with open(self.input()[self.adsorbate_name].path, 'rb') as file_handle:
+                energy = pickle.load(file_handle)
+        else:
 
-        # Add all the atoms together
-        adsorbate = defaults.adsorbates()[self.adsorbate_name]
-        energy = sum(basis_energies[atom] for atom in adsorbate.get_chemical_symbols())
+            # Get the basis energy of each atom in the adsorbate
+            basis_energies = {}
+            for atom, target in self.input().items():
+                with open(target.path, 'rb') as file_handle:
+                    basis_energies[atom] = pickle.load(file_handle)
+
+            # Add all the atoms together
+            adsorbate = defaults.adsorbates()[self.adsorbate_name]
+            energy = sum(basis_energies[atom] for atom in adsorbate.get_chemical_symbols())
+
         save_task_output(self, energy)
 
     def output(self):
@@ -913,7 +929,8 @@ class CalculateAtomicBasisEnergy(luigi.Task):
         all_gases = {'H': ['H2'],
                      'O': ['H2O', 'H2'],
                      'C': ['CO', 'H2O', 'H2'],
-                     'N': ['N2']}
+                     'N': ['N2'],
+                     'CO': ['CO']}
         # Figure out the gases we need for this atom
         try:
             gases = all_gases[self.atom]
@@ -954,6 +971,8 @@ class CalculateAtomicBasisEnergy(luigi.Task):
             basis_energy = gas_energies['CO'] - (gas_energies['H2O']-gas_energies['H2'])
         elif self.atom == 'N':
             basis_energy = gas_energies['N2']/2.
+        elif self.atom == 'CO':
+            basis_energy = gas_energies['CO']
         save_task_output(self, basis_energy)
 
     def output(self):
