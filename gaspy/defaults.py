@@ -16,6 +16,15 @@ def pp_version():
     return '5.4'
 
 
+def logfile_settings(keep_all_logfiles=False):
+    '''Whether to keep electronic log files (CHG, CHGCAR, WAVECAR)'''
+
+    logfile_settings = {'lwave': keep_all_logfiles,
+                        'lcharg': keep_all_logfiles}
+
+    return logfile_settings
+
+
 def xc_settings(xc='rpbe'):
     '''
     A dictionary whose keys are some typical sets of exchange correlationals
@@ -25,7 +34,7 @@ def xc_settings(xc='rpbe'):
     which we copied and put here.
     '''
     xc_settings = {'lda': OrderedDict(pp='LDA'),
-                    # GGAs
+                   # GGAs
                    'gga': OrderedDict(pp='GGA'),
                    'pbe': OrderedDict(pp='PBE'),
                    'revpbe': OrderedDict(pp='LDA', gga='RE'),
@@ -72,7 +81,8 @@ def gas_settings():
                                                 ediffg=-0.03,
                                                 encut=350.,
                                                 pp_version=pp_version(),
-                                                **xc_settings()))
+                                                **xc_settings(),
+                                                **logfile_settings()))
     return gas_settings
 
 
@@ -88,7 +98,8 @@ def bulk_settings():
                                                  prec='Accurate',
                                                  encut=500.,
                                                  pp_version=pp_version(),
-                                                 **xc_settings()))
+                                                 **xc_settings(),
+                                                 **logfile_settings()))
     return bulk_settings
 
 
@@ -107,7 +118,8 @@ def surface_energy_bulk_settings():
                                                     prec='Accurate',
                                                     encut=500.,
                                                     pp_version=pp_version(),
-                                                    **xc_settings('pbesol')))
+                                                    **xc_settings('pbesol'),
+                                                    **logfile_settings()))
     return SE_bulk_settings
 
 
@@ -129,7 +141,8 @@ def slab_settings():
                                                  ediffg=-0.03,
                                                  encut=350.,
                                                  pp_version=pp_version(),
-                                                 **xc_settings('pbesol')),
+                                                 **xc_settings('pbesol'),
+                                                 **logfile_settings()),
                                 slab_generator_settings=OrderedDict(min_slab_size=7.,
                                                                     min_vacuum_size=20.,
                                                                     lll_reduce=False,
@@ -161,7 +174,8 @@ def adslab_settings():
                                                    symprec=1e-10,
                                                    encut=350.,
                                                    pp_version=pp_version(),
-                                                   **xc_settings()))
+                                                   **xc_settings(),
+                                                   **logfile_settings()))
     return adslab_settings
 
 
