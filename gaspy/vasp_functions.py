@@ -85,9 +85,6 @@ def _perform_relaxation(atoms, vasp_flags, fname_out):
     else:
         final_image = _relax_with_ase(atoms, vasp_flags)
 
-    # Delete some files to save disk space
-    _delete_electronic_log_files()
-
     # Save the last image
     final_image.write(str(fname_out))
     return final_image
@@ -313,18 +310,6 @@ def _relax_with_vasp(atoms, vasp_flags):
         for atoms in images:
             tj.write(atoms)
     return images[-1]
-
-
-def _delete_electronic_log_files():
-    '''
-    VASP's electronic log files can get big. This function will delete them for
-    you with the intent of saving hard drive space.
-    '''
-    for file_ in ['CHGCAR', 'WAVECAR', 'CHG']:
-        try:
-            os.remove(file_)
-        except OSError:
-            pass
 
 
 def atoms_to_hex(atoms):
