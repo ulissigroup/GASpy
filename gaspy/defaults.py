@@ -163,7 +163,8 @@ def adslab_settings():
     (Angstroms) before we enumerate adsorption sites on it.
     '''
     adslab_settings = OrderedDict(min_xy=4.5,
-                                  rotation=OrderedDict(phi=0., theta=0., psi=0.),
+                                  rotation=OrderedDict(
+                                      phi=0., theta=0., psi=0.),
                                   vasp=OrderedDict(ibrion=2,
                                                    nsw=200,
                                                    isif=0,
@@ -220,7 +221,8 @@ def adsorbates():
     # Trying to apply Hookean so that CH bound doesn't dissociate. Actual structure
     # is H-C-O
     adsorbates['CHO'] = Atoms('CHO', positions=[[0., 0., 1.],
-                                                [-0.94, 0.2, 1.7],      # position of H
+                                                # position of H
+                                                [-0.94, 0.2, 1.7],
                                                 [0.986, 0.6, 1.8]])     # position of O
     adsorbates['CHO'].set_constraint([ase.constraints.Hookean(a1=0, a2=1, rt=1.59, k=5.),   # Bind CH, initially used k=7, lowered to 5
                                       ase.constraints.Hookean(a1=0, a2=2, rt=1.79, k=5.)])  # Bind CO
@@ -277,8 +279,10 @@ def adsorption_filters(adsorbate=None):
     # into harder-to-read (but mongo-readable) structures
     f_max = 0.5                 # Maximum atomic force [eV/Ang]
     ads_move_max = 1.5          # Maximum distance the adsorbate can move [Ang]
-    bare_slab_move_max = 0.5    # Maximum distance that any atom can move on bare slab [Ang]
-    slab_move_max = 1.5         # Maximum distance that any slab atom can move after adsorption [Ang]
+    # Maximum distance that any atom can move on bare slab [Ang]
+    bare_slab_move_max = 0.5
+    # Maximum distance that any slab atom can move after adsorption [Ang]
+    slab_move_max = 1.5
     if adsorbate == 'CO':
         energy_range = (-7., 5.)
     elif adsorbate == 'H':
@@ -306,10 +310,12 @@ def adsorption_filters(adsorbate=None):
                       UserWarning)
 
     # Distribute filters into mongo-readable form
-    filters['adsorption_energy'] = {'$gt': energy_range[0], '$lt': energy_range[1]}
+    filters['adsorption_energy'] = {
+        '$gt': energy_range[0], '$lt': energy_range[1]}
     filters['results.fmax'] = {'$lt': f_max}
     filters['movement_data.max_adsorbate_movement'] = {'$lt': ads_move_max}
-    filters['movement_data.max_bare_slab_movement'] = {'$lt': bare_slab_move_max}
+    filters['movement_data.max_bare_slab_movement'] = {
+        '$lt': bare_slab_move_max}
     filters['movement_data.max_slab_movement'] = {'$lt': slab_move_max}
     filters['vasp_settings.gga'] = xc_settings()['gga']
 
