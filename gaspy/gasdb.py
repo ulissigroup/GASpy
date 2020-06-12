@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymatgen.ext.matproj import MPRester
-from pymatgen.analysis.pourbaix_diagram import PourbaixDiagram, ELEMENTS_HO, PourbaixPlotter
+from pymatgen.analysis.pourbaix_diagram import PourbaixDiagram, ELEMENTS_HO
 from . import defaults
 from .utils import read_rc
 from .fireworks_helper_scripts import get_launchpad
@@ -811,6 +811,7 @@ def purge_adslabs(fwids):
     print('Removing FWs from adsorption collection...')
     with get_mongo_collection('adsorption') as collection:
         collection.delete_many({'fwids.slab+adsorbate': {'$in': fwids}})
+
 
 def get_electrochemical_stability(mpid, pH, potential):
     '''
