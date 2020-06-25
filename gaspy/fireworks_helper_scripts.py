@@ -282,7 +282,11 @@ def get_atoms_from_fw(fw, index=-1):
         atoms   `ase.Atoms` instance from the Firework you provided
     '''
     # Get the `ase.Atoms` object from FireWork's results
-    atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
+    try:
+        atoms_trajhex = fw.launches[-1].action.stored_data['opt_results'][1]
+    except IndexError:
+        atoms_trajhex = fw.archived_launches[-1].action.stored_data['opt_results'][1]
+        warnings.warn('Getting atoms from an archive Fireworks launch', RuntimeWarning)
     atoms = decode_trajhex_to_atoms(atoms_trajhex, index=index)
 
     # Get the Firework task that was meant to convert the original hexstring to
