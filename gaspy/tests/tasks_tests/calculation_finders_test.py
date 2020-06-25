@@ -113,7 +113,11 @@ def _assert_vasp_settings(doc, vasp_settings):
 
             # If we're looking at a slab, then we don't care about certain
             # vasp settings
-            elif doc['fwname']['calculation_type'] == 'slab+adsorbat optimizatione' and key in set(['isym']):
+            elif doc['fwname']['calculation_type'] == 'surface energy optimization' and key in set(['isym']):
+                pass
+
+            # We never really care if the electronic files are saved or not
+            elif key in set(['lwave', 'lcharg']):
                 pass
 
             else:

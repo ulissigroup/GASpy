@@ -215,8 +215,10 @@ class FindGas(FindCalculation):
         self.fw_query = {'name.calculation_type': 'gas phase optimization',
                          'name.gasname': self.gas_name}
         for key, value in self.vasp_settings.items():
-            self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-            self.fw_query['name.vasp_settings.%s' % key] = value
+            # We don't care if these VASP settings change
+            if key not in set(['nsw', 'isym', 'symprec', 'lwave', 'lcharg']):
+                self.gasdb_query['fwname.vasp_settings.%s' % key] = value
+                self.fw_query['name.vasp_settings.%s' % key] = value
         self.dependency = MakeGasFW(self.gas_name, self.vasp_settings)
 
 
@@ -253,8 +255,10 @@ class FindBulk(FindCalculation):
         self.fw_query = {'name.calculation_type': 'unit cell optimization',
                          'name.mpid': self.mpid}
         for key, value in self.vasp_settings.items():
-            self.gasdb_query['fwname.vasp_settings.%s' % key] = value
-            self.fw_query['name.vasp_settings.%s' % key] = value
+            # We don't care if these VASP settings change
+            if key not in set(['nsw', 'isym', 'symprec', 'lwave', 'lcharg']):
+                self.gasdb_query['fwname.vasp_settings.%s' % key] = value
+                self.fw_query['name.vasp_settings.%s' % key] = value
         self.dependency = MakeBulkFW(self.mpid, self.vasp_settings)
 
 
@@ -363,7 +367,7 @@ class FindAdslab(FindCalculation):
 
         for key, value in self.vasp_settings.items():
             # We don't care if these VASP settings change
-            if key not in set(['nsw', 'isym', 'symprec']):
+            if key not in set(['nsw', 'isym', 'symprec', 'lwave', 'lcharg']):
                 self.gasdb_query['fwname.vasp_settings.%s' % key] = value
                 self.fw_query['name.vasp_settings.%s' % key] = value
 
@@ -485,7 +489,7 @@ class FindSurface(FindCalculation):
         # Parse the VASP settings
         for key, value in self.vasp_settings.items():
             # We don't care if these VASP settings change
-            if key != 'isym':
+            if key not in set(['isym', 'lwave', 'lcharg']):
                 self.gasdb_query['fwname.vasp_settings.%s' % key] = value
                 self.fw_query['name.vasp_settings.%s' % key] = value
 
