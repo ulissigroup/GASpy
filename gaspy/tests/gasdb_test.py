@@ -511,8 +511,9 @@ def test_get_low_coverage_ml_docs(adsorbate, model_tag):
 
 def test_get_electrochemical_stability():
     # at pH=0, V=0.9
-    expected_stabilities = {'mp-126': 0.884,  # Pt
-                            'mp-81': 0.0}    # Au
+    expected_stabilities = {'mp-126': 0.861,  # Pt
+                            'mp-81': 0.0,     # Au
+                            'mp-2723': 0.0}   #IrO2
     for mpid, expected_stability in expected_stabilities.items():
         stability = get_electrochemical_stability(mpid, 0, 0.9)
         assert math.isclose(stability, expected_stability, rel_tol=1e-6)
