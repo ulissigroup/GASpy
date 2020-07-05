@@ -176,20 +176,23 @@ def __make_cori_vasp_command(vasp_flags):
 
     # Figure out the number of processes
     try:
-        n_processors = int(os.environ['SLURM_NPROCS'])
+        n_processors = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
     except KeyError:
         n_processors = 1
 
     # If we're on a Haswell node...
-    if os.environ['CRAY_CPU_TARGET'] == 'haswell' and 'knl' not in os.environ['PATH']:
-        n_nodes = int(os.environ['SLURM_NNODES'])
-        vasp_flags['kpar'] = n_nodes
-        command = 'srun -n %d %s' % (n_processors, vasp_executable)
+    if n_processors <= 64:
+        n_nodes = int(os.environ["SLURM_NNODES"])
+        vasp_flags["kpar"] = n_nodes
+        command = "srun -n %d %s" % (n_processors, vasp_executable)
 
     # If we're on a KNL node...
-    elif 'knl' in os.environ['PATH']:
-        command = 'srun -n %d -c8 --cpu_bind=cores %s' % (n_processors*32, vasp_executable)
-        vasp_flags['ncore'] = 1
+    elif n_processors > 64:
+        command = "srun -n %d -c4 --cpu_bind=cores %s" % (
+            n_processors / 4,
+            vasp_executable,
+        )
+        vasp_flags["ncore"] = 1
 
     return command, vasp_flags
 
