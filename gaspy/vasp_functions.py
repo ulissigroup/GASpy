@@ -184,23 +184,33 @@ def __make_cori_vasp_command(vasp_flags):
 
     # Figure out the number of processes
     try:
-        n_processors = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+        n_processors = int(os.environ["SLURM_CPUS_ON_NODE"])
     except KeyError:
         n_processors = 1
 
+    # Figure out number of nodes
+    try:
+        n_nodes = int(os.environ["SLURM_NNODES"])
+    except KeyError:
+        n_nodes = 1
+
     # If we're on a Haswell node...
     if n_processors <= 64:
-        n_nodes = int(os.environ["SLURM_NNODES"])
         vasp_flags["kpar"] = n_nodes
-        command = "srun -n %d %s" % (n_processors, vasp_executable)
+        command = "srun --ntasks-per-node %d %s" % (n_processors, vasp_executable)
 
     # If we're on a KNL node...
     elif n_processors > 64:
-        command = "srun -n %d -c4 --cpu_bind=cores %s" % (
+        command = "srun --ntasks-per-node %d -c4 --cpu_bind=cores %s" % (
             n_processors / 4,
             vasp_executable,
         )
-        vasp_flags["ncore"] = 1
+
+        # Increase NCORE for unit cell relaxations, as they have many k points
+        if any([k > 5 for k in vasp_flags["kpts"]]):
+            vasp_flags["ncore"] = 16  # From benchmarking
+        else:
+            vasp_flags["ncore"] = 1
 
     return command, vasp_flags
 
