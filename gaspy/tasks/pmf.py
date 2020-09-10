@@ -607,7 +607,10 @@ class MakeFrozenAdslabFW(FireworkMaker):
         '''
         Create, package, and submit the FireWork
         '''
+        # Make sure that we actually do an SCF instead of a full relaxation.
         dft_settings = unfreeze_dict(self.dft_settings)
+        dft_settings['calcmode'] = 'scf'
+
         fw_name = {'calculation_type': 'PMF frozen scf',
                    'adsorbate': self.adsorbate,
                    'adsorbate_height': self.adsorbate_height,
