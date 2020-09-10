@@ -85,12 +85,13 @@ def gas_settings():
 
     qe = OrderedDict(_calculator='qe',
                      xcf='rpbe',
-                     encut=400.,
+                     encut=544.,
                      spol=0,
                      psps='GBRV',
                      kpts=(1, 1, 1),
                      smearing='gaussian',
                      sigma=0.05,
+                     nosym=True,
                      nstep=50)
 
     rism = qe.copy()
@@ -103,13 +104,16 @@ def gas_settings():
     rism['fcp_conv_thr'] = 5e-3
     rism['freeze_all_atoms'] = False
     # Convergence thresholds
-    rism['conv_elec'] = 1e-6
+    rism['conv_thr'] = 1.32e-7
     rism['laue_expand_right'] = 90.
     rism['mdiis1d_step'] = 0.1
     rism['rism1d_conv_thr'] = 1e-8
     rism['rism3d_conv_thr'] = 1e-6
     rism['rism3d_conv_level'] = 0.5
     rism['mdiis3d_step'] = 0.8
+    rism['etot_conv_thr'] = 1e-5
+    rism['forc_conv_thr'] = 1e-4
+    rism['degauss'] = 0.007
     # Force-field things
     rism['LJ_epsilons'] = None
     rism['LJ_sigmas'] = None
@@ -229,13 +233,16 @@ def slab_settings():
     rism['fcp_conv_thr'] = 5e-3
     rism['freeze_all_atoms'] = False
     # Convergence thresholds
-    rism['conv_elec'] = 1e-6
+    rism['conv_thr'] = 1e-6
     rism['laue_expand_right'] = 90.
     rism['mdiis1d_step'] = 0.1
     rism['rism1d_conv_thr'] = 4e-7
     rism['rism3d_conv_thr'] = 3e-5
     rism['rism3d_conv_level'] = 0.4
     rism['mdiis3d_step'] = 0.2
+    rism['etot_conv_thr'] = 1e-4
+    rism['forc_conv_thr'] = 1e-3
+    rism['degauss'] = 0.007
     # Force-field things
     rism['LJ_epsilons'] = None
     rism['LJ_sigmas'] = None
