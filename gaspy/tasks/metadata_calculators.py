@@ -95,13 +95,14 @@ def submit_adsorption_calculations(adsorbate, catalog_docs, **kwargs):
 
 def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                                         anion_concs, cation_concs,
-                                        target_fermi=None, **kwargs):
+                                        schedule=True, target_fermi=None,
+                                        **kwargs):
     '''
     Wrapper for submitting RISM-type adsorption calculations given documents
     from the catalog. This should be used as a reference for beginners. Any
     advanced usage should be based on the code inside this function.
 
-    Arg:
+    Args:
         adsorbate       A string indicating which adsorbate you want to submit
                         a calculation for. See `gaspy.defaults.adsorbates` for
                         possible values.
@@ -118,6 +119,8 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
                         system and whose values are their concentrations in
                         units of mol/L. What you provide here will override the
                         default in `gaspy.defaults`.
+        schedule        A Boolean indicating whether you want to actually
+                        schedule the jobs
         kwargs          If you want to override any arguments for the
                         `gaspy.tasks.metadata_calculators.CalculateConstantMuAdsorptionEnergy`
                         task, then just supply them here. Note that if you
