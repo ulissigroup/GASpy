@@ -167,45 +167,51 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         else:
             task = CalculateRismAdsorptionEnergy(adsorbate_name=adsorbate, **kwargs)
 
-        # Submit the jobs to GASpy
         tasks.append(task)
-    schedule_tasks(tasks)
 
-    # Parse finished calculations
-    finished_docs = []
-    lpad = get_launchpad()
-    for catalog_doc, task in zip(catalog_docs, tasks):
-        try:
-            energy_doc = get_task_output(task)
-            catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
-            catalog_doc['anion_concs'] = anion_concs
-            catalog_doc['cation_concs'] = cation_concs
-            catalog_doc['target_fermi'] = target_fermi
-            launch_dirs = {'adslab': lpad.get_launchdir(energy_doc['fwids']['adslab']),
-                           'slab': lpad.get_launchdir(energy_doc['fwids']['slab']),
-                           'adsorbate': [lpad.get_launchdir(fwid)
-                                         for fwid in energy_doc['fwids']['adsorbate']]}
-            catalog_doc['launch_dirs'] = launch_dirs
-            finished_docs.append(catalog_doc)
-        # Print unfinished calculations
-        except FileNotFoundError:
-            warnings.warn('The following calculation has not finished yet:\n' +
-                          '  adsorbate = %s\n' % adsorbate +
-                          '  mpid = %s\n' % catalog_doc['mpid'] +
-                          '  miller = %s\n' % catalog_doc['miller'] +
-                          '  shift = %s\n' % catalog_doc['shift'] +
-                          '  top = %s\n' % catalog_doc['top'] +
-                          '  site = %s\n' % catalog_doc['adsorption_site'] +
-                          '  anions = %s\n' % anion_concs +
-                          '  cations = %s\n' % cation_concs +
-                          '  fermi = %s' % target_fermi,
-                          RuntimeWarning)
+    # If we're just checking on the jobs, then move on
+    if schedule is False:
+        return tasks
 
-    # Print finished calculations
-    print('Calculations finished:')
-    for doc in finished_docs:
-        pprint(doc, indent=1)
-    return zip(tasks, finished_docs)
+    # If we're actually submitting the jobs, then submit them
+    if schedule is True:
+        schedule_tasks(tasks)
+
+        # Parse finished calculations
+        finished_docs = []
+        lpad = get_launchpad()
+        for catalog_doc, task in zip(catalog_docs, tasks):
+            try:
+                energy_doc = get_task_output(task)
+                catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
+                catalog_doc['anion_concs'] = anion_concs
+                catalog_doc['cation_concs'] = cation_concs
+                catalog_doc['target_fermi'] = target_fermi
+                launch_dirs = {'adslab': lpad.get_launchdir(energy_doc['fwids']['adslab']),
+                               'slab': lpad.get_launchdir(energy_doc['fwids']['slab']),
+                               'adsorbate': [lpad.get_launchdir(fwid)
+                                             for fwid in energy_doc['fwids']['adsorbate']]}
+                catalog_doc['launch_dirs'] = launch_dirs
+                finished_docs.append(catalog_doc)
+            # Print unfinished calculations
+            except FileNotFoundError:
+                warnings.warn('The following calculation has not finished yet:\n' +
+                              '  adsorbate = %s\n' % adsorbate +
+                              '  mpid = %s\n' % catalog_doc['mpid'] +
+                              '  miller = %s\n' % catalog_doc['miller'] +
+                              '  shift = %s\n' % catalog_doc['shift'] +
+                              '  top = %s\n' % catalog_doc['top'] +
+                              '  site = %s\n' % catalog_doc['adsorption_site'] +
+                              '  anions = %s\n' % anion_concs +
+                              '  cations = %s\n' % cation_concs +
+                              '  fermi = %s' % target_fermi,
+                              RuntimeWarning)
+
+        # Print finished calculations
+        print('Calculations finished:')
+        for doc in finished_docs:
+            pprint(doc, indent=1)
+        return zip(tasks, finished_docs)
 
 
 class CalculateRismAdsorptionEnergy(luigi.Task):
