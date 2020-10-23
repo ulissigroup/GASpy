@@ -21,7 +21,6 @@ from fireworks import (Firework,
                        ScriptTask,
                        Workflow)
 from .utils import read_rc
-from . import defaults
 
 
 def get_launchpad():
@@ -303,19 +302,6 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
 
     # # RISM runs better when you initialize it with 1 step of QE
     atom_trajhex = encode_atoms_to_trajhex(atoms)
-    # qe_settings = __guess_qe_initialization_settings(fw_name)
-    # initialize = PyTask(func='espresso_tools.run_qe',
-    #                     args=[atom_trajhex, qe_settings],
-    #                     stored_data_varname='initialization_results')
-
-    # # Our QE initialization created a `fireworks-*.out` file. If we run RISM
-    # # right afterwards, it'll just concatenate to the same file. We want to
-    # # keep the output files separate, so we move the output of the
-    # # initialization.
-    # mv_outputs = PyTask(func='espresso_tools.gaspy_wrappers.move_initialization_output',
-    #                     stored_data_varnam='initialization_movement')
-
-    # Tell the FireWork rocket to run the job using espresso_tools
     relax = PyTask(func='espresso_tools.run_rism',
                    args=[atom_trajhex, rism_settings],
                    stored_data_varname='opt_results')
@@ -334,34 +320,6 @@ def _make_rism_firework(atoms, fw_name, rism_settings):
     tasks = [clone_espresso_tools, relax, clean_up]
     firework = Firework(tasks, name=fw_name)
     return firework
-
-
-def __guess_qe_initialization_settings(fw_name):
-    '''
-    We initialize RISM runs with a 1-step QE run. We need to pass some settings
-    to this 1-step QE run. We guess the correct settings based on the FireWork
-    name, and thes set the `nstep` argument to 1.
-
-    Arg:
-        fw_name     A dictionary that should have probably been created
-                    somewhere in `gaspy.tasks.make_fireworks`
-    Returns:
-        qe_settings     A dictionary of the Quantum Espresso settings to use
-    '''
-    all_settings = {'gas phase optimization': defaults.gas_settings,
-                    'unit cell optimization': defaults.bulk_settings,
-                    'surface energy optimization': defaults.slab_settings,
-                    'slab+adsorbate optimization': defaults.adslab_settings}
-    calculation_type = fw_name['calculation_type']
-    qe_settings = all_settings[calculation_type]()['qe']
-    qe_settings['nstep'] = 1
-
-    # The default k point grid for surfaces is simply labeled as "surface".
-    # Let's replace it with the real k point grid here.
-    if qe_settings['kpts'] == 'surface':
-        qe_settings['kpts'] = fw_name['dft_settings']['kpts']
-
-    return qe_settings
 
 
 def encode_atoms_to_trajhex(atoms):
