@@ -174,7 +174,7 @@ def _assert_qe_settings(doc, rism_settings):
         # We don't NEED the starting charge to be in the settings. If it's not
         # there, then we assume it's zero.
         except KeyError:
-            if key == 'starting_charge':
+            if key in {'starting_charge', 'tot_charge'}:
                 pass
             else:
                 raise
@@ -287,7 +287,6 @@ def test_FindAdslab_successfully():
     If we ask this task to find something that is there, it should return
     the correct Mongo document/dictionary
     '''
-    #adsorption_site = (0., 1.41, 20.52)
     adsorption_site = (1.41, 1.41, 20.90)
     shift = 0.25
     top = True
@@ -296,6 +295,7 @@ def test_FindAdslab_successfully():
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
     dft_settings = ADSLAB_SETTINGS['vasp']
+    dft_settings['kpts'] = (4, 4, 1)
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
@@ -338,6 +338,7 @@ def test_FindAdslab_unsuccessfully():
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
     dft_settings = ADSLAB_SETTINGS['vasp']
+    dft_settings['kpts'] = (4, 4, 1)
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
@@ -358,7 +359,6 @@ def test_FindAdslab_unsuccessfully():
         assert unfreeze_dict(dependency.rotation) == rotation
         assert dependency.miller_indices == miller_indices
         expected_dft_settings = copy.deepcopy(dft_settings)
-        expected_dft_settings['kpts'] = (4, 4, 1)
         assert unfreeze_dict(dependency.dft_settings) == expected_dft_settings
 
     finally:
@@ -377,8 +377,8 @@ def test_calculate_surface_k_points():
 
         a0, b0, c0 = (np.linalg.norm(vector) for vector in cell)
         assert all(isinstance(point, int) for point in k_points)
-        assert k_points[0] == max(1, int(round(20 / a0)))
-        assert k_points[1] == max(1, int(round(20 / b0)))
+        assert k_points[0] == max(1, int(round(40 / a0)))
+        assert k_points[1] == max(1, int(round(40 / b0)))
         assert k_points[2] == 1
 
 
@@ -610,7 +610,9 @@ def test_RismFindAdslab_unsuccessfully():
         assert dependency.adsorbate_name == adsorbate_name
         assert unfreeze_dict(dependency.rotation) == rotation
         assert dependency.miller_indices == miller_indices
-        assert unfreeze_dict(dependency.dft_settings) == ADSLAB_SETTINGS['rism']
+        expected_adslab_settings = copy.deepcopy(ADSLAB_SETTINGS['rism'])
+        expected_adslab_settings['kpts'] = (8, 8, 1)
+        assert unfreeze_dict(dependency.dft_settings) == expected_adslab_settings
 
     finally:
         clean_up_tasks()
