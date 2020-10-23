@@ -128,8 +128,8 @@ def test___warn_about_fizzles():
 
         # When things are fizzled, make sure it warns us
         docs = [{'state': 'FIZZLED', 'fw_id': 1}]
-        assert __get_n_fizzles(docs) >= 1
-        assert len(warning_manager) == 1
+        assert __get_n_fizzles(docs) == 1
+        assert len(warning_manager) >= 1
         assert issubclass(warning_manager[-1].category, RuntimeWarning)
         assert 'We have fizzled a calculation' in str(warning_manager[-1].message)
 
