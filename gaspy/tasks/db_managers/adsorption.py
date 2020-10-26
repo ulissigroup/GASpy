@@ -7,6 +7,7 @@ information.
 __authors__ = ['Zachary W. Ulissi', 'Kevin Tran']
 __emails__ = ['zulissi@andrew.cmu.edu', 'ktran@andrew.cmu.edu']
 
+import sys
 import traceback
 import warnings
 import pprint
@@ -14,7 +15,7 @@ from datetime import datetime
 import luigi
 from ..core import get_task_output, run_task
 from ..metadata_calculators import CalculateAdsorptionEnergy, CalculateRismAdsorptionEnergy
-from ...defaults import DFT_CALCULATOR, gas_settings
+from ...defaults import DFT_CALCULATOR, gas_settings, slab_settings
 from ...utils import multimap
 from ...mongo import make_atoms_from_doc, make_doc_from_atoms
 from ...gasdb import get_mongo_collection
@@ -112,20 +113,41 @@ def _find_atoms_docs_not_in_adsorption_collection(dft_calculator):
     return missing_ads_docs
 
 
-def __run_calculate_adsorption_energy_task(atoms_doc):
+def __run_calculate_adsorption_energy_task(atoms_doc,
+                                           slab_generator_settings=None,
+                                           get_slab_settings=None,
+                                           min_xy=None):
     '''
     This function will parse adsorption documents from our `atoms` collection,
     create Luigi tasks to calculate adsorption energies for each document, run
     the tasks, and then give you the results.
 
     Args:
-        atoms_doc   A dictionary taken from our `atoms` Mongo collection
+        atoms_doc               A dictionary taken from our `atoms` Mongo
+                                collection
+        slab_generator_settings A dictionary for the slab_generator_settings
+                                that should be assumed were used to enemurate
+                                the slabs
+        get_slab_settings       A dictionary for the get_slab_settings
+                                that should be assumed were used to enemurate
+                                the slabs
+        min_xy                  A float indicating the min_xy that should be
+                                assumed was used when creating the adslab
     Returns:
         energy_doc  A dictionary obtained from the output of the
                     `Calculate*AdsorptionEnergy` task
     '''
     # Reformat the site because of silly historical reasons
     adsorption_site = atoms_doc['fwname']['adsorption_site']
+
+    # Override [ad]slab enumeration settings if necessary
+    kwargs = {}
+    if slab_generator_settings is not None:
+        kwargs['slab_generator_settings'] = slab_generator_settings
+    if get_slab_settings is not None:
+        kwargs['get_slab_settings'] = get_slab_settings
+    if min_xy is not None:
+        kwargs['min_xy'] = min_xy
 
     # Use the appropriate adsorption energy calculator
     dft_calculator = atoms_doc['fwname']['dft_settings']['_calculator']
@@ -152,7 +174,8 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
                                  miller_indices=atoms_doc['fwname']['miller'],
                                  bare_slab_dft_settings=atoms_doc['fwname']['dft_settings'],
                                  adslab_dft_settings=atoms_doc['fwname']['dft_settings'],
-                                 gas_dft_settings=gas_dft_settings)
+                                 gas_dft_settings=gas_dft_settings,
+                                 **kwargs)
     try:
         run_task(task)
         energy_doc = get_task_output(task)
@@ -167,6 +190,48 @@ def __run_calculate_adsorption_energy_task(atoms_doc):
     except luigi.target.FileAlreadyExists:
         energy_doc = get_task_output(task)
         return energy_doc
+
+    # If we couldn't enumerate the site, then try using different enumeration
+    # settings that we have green-lighted in this function.
+    # WARNING:  This is still untested code.
+    except RuntimeError:
+        exception_info = sys.exc_info()
+        tb = traceback.format_exception(*exception_info)
+        tb_str = ''.join(tb)
+        enumeration_error_message = ('RuntimeError: You just tried to make an '
+                                     'adslab FireWork rocket that we could not '
+                                     'enumerate.')
+        is_normal_calc = all([slab_generator_settings is None,
+                              get_slab_settings is None,
+                              min_xy is None])
+        if enumeration_error_message in tb_str and is_normal_calc is True:
+            warnings.warn('Could not enumerate a site; trying to use '
+                          'specialized slab enumeration settings now',
+                          RuntimeWarning)
+            slab_settings_ = slab_settings()
+            slab_generator_settings = slab_settings_['slab_generator_settings']
+            get_slab_settings = slab_settings_['get_slab_settings']
+            max_miller = max(atoms_doc['fwname']['miller'])
+            if max_miller == 2:
+                min_xy = 7
+            elif max_miller == 1:
+                min_xy = 8
+            energy_doc = __run_calculate_adsorption_energy_task(atoms_doc,
+                                                                slab_generator_settings=slab_generator_settings,
+                                                                get_slab_settings=get_slab_settings,
+                                                                min_xy=min_xy)
+            return energy_doc
+
+        # If it wasn't a slab generation setting issue, then move on
+        else:
+            traceback.print_exc()
+            doc_str = pprint.pformat({'fwname': atoms_doc['fwname'],
+                                      'fwid': atoms_doc['fwid'],
+                                      'directory': atoms_doc['directory'],
+                                      'calculation_date': atoms_doc['calculation_date']})
+            warnings.warn('We caught the exception reported just above and moved on '
+                          'without updating the adsorption collection. Here is the '
+                          'offending document:\n%s' % doc_str)
 
     # If some other error pops up, then we want to report it. But we also want
     # to move on so that we can still update other things.
