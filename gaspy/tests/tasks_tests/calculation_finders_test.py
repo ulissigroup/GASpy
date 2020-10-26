@@ -295,7 +295,6 @@ def test_FindAdslab_successfully():
     mpid = 'mp-2'
     miller_indices = (1, 0, 0)
     dft_settings = ADSLAB_SETTINGS['vasp']
-    dft_settings['kpts'] = (4, 4, 1)
     task = FindAdslab(adsorption_site=adsorption_site,
                       shift=shift,
                       top=top,
