@@ -64,7 +64,7 @@ def test_CalculateRismAdsorptionEnergy():
         assert math.isclose(doc['adsorption_energy'], -0.7436998067121294)
         assert doc['fwids']['slab'] == 3003
         assert doc['fwids']['adslab'] == 3006
-        assert doc['fwids']['adsorbate'] == [3017, 3018, 3019]
+        assert doc['fwids']['adsorbate'] == [3017]
 
     finally:
         clean_up_tasks()
@@ -104,7 +104,7 @@ def test_CalculateAdsorptionEnergy():
         assert math.isclose(doc['adsorption_energy'], -1.2317927399999942)
         assert doc['fwids']['slab'] == 124894
         assert doc['fwids']['adslab'] == 124895
-        assert doc['fwids']['adsorbate'] == [19565, 19566, 19567]
+        assert doc['fwids']['adsorbate'] == [19566]
 
     finally:
         clean_up_tasks()
