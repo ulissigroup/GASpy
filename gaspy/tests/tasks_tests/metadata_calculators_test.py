@@ -10,6 +10,7 @@ os.environ['PYTHONPATH'] = '/home/GASpy/gaspy/tests:' + os.environ['PYTHONPATH']
 
 # Things we're testing
 from ...tasks.metadata_calculators import (CalculateRismAdsorptionEnergy,
+                                           CalculateConstantMuAdsorptionEnergy,
                                            CalculateAdsorptionEnergy,
                                            CalculateAdsorbateEnergy,
                                            CalculateAtomicBasisEnergy,
@@ -28,7 +29,7 @@ from ...mongo import make_atoms_from_doc
 from ...utils import unfreeze_dict
 from ...tasks import get_task_output, run_task
 from ...tasks.core import schedule_tasks
-from ...tasks.calculation_finders import FindBulk, FindSurface
+from ...tasks.calculation_finders import FindBulk, FindSurface  # , FindRismAdslab
 
 GAS_SETTINGS = defaults.gas_settings()
 SE_BULK_SETTINGS = defaults.surface_energy_bulk_settings()
@@ -71,7 +72,86 @@ def test_CalculateRismAdsorptionEnergy():
 
 
 def test_CalculateConstantMuAdsorptionEnergy():
-    assert False
+    '''
+    WARNING:  A test like this normally needs to have a test case in the
+    unit_testing_atoms Mongo testing collection to work on, but we don't have
+    one because we haven't run this fully yet. So the current testing just
+    looks for some key flags/markers. It's not a true test yet.
+
+    WARNING:  This test uses `run_task_locally`, which has a chance of
+    actually submitting a FireWork to production. To avoid this, you must try
+    to make sure that you have all of the gas calculations in the unit testing
+    atoms collection.  If you copy/paste this test into somewhere else, make
+    sure that you use `run_task_locally` appropriately.
+    '''
+    adsorption_site = (2.558675812674303, 2.5586758126743008, 19.187941671)
+    target_fermi = 0.5
+    shift = 0.25
+    top = True
+    adsorbate_name = 'CO'
+    mpid = 'mp-30'
+    miller_indices = (1, 0, 0)
+    slab_dft_settings = defaults.slab_settings()
+    adslab_dft_settings = defaults.adslab_settings()
+    slab_dft_settings['target_fermi'] = target_fermi
+    adslab_dft_settings['target_fermi'] = target_fermi
+    task = CalculateConstantMuAdsorptionEnergy(adsorption_site=adsorption_site,
+                                               bare_slab_dft_settings=slab_dft_settings,
+                                               adslab_dft_settings=adslab_dft_settings,
+                                               shift=shift,
+                                               top=top,
+                                               adsorbate_name=adsorbate_name,
+                                               mpid=mpid,
+                                               miller_indices=miller_indices,)
+
+    # Check that Fermi level was passed
+    assert task.bare_slab_dft_settings['target_fermi'] == target_fermi
+    assert task.adslab_dft_settings['target_fermi'] == target_fermi
+    assert isinstance(task, CalculateRismAdsorptionEnergy)
+
+    # Check that seed PZC was passed correctly
+    pzc_task = task._seed_calc_requires()['pzc']
+    assert isinstance(pzc_task, CalculateRismAdsorptionEnergy)
+    assert 'target_fermi' not in pzc_task.bare_slab_dft_settings
+    assert 'target_fermi' not in pzc_task.adslab_dft_settings
+
+    # un-comment the rest of this test once we have an example in our unit testing collection
+
+    # Check that the charged calculations were created
+    #reqs = task._rism_requires()
+    #ads_task = reqs['adsorbate_energy']
+    #assert isinstance(ads_task, CalculateAdsorbateEnergy)
+    #assert 'target_fermi' not in ads_task.dft_settings
+    #slab_task = reqs['bare_slab_doc']
+    #assert isinstance(slab_task, FindRismAdslab)
+    #assert slab_task.dft_settings['target_fermi'] == target_fermi
+    #adslab_task = reqs['adslab_doc']
+    #assert isinstance(adslab_task, FindRismAdslab)
+    #assert adslab_task.dft_settings['target_fermi'] == target_fermi
+
+    # We should also probably test the
+    # `CalculateConstantMuAdsorptionEnergy.__parse_pzc_info` and the
+    # `CalculateConstantMuAdsorptionEnergy.__calculate_tot_charge` methods as
+    # well. But we're in kind of a time crunch here and I honestly don't think
+    # anyone is going to read this at any point, so I'm going to skip it. If
+    # you are reading this, then I apologize. You should probably make these
+    # tests if you're going to continue this work.
+    #assert task.__parse_pzc_info(fwid)
+    #assert task.__calculate_tot_charge(mu, mu_pzc, doc)
+
+    #try:
+    #    run_task_locally(task)
+    #    doc = get_task_output(task)
+
+    #    # I just checked this one calculation by hand and found some key
+    #    # information about it.
+    #    assert math.isclose(doc['adsorption_energy'], -0.7436998067121294)
+    #    assert doc['fwids']['slab'] == 3003
+    #    assert doc['fwids']['adslab'] == 3006
+    #    assert doc['fwids']['adsorbate'] == [3017]
+
+    #finally:
+    #    clean_up_tasks()
 
 
 def test_CalculateAdsorptionEnergy():
