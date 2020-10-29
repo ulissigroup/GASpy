@@ -207,11 +207,10 @@ def test__find_matching_adslab_doc():
     assert doc == expected_doc
 
     # Try a fail-to-find
-    with pytest.raises(RuntimeError, message='Expected a RuntimeError') as exc_info:
+    message = 'You just tried to make an adslab FireWork rocket that we could not enumerate.'
+    with pytest.raises(RuntimeError, match=message) as exc_info:
         doc = MakeAdslabFW._find_matching_adslab_doc(docs, adsorption_site=(0., 0., 0.),
                                                      shift=0.25, top=False)
-        assert ('You just tried to make an adslab FireWork rocket that we could not enumerate.'
-                in str(exc_info.value))
 
 
 def test_MakeSurfaceFW():

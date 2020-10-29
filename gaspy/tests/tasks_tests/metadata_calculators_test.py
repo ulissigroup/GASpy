@@ -225,7 +225,7 @@ def test_CalculateAdsorbateEnergy_Error():
     If we try to calculate the energy of an adsorbate that we have not yet
     defined, then this task should yell at us.
     '''
-    adsorbate_name = 'U'
+    adsorbate_name = 'Foo'
     dft_settings = GAS_SETTINGS['vasp']
     task = CalculateAdsorbateEnergy(adsorbate_name=adsorbate_name,
                                     dft_settings=dft_settings)
@@ -233,10 +233,10 @@ def test_CalculateAdsorbateEnergy_Error():
     assert unfreeze_dict(task.dft_settings) == dft_settings
 
     try:
-        with pytest.raises(KeyError, message='Expected a KeyError') as exc_info:
+        expected_message = ('You are trying to calculate the adsorbate energy '
+                            'of an undefined adsorbate, %s' % adsorbate_name)
+        with pytest.raises(KeyError, match=expected_message) as exc_info:
             run_task(task)
-            assert ('You are trying to calculate the adsorbate energy of an '
-                    'undefined adsorbate, U' in str(exc_info.value))
 
     finally:
         clean_up_tasks()

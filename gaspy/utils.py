@@ -80,7 +80,7 @@ def unfreeze_dict(frozen_dict):
     along with all of the branches.
 
     Arg:
-        frozen_dict     Instance of a luigi.parameter._FrozenOrderedDict
+        frozen_dict     Instance of a luigi.parameter.FrozenOrderedDict
     Returns:
         dict_   Ordered dictionary
     '''

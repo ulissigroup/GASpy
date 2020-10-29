@@ -138,7 +138,7 @@ class FindCalculation(luigi.Task):
         # Turn frozen dictionaries into normal ones for cleaner queries
         for dict_ in [self.gasdb_query, self.fw_query]:
             for key, value in dict_.items():
-                if isinstance(value, luigi.parameter._FrozenOrderedDict):
+                if isinstance(value, luigi.parameter.FrozenOrderedDict):
                     dict_[key] = dict(value)
 
         # Find the document in our `atoms` Mongo collection
