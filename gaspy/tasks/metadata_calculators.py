@@ -186,6 +186,14 @@ def submit_rism_adsorption_calculations(adsorbate, catalog_docs,
         for catalog_doc, task in zip(catalog_docs, tasks):
             try:
                 energy_doc = get_task_output(task)
+                fermis = {}
+                for calc_type in ['slab', 'adslab']:
+                    fws = list(lpad.fireworks.find({'fw_id': energy_doc['fwids'][calc_type]}, {'_id': 0, 'launches': 1}))
+                    launch_id = fws[-1]['launches'][-1]
+                    launches = list(lpad.launches.find({'launch_id': launch_id}, {'_id': 0, 'action.stored_data.opt_results': 1}))
+                    fermi = launches[-1]['action']['stored_data']['opt_results'][-1]
+                    fermis[calc_type] = fermi
+                catalog_doc['fermis'] = fermis
                 catalog_doc['adsorption_energy'] = energy_doc['adsorption_energy']
                 catalog_doc['anion_concs'] = anion_concs
                 catalog_doc['cation_concs'] = cation_concs
