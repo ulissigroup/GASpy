@@ -70,7 +70,10 @@ def _perform_relaxation(atoms, vasp_flags, fname_out):
     """
     # Initialize some things before we run
     atoms, vasp_flags = _clean_up_vasp_inputs(atoms, vasp_flags)
-    vasp_flags = _set_vasp_command(vasp_flags)
+    if 'NCORE' in os.environ:
+        vasp_flags['ncore'] = int(float(os.environ['NCORE']))
+    if 'KPAR' in os.environ:
+        vasp_flags['kpar'] = int(float(os.environ['KPAR']))
 
     # Detect whether or not there are constraints that cannot be handled by VASP
     allowable_constraints = {"FixAtoms"}
@@ -126,154 +129,6 @@ def _clean_up_vasp_inputs(atoms, vasp_flags):
     del vasp_flags["pp_version"]
 
     return atoms, vasp_flags
-
-
-def _set_vasp_command(vasp_flags):
-    """
-    This function assigns the appropriate call to VASP to the `$VASP_COMMAND`
-    variable. The command depends on what cluster we are running on. This
-    function figures that out automatically.
-
-    Arg:
-        vasp_flags  A dictionary of settings we want to pass to the `Vasp2`
-                    calculator
-    Returns:
-        vasp_flags  A modified version of the 'vasp_flags' argument
-    """
-    # Figure out where we're running based on environment variables
-    if "SLURM_CLUSTER_NAME" in os.environ:
-        cluster_name = os.environ["SLURM_CLUSTER_NAME"]
-    elif "PBS_O_HOST" in os.environ:
-        cluster_name = os.environ["PBS_O_HOST"].split()[0]
-    else:
-        raise RuntimeError(
-            "Could not figure out what machine this job is "
-            "running on and therefore could not figure out "
-            "how to run VASP correctly. If you would like to "
-            "add a subroutine for your cluster, please send a "
-            "pull request to "
-            "https://github.com/ulissigroup/GASpy"
-        )
-
-    # Define which functions to use for which clusters
-    command_makers = {
-        "cori": __make_cori_vasp_command,
-        "arjuna": __make_arjuna_vasp_command,
-        "gilgamesh": __make_gilgamesh_vasp_command,
-    }
-
-    # Make the appropriate command to call VASP and then assign it to the
-    # environment so that VASP can pick it up automatically.
-    vasp_command, vasp_flags = command_makers[cluster_name](vasp_flags)
-    os.environ["VASP_COMMAND"] = vasp_command
-    return vasp_flags
-
-
-def __make_cori_vasp_command(vasp_flags):
-    """
-    Makes a VASP command to use on Cori
-
-    Arg:
-        vasp_flags  A dictionary of settings we want to pass to the `Vasp2`
-                    calculator
-    Returns:
-        command     The command that should be executed in bash to run VASP
-        vasp_flags  A modified version of the 'vasp_flags' argument
-    """
-    vasp_executable = "vasp_std"
-
-    # Figure out the number of processes
-    try:
-        n_processors = int(os.environ["SLURM_CPUS_ON_NODE"])
-    except KeyError:
-        n_processors = 1
-
-    # Figure out number of nodes
-    try:
-        n_nodes = int(os.environ["SLURM_NNODES"])
-    except KeyError:
-        n_nodes = 1
-
-    # If we're on a Haswell node...
-    if n_processors <= 64:
-        vasp_flags["kpar"] = n_nodes
-        command = "srun --ntasks-per-node %d %s" % (n_processors, vasp_executable)
-
-    # If we're on a KNL node...
-    elif n_processors > 64:
-        command = "srun --ntasks-per-node %d -c4 --cpu_bind=cores %s" % (
-            n_processors / 4,
-            vasp_executable,
-        )
-
-        # Increase NCORE for unit cell relaxations, as they have many k points
-        if any([k > 5 for k in vasp_flags["kpts"]]):
-            vasp_flags["ncore"] = 16  # From benchmarking
-        else:
-            vasp_flags["ncore"] = 1
-
-    return command, vasp_flags
-
-
-def __make_arjuna_vasp_command(vasp_flags):
-    """
-    Makes a VASP command to use on Arjuna
-
-    Arg:
-        vasp_flags  A dictionary of settings we want to pass to the `Vasp2`
-                    calculator
-    Returns:
-        command     The command that should be executed in bash to run VASP
-        vasp_flags  A modified version of the 'vasp_flags' argument
-    """
-    # Figure out the number of processes
-    try:
-        n_processors = int(os.environ["SLURM_NPROCS"])
-    except KeyError:
-        n_processors = 1
-
-    # If this is a GPU job...
-    if os.environ["CUDA_VISIBLE_DEVICES"] != "NoDevFiles":
-        vasp_flags["ncore"] = 1
-        vasp_flags["kpar"] = 16
-        vasp_flags["nsim"] = 8
-        vasp_flags["lreal"] = "Auto"
-        vasp_executable = "vasp_gpu"
-        command = "mpirun -np %i %s" % (n_processors, vasp_executable)
-
-    # If this is a CPU job...
-    else:
-        vasp_executable = "vasp_std"
-        if n_processors > 16:
-            vasp_flags["ncore"] = 4
-            vasp_flags["kpar"] = 4
-        else:
-            vasp_flags["kpar"] = 1
-            vasp_flags["ncore"] = 4
-        command = "mpirun -np %i %s" % (n_processors, vasp_executable)
-
-    return command, vasp_flags
-
-
-def __make_gilgamesh_vasp_command(vasp_flags):
-    """
-    Makes a VASP command to use on Gilgamesh
-
-    Arg:
-        vasp_flags  A dictionary of settings we want to pass to the `Vasp2`
-                    calculator
-    Returns:
-        command     The command that should be executed in bash to run VASP
-        vasp_flags  A modified version of the 'vasp_flags' argument
-    """
-    os.environ["PBS_SERVER"] = "gilgamesh.cheme.cmu.edu"
-    vasp_flags["npar"] = 4
-    vasp_executable = (
-        "/home-research/zhongnanxu/opt/vasp-5.3.5/bin/vasp-vtst-beef-parallel"
-    )
-    n_processors = len(open(os.environ["PBS_NODEFILE"]).readlines())
-    command = "mpirun -np %i %s" % (n_processors, vasp_executable)
-    return command, vasp_flags
 
 
 def _relax_with_ase(atoms, vasp_flags):
