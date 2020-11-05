@@ -51,7 +51,8 @@ def get_mongo_collection(collection_tag):
     collection_name = mongo_info['collection_name']
 
     # Connect to the database/collection
-    client = MongoClient(host=host, port=port, maxPoolSize=None)
+    client = MongoClient(host=host, port=port, maxPoolSize=None,
+                         ssl=True, tlsAllowInvalidCertificates=True)
     database = getattr(client, database_name)
     database.authenticate(user, password)
     collection = ConnectableCollection(database=database, name=collection_name)
@@ -162,7 +163,7 @@ def _clean_up_aggregated_docs(docs, expected_keys):
             clean = False
         # Clean up documents that have `None` or '' as values
         for key, value in doc.items():
-            if (value is None) or (value is ''):
+            if (value is None) or (value == ''):
                 clean = False
             # Clean up documents that have no second-shell atoms
             if key == 'neighborcoord':

@@ -33,6 +33,8 @@ def get_launchpad():
     '''
     configs = read_rc('fireworks_info.lpad')
     configs['port'] = int(configs['port'])  # Make sure that the port is an integer
+    configs['ssl'] = True
+    configs['mongoclient_kwargs'] = {'tlsAllowInvalidCertificates': True}
     lpad = LaunchPad(**configs)
     return lpad
 

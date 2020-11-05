@@ -84,7 +84,8 @@ def test_ConnectableCollection(collection_tag):
     collection_name = mongo_info['collection_name']
 
     # Connect to the database/collection
-    client = MongoClient(host=host, port=port)
+    client = MongoClient(host=host, port=port,
+                         ssl=True, tlsAllowInvalidCertificates=True)
     database = getattr(client, database_name)
     database.authenticate(user, password)
     collection = ConnectableCollection(database=database, name=collection_name)
