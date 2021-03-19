@@ -118,9 +118,6 @@ reading. If you do not want to set this up, simply re-enter your catalog
 collection's information into the readonly sections of the `.gaspyrc.json`
 file.
 
-The `surface_energy` collection is still under development; use at your
-own risk.
-
 ## FireWorks
 
 GASpy only submits jobs to
